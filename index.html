@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Construction Estimator Pro - Modern Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
@@ -1030,9 +1031,11 @@
                         <div class="summary-item"><div class="summary-label">Contingency</div><div class="summary-value" id="bidContingency">$0</div></div>
                         <div class="summary-item"><div class="summary-label">Total Bid</div><div class="summary-value" id="bidTotal">$0</div></div>
                     </div>
-                    <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                        <button class="btn btn-primary" id="generateReportBtn">Generate Report</button>
-                        <button class="btn btn-success" id="saveBidBtn">Save Bid</button>
+                    <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 2rem;">
+                        <button class="btn btn-primary" id="exportPdfBtn">Export PDF</button>
+                        <button class="btn btn-primary" id="exportXlsxBtn">Export Excel</button>
+                        <button class="btn btn-primary" id="exportCsvBtn">Export CSV</button>
+                        <button class="btn btn-success" id="saveBidBtn" style="margin-left: auto;">Save Bid</button>
                     </div>
                 </div>
             </div>
@@ -1277,7 +1280,12 @@
             document.querySelectorAll('.material-card').forEach(card => card.addEventListener('click', handleMaterialSelection));
             document.getElementById('saveProjectBtn')?.addEventListener('click', saveProject);
             document.getElementById('addLineItemBtn')?.addEventListener('click', () => addLineItem());
-            document.getElementById('generateReportBtn')?.addEventListener('click', generateBidReport);
+            
+            // Export Buttons
+            document.getElementById('exportPdfBtn')?.addEventListener('click', exportAsPdf);
+            document.getElementById('exportXlsxBtn')?.addEventListener('click', exportAsXlsx);
+            document.getElementById('exportCsvBtn')?.addEventListener('click', exportAsCsv);
+
             document.getElementById('saveBidBtn')?.addEventListener('click', saveBid);
             document.getElementById('checkUpdatesBtn')?.addEventListener('click', checkForUpdates);
             document.getElementById('applyUpdateBtn')?.addEventListener('click', applyUpdate);
@@ -1650,13 +1658,83 @@
                 return;
             }
             state.lastFocusedInput.value = state.calculator.displayValue;
-            // Trigger input event to update totals
             state.lastFocusedInput.dispatchEvent(new Event('input', { bubbles: true }));
             closeModal('calculatorModal');
         }
 
-        // --- REPORTING ---
-        function generateBidReport() {
+        // --- REPORTING & EXPORTING ---
+        function getBidDataForExport() {
+            const projectName = document.getElementById('bidProjectName').value || 'N/A';
+            const clientName = document.getElementById('clientName').value || 'N/A';
+            const bidDate = new Date(document.getElementById('bidDate').value).toLocaleDateString();
+            
+            const data = [
+                ['Project Name', projectName],
+                ['Client Name', clientName],
+                ['Bid Date', bidDate],
+                [], // Spacer row
+                ['Category', 'Description', 'Quantity', 'Unit', 'Rate', 'Total']
+            ];
+
+            let currentCategory = '';
+            document.querySelectorAll('.line-item-row').forEach(row => {
+                const category = row.querySelector('[data-field="category"]').value;
+                if (category !== currentCategory) {
+                    currentCategory = category;
+                    data.push([category]); // Add category as a full-width row
+                }
+                const description = row.querySelector('[data-field="description"]').value;
+                const quantity = parseFloat(row.querySelector('[data-field="quantity"]').value) || 0;
+                const unit = row.querySelector('[data-field="unit"]').value;
+                const rate = parseFloat(row.querySelector('[data-field="rate"]').value) || 0;
+                const total = quantity * rate;
+                data.push(['', description, quantity, unit, rate, total]);
+            });
+            
+            data.push([]); // Spacer row
+            
+            const subtotal = parseFloat(document.getElementById('bidSubtotal').textContent.replace(/[^0-9.-]+/g,""));
+            const markup = parseFloat(document.getElementById('bidMarkup').textContent.replace(/[^0-9.-]+/g,""));
+            const contingency = parseFloat(document.getElementById('bidContingency').textContent.replace(/[^0-9.-]+/g,""));
+            const total = parseFloat(document.getElementById('bidTotal').textContent.replace(/[^0-9.-]+/g,""));
+
+            data.push(['', '', '', '', 'Subtotal', subtotal]);
+            data.push(['', '', '', '', 'Markup', markup]);
+            data.push(['', '', '', '', 'Contingency', contingency]);
+            data.push(['', '', '', '', 'Total Bid', total]);
+
+            return { data, projectName };
+        }
+
+        function exportAsXlsx() {
+            const { data, projectName } = getBidDataForExport();
+            const worksheet = XLSX.utils.aoa_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Bid');
+            XLSX.writeFile(workbook, `Bid-${projectName}.xlsx`);
+            showToast('Excel file generated!', 'success');
+        }
+
+        function exportAsCsv() {
+            const { data, projectName } = getBidDataForExport();
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            data.forEach(rowArray => {
+                let row = rowArray.map(item => `"${String(item).replace(/"/g, '""')}"`).join(",");
+                csvContent += row + "\r\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Bid-${projectName}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('CSV file generated!', 'success');
+        }
+
+        function exportAsPdf() {
             const projectName = document.getElementById('bidProjectName').value || 'N/A';
             const clientName = document.getElementById('clientName').value || 'N/A';
             const bidDate = new Date(document.getElementById('bidDate').value).toLocaleDateString();
@@ -1754,7 +1832,7 @@
             const reportWindow = window.open('', '_blank');
             reportWindow.document.write(reportHtml);
             reportWindow.document.close();
-            showToast('Report generated in new tab.', 'success');
+            showToast('PDF report generated in new tab.', 'success');
         }
 
         // --- PROJECTS & MATERIALS ---
