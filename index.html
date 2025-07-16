@@ -35,6 +35,12 @@
             --shadow-xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
             --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --bg-color: var(--gray-100);
+            --surface-color: var(--white);
+            --surface-alt: var(--gray-100);
+            --text-color: var(--gray-900);
+            --border-color: var(--gray-200);
+            --gray-50: #f0f4f8;
         }
 
         body.dark-mode {
@@ -49,6 +55,12 @@
             --gray-900: #f8fafc;
             --dark: #ffffff;
             --gradient-dark: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --surface-alt: #334155;
+            --text-color: #f8fafc;
+            --border-color: #334155;
+            --gray-50: #1e293b;
         }
 
         * {
@@ -59,10 +71,11 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--gray-100);
-            color: var(--gray-900);
+            background: var(--bg-color);
+            color: var(--text-color);
             line-height: 1.6;
             overflow-x: hidden;
+            transition: background 0.3s ease, color 0.3s ease;
         }
 
         /* Sidebar Navigation */
@@ -157,11 +170,11 @@
         .main-content {
             margin-left: 280px;
             min-height: 100vh;
-            background: var(--gray-100);
+            background: var(--bg-color);
         }
 
         .header {
-            background: white;
+            background: var(--surface-color);
             padding: 1.5rem 2.5rem;
             box-shadow: var(--shadow-sm);
             display: flex;
@@ -175,7 +188,7 @@
         .page-title {
             font-size: 1.75rem;
             font-weight: 800;
-            color: var(--dark);
+            color: var(--text-color);
         }
 
         .header-actions {
@@ -189,7 +202,7 @@
             align-items: center;
             gap: 0.75rem;
             padding: 0.5rem 1.25rem;
-            background: var(--gray-100);
+            background: var(--surface-alt);
             border-radius: 100px;
             font-size: 0.875rem;
             font-weight: 500;
@@ -240,11 +253,12 @@
 
         /* Cards */
         .card {
-            background: white;
+            background: var(--surface-color);
             border-radius: 20px;
             padding: 2rem;
             box-shadow: var(--shadow-sm);
-            border: 1px solid var(--gray-200);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
             transition: all 0.3s ease;
         }
 
@@ -304,12 +318,13 @@
         .form-select {
             width: 100%;
             padding: 0.75rem 1rem;
-            border: 2px solid var(--gray-300);
+            border: 2px solid var(--border-color);
             border-radius: 12px;
             font-size: 1rem;
             font-weight: 500;
             transition: all 0.2s ease;
-            background: white;
+            background: var(--surface-color);
+            color: var(--text-color);
         }
 
         .form-input:focus,
@@ -329,13 +344,14 @@
         .material-card {
             position: relative;
             padding: 1rem;
-            border: 3px solid var(--gray-200);
+            border: 3px solid var(--border-color);
             border-radius: 16px;
             cursor: pointer;
             transition: all 0.3s ease;
-            background: white;
+            background: var(--surface-color);
             text-align: center;
             overflow: hidden;
+            color: var(--text-color);
         }
         
         .material-card::before {
@@ -515,7 +531,7 @@
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
-            background: white;
+            background: var(--surface-color);
             border-radius: 16px;
             overflow: hidden;
             box-shadow: var(--shadow-sm);
@@ -538,7 +554,7 @@
 
         .modern-table td {
             padding: 1.25rem;
-            border-bottom: 1px solid var(--gray-100);
+            border-bottom: 1px solid var(--border-color);
         }
 
         .modern-table tbody tr {
@@ -546,7 +562,7 @@
         }
         
         .modern-table tbody tr:hover {
-            background: var(--gray-50);
+            background: var(--surface-alt);
             transform: scale(1.01);
         }
 
@@ -599,7 +615,7 @@
         }
 
         .modal-dialog {
-            background: white;
+            background: var(--surface-color);
             border-radius: 24px;
             padding: 2.5rem;
             max-width: 600px;
@@ -608,6 +624,7 @@
             overflow-y: auto;
             box-shadow: var(--shadow-xl);
             animation: slideUp 0.3s ease;
+            color: var(--text-color);
         }
 
         @keyframes slideUp {
@@ -661,7 +678,7 @@
         }
 
         .toast {
-            background: white;
+            background: var(--surface-color);
             padding: 1rem 1.5rem;
             border-radius: 16px;
             box-shadow: var(--shadow-xl);
@@ -671,6 +688,7 @@
             min-width: 300px;
             animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
             border: 2px solid transparent;
+            color: var(--text-color);
         }
 
         @keyframes slideInRight {
@@ -731,14 +749,14 @@
         /* Calculator */
         .calculator-dialog {
             max-width: 480px;
-            background: white;
-            color: var(--dark);
+            background: var(--surface-color);
+            color: var(--text-color);
             border-radius: 20px;
             padding: 2rem;
             box-shadow: var(--shadow-xl);
         }
         .calculator-display {
-            background: var(--gray-100);
+            background: var(--surface-alt);
             border-radius: 12px;
             padding: 1rem 1.5rem;
             text-align: right;
@@ -747,8 +765,8 @@
             margin-bottom: 1.5rem;
             min-height: 60px;
             word-wrap: break-word;
-            color: var(--dark);
-            border: 2px solid var(--gray-300);
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
         }
         .calculator-grid {
             display: grid;
@@ -759,15 +777,16 @@
             padding: 1.25rem;
             font-size: 1.25rem;
             border-radius: 12px;
-            background: var(--gray-200);
+            background: var(--surface-alt);
             border: none;
+            color: var(--text-color);
         }
         .calculator-grid button:hover {
-            background: var(--gray-300);
+            background: var(--surface-color);
         }
         .calculator-grid .btn-secondary {
-            background-color: var(--gray-300);
-            color: var(--dark);
+            background-color: var(--surface-color);
+            color: var(--text-color);
         }
         .calculator-grid .btn-primary {
             background-color: var(--primary);
@@ -781,12 +800,12 @@
         .mode-btn {
             flex: 1;
             padding: 0.5rem 0.75rem;
-            border: 2px solid var(--gray-300);
-            background: var(--white);
+            border: 2px solid var(--border-color);
+            background: var(--surface-color);
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
-            color: var(--dark);
+            color: var(--text-color);
         }
         .mode-btn.active {
             background: var(--primary);
