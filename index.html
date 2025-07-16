@@ -1073,7 +1073,13 @@
             <!-- Projects Tab -->
             <div id="projectsTab" class="tab-content">
                 <div class="card">
-                    <div class="card-header"><h3 class="card-title">Saved Projects</h3><input type="search" class="form-input" id="projectSearch" placeholder="Search projects..." style="max-width: 300px;"></div>
+                    <div class="card-header">
+                        <h3 class="card-title">Saved Projects</h3>
+                        <input type="search" class="form-input" id="projectSearch" placeholder="Search projects..." style="max-width: 200px;">
+                        <button class="btn btn-secondary" id="exportProjectsBtn">Export</button>
+                        <button class="btn btn-secondary" id="importProjectsBtn">Import</button>
+                        <input type="file" id="importProjectsInput" style="display:none">
+                    </div>
                     <div id="projectsList" style="margin-top: 2rem;"></div>
                 </div>
             </div>
@@ -1106,6 +1112,16 @@
                             <div class="form-group"><label class="form-label">Default Tax Rate (%)</label><input type="number" class="form-input" value="8.5" step="0.1"></div>
                         </div>
                     </div>
+                </div>
+                <div class="card" style="margin-top:2rem;">
+                    <h3 class="card-title" style="margin-bottom:1.5rem;">Company Information</h3>
+                    <div class="grid-2" style="gap:1rem;">
+                        <div class="form-group"><label class="form-label">Company Name</label><input type="text" class="form-input" id="companyName"></div>
+                        <div class="form-group"><label class="form-label">Address</label><input type="text" class="form-input" id="companyAddress"></div>
+                        <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="companyPhone"></div>
+                        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="companyEmail"></div>
+                    </div>
+                    <button class="btn btn-primary" id="saveCompanyBtn" style="margin-top:1rem;">Save Company Info</button>
                 </div>
             </div>
         </div>
@@ -1199,6 +1215,15 @@
             <button class="btn btn-success" id="useValueBtn" style="width: 100%; margin-top: 1.5rem;">Use Value</button>
         </div>
     </div>
+    <div class="modal" id="newProjectModal">
+        <div class="modal-dialog">
+            <div class="modal-header"><h2 class="modal-title">Select Estimator Type</h2><button class="modal-close" id="closeNewProjectModal">&times;</button></div>
+            <div style="display:flex; gap:1rem; justify-content:center; margin-top:1rem;">
+                <button class="btn btn-primary" id="startQuickBtn">Quick Estimator</button>
+                <button class="btn btn-secondary" id="startDetailedBtn">Detailed Bidding</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Container -->
     <div id="toastContainer"></div>
@@ -1218,6 +1243,7 @@
                 flooring: { carpet: 2.50, hardwood: 8.00, tile: 5.00, laminate: 3.50 }
             },
             savedProjects: [],
+            companyInfo: { name: '', address: '', phone: '', email: '' },
             currentEstimate: null,
             lineItemId: 0,
             lastFocusedInput: null,
@@ -1247,6 +1273,8 @@
                     { name: 'Foundation Walls', unit: 'sq ft', rate: 12 },
                     { name: 'Slab on Grade', unit: 'sq ft', rate: 7.5 },
                     { name: 'Waterproofing', unit: 'sq ft', rate: 3.5 },
+                    { name: 'Rebar Installation', unit: 'ton', rate: 1200 },
+                    { name: 'Formwork', unit: 'sq ft', rate: 4 },
                 ],
                 'Masonry': [
                     { name: 'CMU Block Wall', unit: 'sq ft', rate: 18 },
@@ -1300,6 +1328,16 @@
                     { name: 'Lighting Fixtures', unit: 'each', rate: 180 },
                     { name: 'Panelboards', unit: 'each', rate: 1500 },
                     { name: 'Fire Alarm System', unit: 'sq ft', rate: 1.75 },
+                ],
+                'Fire Protection': [
+                    { name: 'Sprinkler System', unit: 'sq ft', rate: 2 },
+                    { name: 'Fire Extinguishers', unit: 'each', rate: 50 },
+                    { name: 'Standpipes', unit: 'each', rate: 500 }
+                ],
+                'Earthwork': [
+                    { name: 'Clearing & Grubbing', unit: 'acre', rate: 2500 },
+                    { name: 'Trenching', unit: 'ln ft', rate: 6 },
+                    { name: 'Soil Compaction', unit: 'sq ft', rate: 1.2 }
                 ]
             }
         };
@@ -1324,8 +1362,14 @@
             try {
                 const savedData = localStorage.getItem('constructionProjects');
                 state.savedProjects = savedData ? JSON.parse(savedData) : [];
+                const companyData = localStorage.getItem('companyInfo');
+                state.companyInfo = companyData ? JSON.parse(companyData) : state.companyInfo;
+                document.getElementById('companyName').value = state.companyInfo.name || '';
+                document.getElementById('companyAddress').value = state.companyInfo.address || '';
+                document.getElementById('companyPhone').value = state.companyInfo.phone || '';
+                document.getElementById('companyEmail').value = state.companyInfo.email || '';
             } catch (e) {
-                console.error('Error loading saved projects:', e);
+                console.error('Error loading saved data:', e);
                 state.savedProjects = [];
             }
         }
@@ -1344,11 +1388,20 @@
             document.getElementById('exportCsvBtn')?.addEventListener('click', exportAsCsv);
 
             document.getElementById('saveBidBtn')?.addEventListener('click', saveBid);
+            document.getElementById('saveCompanyBtn')?.addEventListener('click', saveCompanyInfo);
             document.getElementById('checkUpdatesBtn')?.addEventListener('click', checkForUpdates);
             document.getElementById('applyUpdateBtn')?.addEventListener('click', applyUpdate);
             document.getElementById('laterBtn')?.addEventListener('click', () => closeModal('updateModal'));
-            document.getElementById('newProjectBtn')?.addEventListener('click', () => switchTab('estimator'));
+            document.getElementById('newProjectBtn')?.addEventListener('click', () => openModal('newProjectModal'));
             document.getElementById('projectSearch')?.addEventListener('input', (e) => loadProjects(e.target.value));
+
+            document.getElementById('exportProjectsBtn')?.addEventListener('click', exportProjects);
+            document.getElementById('importProjectsBtn')?.addEventListener('click', () => document.getElementById('importProjectsInput').click());
+            document.getElementById('importProjectsInput')?.addEventListener('change', importProjects);
+
+            document.getElementById('startQuickBtn')?.addEventListener('click', () => { closeModal('newProjectModal'); switchTab('estimator'); });
+            document.getElementById('startDetailedBtn')?.addEventListener('click', () => { closeModal('newProjectModal'); switchTab('detailed'); });
+            document.getElementById('closeNewProjectModal')?.addEventListener('click', () => closeModal('newProjectModal'));
             
             // Modals
             document.getElementById('closeUpdateModal')?.addEventListener('click', () => closeModal('updateModal'));
@@ -1530,6 +1583,17 @@
             localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
             showToast('Project saved successfully!', 'success');
             loadProjects();
+        }
+
+        function saveCompanyInfo() {
+            state.companyInfo = {
+                name: document.getElementById('companyName').value,
+                address: document.getElementById('companyAddress').value,
+                phone: document.getElementById('companyPhone').value,
+                email: document.getElementById('companyEmail').value,
+            };
+            localStorage.setItem('companyInfo', JSON.stringify(state.companyInfo));
+            showToast('Company information saved!', 'success');
         }
 
         // --- DETAILED BIDDING ---
@@ -1857,6 +1921,7 @@ function handlePlanUpload(e) {
             const clientName = document.getElementById('clientName').value || 'N/A';
             const bidDate = new Date(document.getElementById('bidDate').value).toLocaleDateString();
             const completionDays = document.getElementById('completionDays').value || 'N/A';
+            const company = state.companyInfo;
 
             let lineItemsHtml = '';
             let currentCategory = '';
@@ -1914,7 +1979,9 @@ function handlePlanUpload(e) {
                 <body>
                     <div class="header">
                         <h1>Construction Bid Proposal</h1>
-                        <p>Generated by Construction Estimator Pro</p>
+                        <p>${company.name || 'Construction Estimator Pro'}</p>
+                        <p>${company.address || ''}</p>
+                        <p>${company.phone ? company.phone + ' | ' : ''}${company.email || ''}</p>
                     </div>
                     <div class="info-grid">
                         <div><span>Project Name:</span> ${projectName}</div>
@@ -1984,6 +2051,35 @@ function handlePlanUpload(e) {
                 `;
                 list.appendChild(div);
             });
+        }
+
+        function exportProjects() {
+            const data = JSON.stringify(state.savedProjects);
+            const blob = new Blob([data], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'projects.json';
+            link.click();
+        }
+
+        function importProjects(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const projects = JSON.parse(reader.result);
+                    if (Array.isArray(projects)) {
+                        state.savedProjects = projects;
+                        localStorage.setItem('constructionProjects', JSON.stringify(projects));
+                        loadProjects();
+                        showToast('Projects imported!', 'success');
+                    }
+                } catch (err) {
+                    showToast('Invalid project file.', 'error');
+                }
+            };
+            reader.readAsText(file);
         }
 
         function populateMaterialsTable() {
