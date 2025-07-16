@@ -1240,11 +1240,13 @@
                 framing: { wood: 15.00, steel: 20.00, concrete: 25.00 },
                 exterior: { vinyl: 3.00, brick: 8.00, stucco: 6.00, stone: 15.00 },
                 roofing: { asphalt: 3.50, metal: 7.00, tile: 10.00 },
-                flooring: { carpet: 2.50, hardwood: 8.00, tile: 5.00, laminate: 3.50 }
+                flooring: { carpet: 2.50, hardwood: 8.00, tile: 5.00, laminate: 3.50 },
+                insulation: { fiberglass: 0.75, sprayFoam: 1.50 }
             },
             savedProjects: [],
             companyInfo: { name: '', address: '', phone: '', email: '' },
             currentEstimate: null,
+            editingProjectId: null,
             lineItemId: 0,
             lastFocusedInput: null,
             calcMode: "basic",
@@ -1333,6 +1335,11 @@
                     { name: 'Sprinkler System', unit: 'sq ft', rate: 2 },
                     { name: 'Fire Extinguishers', unit: 'each', rate: 50 },
                     { name: 'Standpipes', unit: 'each', rate: 500 }
+                ],
+                'Specialties': [
+                    { name: 'Toilet Accessories', unit: 'allowance', rate: 1000 },
+                    { name: 'Fire Stopping', unit: 'sq ft', rate: 3 },
+                    { name: 'Signage', unit: 'allowance', rate: 1500 }
                 ],
                 'Earthwork': [
                     { name: 'Clearing & Grubbing', unit: 'acre', rate: 2500 },
@@ -1548,9 +1555,13 @@
             const total = materialTotal + laborTotal;
 
             state.currentEstimate = {
+                id: state.editingProjectId || state.currentEstimate?.id || Date.now(),
+                estimateType: 'quick',
                 name: form.querySelector('#projectName').value,
                 type: form.querySelector('#projectType').value,
-                sqft, floors, laborMultiplier, costs,
+                sqft, floors, laborMultiplier,
+                selected,
+                costs,
                 materialTotal, laborTotal, total,
                 date: new Date().toISOString()
             };
@@ -1579,10 +1590,48 @@
                 showToast('No estimate to save.', 'warning');
                 return;
             }
-            state.savedProjects.push(state.currentEstimate);
+            const estimate = { ...state.currentEstimate, estimateType: 'quick' };
+            if (state.editingProjectId) {
+                const idx = state.savedProjects.findIndex(p => p.id === state.editingProjectId);
+                if (idx !== -1) {
+                    state.savedProjects[idx] = estimate;
+                }
+                state.editingProjectId = null;
+                showToast('Project updated successfully!', 'success');
+            } else {
+                state.savedProjects.push(estimate);
+                showToast('Project saved successfully!', 'success');
+            }
             localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
-            showToast('Project saved successfully!', 'success');
             loadProjects();
+        }
+
+        function populateEstimatorForm(data) {
+            document.getElementById('projectName').value = data.name || '';
+            document.getElementById('projectType').value = data.type || '';
+            document.getElementById('sqft').value = data.sqft || '';
+            document.getElementById('floors').value = data.floors || '';
+            document.getElementById('laborCost').value = data.laborMultiplier || '';
+
+            document.querySelectorAll('[data-foundation]').forEach(c => {
+                c.classList.toggle('selected', c.dataset.foundation === data.selected?.foundation);
+            });
+            document.querySelectorAll('[data-framing]').forEach(c => {
+                c.classList.toggle('selected', c.dataset.framing === data.selected?.framing);
+            });
+            document.querySelectorAll('[data-exterior]').forEach(c => {
+                c.classList.toggle('selected', c.dataset.exterior === data.selected?.exterior);
+            });
+        }
+
+        function editProject(id) {
+            const project = state.savedProjects.find(p => p.id === id && p.estimateType === 'quick');
+            if (!project) return;
+            state.editingProjectId = id;
+            state.currentEstimate = { ...project };
+            populateEstimatorForm(project);
+            displayEstimate(project);
+            switchTab('estimator');
         }
 
         function saveCompanyInfo() {
@@ -1680,7 +1729,46 @@
         }
         
         function saveBid() {
+            const name = document.getElementById('bidProjectName').value;
+            if (!name) {
+                showToast('Project name required', 'warning');
+                return;
+            }
+
+            const lineItems = [];
+            document.querySelectorAll('.line-item-row').forEach(row => {
+                const category = row.querySelector('[data-field="category"]').value;
+                const description = row.querySelector('[data-field="description"]').value;
+                const quantity = parseFloat(row.querySelector('[data-field="quantity"]').value) || 0;
+                const unit = row.querySelector('[data-field="unit"]').value;
+                const rate = parseFloat(row.querySelector('[data-field="rate"]').value) || 0;
+                lineItems.push({ category, description, quantity, unit, rate, total: quantity * rate });
+            });
+
+            const subtotal = parseFloat(document.getElementById('bidSubtotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+            const markup = parseFloat(document.getElementById('bidMarkup').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+            const contingency = parseFloat(document.getElementById('bidContingency').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+            const total = parseFloat(document.getElementById('bidTotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+
+            const bid = {
+                id: Date.now(),
+                estimateType: 'detailed',
+                name,
+                clientName: document.getElementById('clientName').value,
+                bidDate: document.getElementById('bidDate').value,
+                completionDays: document.getElementById('completionDays').value,
+                lineItems,
+                subtotal,
+                markup,
+                contingency,
+                total,
+                date: new Date().toISOString()
+            };
+
+            state.savedProjects.push(bid);
+            localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
             showToast('Bid saved!', 'success');
+            loadProjects();
         }
 
         // --- CALCULATOR ---
@@ -2025,7 +2113,7 @@ function handlePlanUpload(e) {
             const list = document.getElementById('projectsList');
             list.innerHTML = '';
             
-            const filteredProjects = state.savedProjects.filter(p => 
+            const filteredProjects = state.savedProjects.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
@@ -2037,18 +2125,21 @@ function handlePlanUpload(e) {
             filteredProjects.forEach(p => {
                 const div = document.createElement('div');
                 div.style = "padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem;";
+                const typeLabel = p.estimateType === 'detailed' ? 'Detailed' : 'Quick';
                 div.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <h4 style="font-weight: 600;">${p.name}</h4>
-                            <p style="color: var(--gray-600); font-size: 0.875rem;">${p.type} • ${p.sqft} sqft</p>
+                            <p style="color: var(--gray-600); font-size: 0.875rem;">${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}</p>
                         </div>
                         <div style="text-align: right;">
                             <p style="font-weight: 700; color: var(--primary);">${formatCurrency(p.total)}</p>
                             <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
+                            ${p.estimateType === 'quick' ? `<button class="btn btn-secondary edit-project" data-id="${p.id}" style="margin-top:0.25rem;">Edit</button>` : ''}
                         </div>
                     </div>
                 `;
+                div.querySelector('.edit-project')?.addEventListener('click', () => editProject(p.id));
                 list.appendChild(div);
             });
         }
