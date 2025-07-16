@@ -622,6 +622,40 @@
             border-color: var(--gray-300);
         }
 
+        /* Dark Mode Adjustments */
+        body.dark-mode .header {
+            background: var(--gray-200);
+        }
+
+        body.dark-mode .card,
+        body.dark-mode .material-card,
+        body.dark-mode .toast,
+        body.dark-mode .modern-table {
+            background: var(--gray-200);
+            color: var(--gray-900);
+            border-color: var(--gray-300);
+        }
+
+        body.dark-mode .material-card.selected {
+            background: var(--primary);
+            color: white;
+        }
+
+        body.dark-mode .modern-table thead {
+            background: var(--gray-100);
+        }
+
+        body.dark-mode .modern-table tbody tr:hover {
+            background: var(--gray-300);
+        }
+
+        body.dark-mode .form-input,
+        body.dark-mode .form-select {
+            background: var(--gray-100);
+            color: var(--gray-900);
+            border-color: var(--gray-300);
+        }
+
         @keyframes slideUp {
             from { transform: translateY(100px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
