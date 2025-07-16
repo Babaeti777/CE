@@ -1641,7 +1641,10 @@
             };
             
             const key = `${fromUnit}-${toUnit}`;
-            if (conversions[key]) {
+            if (fromUnit === toUnit) {
+                // No conversion needed when units match
+                result = value;
+            } else if (conversions[key]) {
                 result = conversions[key](value);
             } else {
                 showToast('Invalid unit conversion', 'error');
