@@ -716,23 +716,25 @@
 
         /* Calculator */
         .calculator-dialog {
-            max-width: 420px;
-            background: var(--gradient-dark);
-            color: white;
-            border-radius: 16px;
+            max-width: 480px;
+            background: white;
+            color: var(--dark);
+            border-radius: 20px;
             padding: 2rem;
+            box-shadow: var(--shadow-xl);
         }
         .calculator-display {
-            background: rgba(255,255,255,0.1);
+            background: var(--gray-100);
             border-radius: 12px;
             padding: 1rem 1.5rem;
             text-align: right;
-            font-size: 2rem;
+            font-size: 2.25rem;
             font-weight: 700;
             margin-bottom: 1.5rem;
             min-height: 60px;
             word-wrap: break-word;
-            color: white;
+            color: var(--dark);
+            border: 2px solid var(--gray-300);
         }
         .calculator-grid {
             display: grid;
@@ -742,11 +744,16 @@
         .calculator-grid button {
             padding: 1.25rem;
             font-size: 1.25rem;
-            border-radius: 8px;
+            border-radius: 12px;
+            background: var(--gray-200);
+            border: none;
+        }
+        .calculator-grid button:hover {
+            background: var(--gray-300);
         }
         .calculator-grid .btn-secondary {
-            background-color: rgba(255,255,255,0.15);
-            color: white;
+            background-color: var(--gray-300);
+            color: var(--dark);
         }
         .calculator-grid .btn-primary {
             background-color: var(--primary);
@@ -760,11 +767,12 @@
         .mode-btn {
             flex: 1;
             padding: 0.5rem 0.75rem;
-            border: 1px solid var(--gray-300);
-            background: var(--gray-100);
+            border: 2px solid var(--gray-300);
+            background: var(--white);
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
+            color: var(--dark);
         }
         .mode-btn.active {
             background: var(--primary);
@@ -958,32 +966,26 @@
                 <div class="grid-4" style="margin-bottom: 2rem;">
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Total Projects</h3><svg width="24" height="24" fill="none" stroke="var(--primary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg></div>
-                        <p style="font-size: 2.5rem; font-weight: 800; color: var(--primary);">12</p>
-                        <p style="color: var(--gray-600); font-size: 0.875rem;">+3 this month</p>
+                        <p id="totalProjects" style="font-size: 2.5rem; font-weight: 800; color: var(--primary);">0</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Total Value</h3><svg width="24" height="24" fill="none" stroke="var(--success)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                        <p style="font-size: 2.5rem; font-weight: 800; color: var(--success);">$2.4M</p>
-                        <p style="color: var(--gray-600); font-size: 0.875rem;">Average: $200K</p>
+                        <p id="totalValue" style="font-size: 2.5rem; font-weight: 800; color: var(--success);">$0</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Active Bids</h3><svg width="24" height="24" fill="none" stroke="var(--warning)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg></div>
-                        <p style="font-size: 2.5rem; font-weight: 800; color: var(--warning);">5</p>
-                        <p style="color: var(--gray-600); font-size: 0.875rem;">2 pending review</p>
+                        <p id="activeBids" style="font-size: 2.5rem; font-weight: 800; color: var(--warning);">0</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Win Rate</h3><svg width="24" height="24" fill="none" stroke="var(--secondary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                        <p style="font-size: 2.5rem; font-weight: 800; color: var(--secondary);">68%</p>
-                        <p style="color: var(--gray-600); font-size: 0.875rem;">Above average</p>
+                        <p id="winRate" style="font-size: 2.5rem; font-weight: 800; color: var(--secondary);">0%</p>
                     </div>
                 </div>
                 <div class="grid-2">
                     <div class="card">
                         <h3 class="card-title" style="margin-bottom: 1.5rem;">Recent Projects</h3>
-                        <div class="space-y-3">
-                            <div style="padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem;"><div style="display: flex; justify-content: space-between; align-items: center;"><div><h4 style="font-weight: 600;">Riverside Apartments</h4><p style="color: var(--gray-600); font-size: 0.875rem;">Residential • 12,000 sqft</p></div><div style="text-align: right;"><p style="font-weight: 700; color: var(--primary);">$480,000</p><p style="color: var(--gray-600); font-size: 0.75rem;">2 days ago</p></div></div></div>
-                            <div style="padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem;"><div style="display: flex; justify-content: space-between; align-items: center;"><div><h4 style="font-weight: 600;">Office Complex B</h4><p style="color: var(--gray-600); font-size: 0.875rem;">Commercial • 8,500 sqft</p></div><div style="text-align: right;"><p style="font-weight: 700; color: var(--primary);">$650,000</p><p style="color: var(--gray-600); font-size: 0.75rem;">5 days ago</p></div></div></div>
-                        </div>
+                        <div id="recentProjectsList" class="space-y-3"></div>
+                        <button class="btn btn-secondary" id="viewAllProjectsBtn" style="margin-top:1rem;">View All</button>
                     </div>
                     <div class="card">
                         <h3 class="card-title" style="margin-bottom: 1.5rem;">Material Price Trends</h3>
@@ -1356,6 +1358,7 @@
             setupNavigation();
             populateMaterialsTable();
             loadProjects();
+            updateDashboard();
             initCharts();
             checkForUpdatesOnLoad();
             
@@ -1461,6 +1464,7 @@
             document.getElementById("shapeSelect")?.addEventListener("change", updateShapeInputs);
             document.getElementById("calcAreaBtn")?.addEventListener("click", calculateArea);
             document.getElementById("planUpload")?.addEventListener("change", handlePlanUpload);
+            document.getElementById('viewAllProjectsBtn')?.addEventListener('click', () => switchTab('projects'));
             updateCalcMode(state.calcMode);
         }
 
@@ -1604,6 +1608,7 @@
             }
             localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
             loadProjects();
+            updateDashboard();
         }
 
         function populateEstimatorForm(data) {
@@ -1769,6 +1774,7 @@
             localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
             showToast('Bid saved!', 'success');
             loadProjects();
+            updateDashboard();
         }
 
         // --- CALCULATOR ---
@@ -2164,6 +2170,7 @@ function handlePlanUpload(e) {
                         state.savedProjects = projects;
                         localStorage.setItem('constructionProjects', JSON.stringify(projects));
                         loadProjects();
+                        updateDashboard();
                         showToast('Projects imported!', 'success');
                     }
                 } catch (err) {
@@ -2171,6 +2178,58 @@ function handlePlanUpload(e) {
                 }
             };
             reader.readAsText(file);
+        }
+
+        function updateDashboard() {
+            const totalProjectsEl = document.getElementById('totalProjects');
+            const totalValueEl = document.getElementById('totalValue');
+            const activeBidsEl = document.getElementById('activeBids');
+            const winRateEl = document.getElementById('winRate');
+            const recentList = document.getElementById('recentProjectsList');
+
+            const totalProjects = state.savedProjects.length;
+            const totalValue = state.savedProjects.reduce((sum, p) => sum + (p.total || 0), 0);
+            const activeBids = state.savedProjects.filter(p => p.estimateType === 'detailed').length;
+            const wins = state.savedProjects.filter(p => p.won).length;
+            const winRate = totalProjects ? Math.round((wins / totalProjects) * 100) : 0;
+
+            if (totalProjectsEl) totalProjectsEl.textContent = totalProjects;
+            if (totalValueEl) totalValueEl.textContent = formatCurrency(totalValue);
+            if (activeBidsEl) activeBidsEl.textContent = activeBids;
+            if (winRateEl) winRateEl.textContent = winRate + '%';
+
+            if (!recentList) return;
+            recentList.innerHTML = '';
+            const recent = state.savedProjects.slice().sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0,3);
+            if (recent.length === 0) {
+                recentList.innerHTML = `<p style="color: var(--gray-600);">No saved projects.</p>`;
+                return;
+            }
+            recent.forEach(p => {
+                const div = document.createElement('div');
+                div.style = "padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem; cursor:pointer;";
+                const typeLabel = p.estimateType === 'detailed' ? 'Detailed' : 'Quick';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content: space-between; align-items:center;">
+                        <div>
+                            <h4 style="font-weight:600;">${p.name}</h4>
+                            <p style="color: var(--gray-600); font-size:0.875rem;">${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <p style="font-weight:700; color: var(--primary);">${formatCurrency(p.total)}</p>
+                            <p style="color: var(--gray-600); font-size:0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                `;
+                div.addEventListener('click', () => {
+                    if (p.estimateType === 'quick') {
+                        editProject(p.id);
+                    } else {
+                        switchTab('projects');
+                    }
+                });
+                recentList.appendChild(div);
+            });
         }
 
         function populateMaterialsTable() {
