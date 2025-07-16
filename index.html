@@ -593,14 +593,20 @@
             padding: 2rem;
         }
 
+        body.dark-mode .modal {
+            background: rgba(0, 0, 0, 0.6);
+        }
+
         .modal.active {
             display: flex;
             animation: fadeIn 0.2s ease;
         }
 
         .modal-dialog {
-            background: white;
+            background: var(--gray-100);
+            color: var(--gray-900);
             border-radius: 24px;
+            border: 1px solid var(--gray-200);
             padding: 2.5rem;
             max-width: 600px;
             width: 100%;
@@ -608,6 +614,12 @@
             overflow-y: auto;
             box-shadow: var(--shadow-xl);
             animation: slideUp 0.3s ease;
+        }
+
+        body.dark-mode .modal-dialog {
+            background: var(--gray-200);
+            color: var(--gray-800);
+            border-color: var(--gray-300);
         }
 
         @keyframes slideUp {
