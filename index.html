@@ -37,6 +37,20 @@
             --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         }
 
+        body.dark-mode {
+            --gray-100: #1e293b;
+            --gray-200: #334155;
+            --gray-300: #475569;
+            --gray-400: #64748b;
+            --gray-500: #94a3b8;
+            --gray-600: #cbd5e1;
+            --gray-700: #e2e8f0;
+            --gray-800: #f1f5f9;
+            --gray-900: #f8fafc;
+            --dark: #ffffff;
+            --gradient-dark: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -953,6 +967,9 @@
                     <div class="sync-dot"></div>
                     <span>Database synced</span>
                 </div>
+                <button class="btn btn-ghost" id="themeToggle" aria-label="Toggle Theme">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                </button>
                 <button class="btn btn-primary" id="newProjectBtn">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     New Project
@@ -973,8 +990,8 @@
                         <p id="totalValue" style="font-size: 2.5rem; font-weight: 800; color: var(--success);">$0</p>
                     </div>
                     <div class="card">
-                        <div class="card-header"><h3 class="card-title">Active Bids</h3><svg width="24" height="24" fill="none" stroke="var(--warning)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg></div>
-                        <p id="activeBids" style="font-size: 2.5rem; font-weight: 800; color: var(--warning);">0</p>
+                        <div class="card-header"><h3 class="card-title">Under Review</h3><svg width="24" height="24" fill="none" stroke="var(--warning)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg></div>
+                        <p id="reviewCount" style="font-size: 2.5rem; font-weight: 800; color: var(--warning);">0</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Win Rate</h3><svg width="24" height="24" fill="none" stroke="var(--secondary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
@@ -1372,12 +1389,15 @@
             try {
                 const savedData = localStorage.getItem('constructionProjects');
                 state.savedProjects = savedData ? JSON.parse(savedData) : [];
+                state.savedProjects.forEach(p => { if (!p.status) p.status = 'review'; });
                 const companyData = localStorage.getItem('companyInfo');
                 state.companyInfo = companyData ? JSON.parse(companyData) : state.companyInfo;
                 document.getElementById('companyName').value = state.companyInfo.name || '';
                 document.getElementById('companyAddress').value = state.companyInfo.address || '';
                 document.getElementById('companyPhone').value = state.companyInfo.phone || '';
                 document.getElementById('companyEmail').value = state.companyInfo.email || '';
+                const theme = localStorage.getItem('darkMode');
+                if (theme === 'on') document.body.classList.add('dark-mode');
             } catch (e) {
                 console.error('Error loading saved data:', e);
                 state.savedProjects = [];
@@ -1403,6 +1423,7 @@
             document.getElementById('applyUpdateBtn')?.addEventListener('click', applyUpdate);
             document.getElementById('laterBtn')?.addEventListener('click', () => closeModal('updateModal'));
             document.getElementById('newProjectBtn')?.addEventListener('click', () => openModal('newProjectModal'));
+            document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
             document.getElementById('projectSearch')?.addEventListener('input', (e) => loadProjects(e.target.value));
 
             document.getElementById('exportProjectsBtn')?.addEventListener('click', exportProjects);
@@ -1498,6 +1519,11 @@
             document.getElementById('sidebar')?.classList.toggle('open');
         }
 
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
+        }
+
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
@@ -1567,7 +1593,8 @@
                 selected,
                 costs,
                 materialTotal, laborTotal, total,
-                date: new Date().toISOString()
+                date: new Date().toISOString(),
+                status: state.currentEstimate?.status || 'review'
             };
 
             displayEstimate(state.currentEstimate);
@@ -1594,7 +1621,7 @@
                 showToast('No estimate to save.', 'warning');
                 return;
             }
-            const estimate = { ...state.currentEstimate, estimateType: 'quick' };
+            const estimate = { ...state.currentEstimate, estimateType: 'quick', status: state.currentEstimate.status || 'review' };
             if (state.editingProjectId) {
                 const idx = state.savedProjects.findIndex(p => p.id === state.editingProjectId);
                 if (idx !== -1) {
@@ -1637,6 +1664,23 @@
             populateEstimatorForm(project);
             displayEstimate(project);
             switchTab('estimator');
+        }
+
+        function editBid(id) {
+            const bid = state.savedProjects.find(p => p.id === id && p.estimateType === 'detailed');
+            if (!bid) return;
+            state.editingProjectId = id;
+            document.getElementById('bidProjectName').value = bid.name || '';
+            document.getElementById('clientName').value = bid.clientName || '';
+            document.getElementById('bidDate').value = bid.bidDate || '';
+            document.getElementById('completionDays').value = bid.completionDays || '';
+            document.getElementById('overhead').value = bid.overheadPercent || 10;
+            document.getElementById('profit').value = bid.profitPercent || 15;
+            document.getElementById('contingency').value = bid.contingencyPercent || 5;
+            document.getElementById('lineItems').innerHTML = '';
+            bid.lineItems.forEach(item => addLineItem(item));
+            updateBidTotal();
+            switchTab('detailed');
         }
 
         function saveCompanyInfo() {
@@ -1750,29 +1794,45 @@
                 lineItems.push({ category, description, quantity, unit, rate, total: quantity * rate });
             });
 
+            const overheadPercent = parseFloat(document.getElementById('overhead').value) || 0;
+            const profitPercent = parseFloat(document.getElementById('profit').value) || 0;
+            const contingencyPercent = parseFloat(document.getElementById('contingency').value) || 0;
+
             const subtotal = parseFloat(document.getElementById('bidSubtotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
             const markup = parseFloat(document.getElementById('bidMarkup').textContent.replace(/[^0-9.-]+/g, '')) || 0;
             const contingency = parseFloat(document.getElementById('bidContingency').textContent.replace(/[^0-9.-]+/g, '')) || 0;
             const total = parseFloat(document.getElementById('bidTotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
 
             const bid = {
-                id: Date.now(),
+                id: state.editingProjectId || Date.now(),
                 estimateType: 'detailed',
                 name,
                 clientName: document.getElementById('clientName').value,
                 bidDate: document.getElementById('bidDate').value,
                 completionDays: document.getElementById('completionDays').value,
                 lineItems,
+                overheadPercent,
+                profitPercent,
+                contingencyPercent,
                 subtotal,
                 markup,
                 contingency,
                 total,
-                date: new Date().toISOString()
+                date: new Date().toISOString(),
+                status: state.editingProjectId ? state.savedProjects.find(p => p.id === state.editingProjectId)?.status : 'review'
             };
-
-            state.savedProjects.push(bid);
+            if (state.editingProjectId) {
+                const idx = state.savedProjects.findIndex(p => p.id === state.editingProjectId);
+                if (idx !== -1) {
+                    state.savedProjects[idx] = bid;
+                }
+                state.editingProjectId = null;
+                showToast('Bid updated!', 'success');
+            } else {
+                state.savedProjects.push(bid);
+                showToast('Bid saved!', 'success');
+            }
             localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
-            showToast('Bid saved!', 'success');
             loadProjects();
             updateDashboard();
         }
@@ -2141,13 +2201,29 @@ function handlePlanUpload(e) {
                         <div style="text-align: right;">
                             <p style="font-weight: 700; color: var(--primary);">${formatCurrency(p.total)}</p>
                             <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
-                            ${p.estimateType === 'quick' ? `<button class="btn btn-secondary edit-project" data-id="${p.id}" style="margin-top:0.25rem;">Edit</button>` : ''}
+                            <select class="form-select project-status" data-id="${p.id}" style="margin-top:0.25rem;">
+                                <option value="review" ${p.status === 'review' ? 'selected' : ''}>Under Review</option>
+                                <option value="won" ${p.status === 'won' ? 'selected' : ''}>Won</option>
+                                <option value="lost" ${p.status === 'lost' ? 'selected' : ''}>Lost</option>
+                            </select>
+                            <button class="btn btn-secondary ${p.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${p.id}" style="margin-top:0.25rem;">Edit</button>
                         </div>
                     </div>
                 `;
+                const statusSelect = div.querySelector('.project-status');
+                statusSelect.addEventListener('change', (e) => updateProjectStatus(p.id, e.target.value));
                 div.querySelector('.edit-project')?.addEventListener('click', () => editProject(p.id));
+                div.querySelector('.edit-bid')?.addEventListener('click', () => editBid(p.id));
                 list.appendChild(div);
             });
+        }
+
+        function updateProjectStatus(id, status) {
+            const proj = state.savedProjects.find(p => p.id === id);
+            if (!proj) return;
+            proj.status = status;
+            localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+            updateDashboard();
         }
 
         function exportProjects() {
@@ -2183,19 +2259,20 @@ function handlePlanUpload(e) {
         function updateDashboard() {
             const totalProjectsEl = document.getElementById('totalProjects');
             const totalValueEl = document.getElementById('totalValue');
-            const activeBidsEl = document.getElementById('activeBids');
+            const reviewEl = document.getElementById('reviewCount');
             const winRateEl = document.getElementById('winRate');
             const recentList = document.getElementById('recentProjectsList');
 
             const totalProjects = state.savedProjects.length;
             const totalValue = state.savedProjects.reduce((sum, p) => sum + (p.total || 0), 0);
-            const activeBids = state.savedProjects.filter(p => p.estimateType === 'detailed').length;
-            const wins = state.savedProjects.filter(p => p.won).length;
-            const winRate = totalProjects ? Math.round((wins / totalProjects) * 100) : 0;
+            const review = state.savedProjects.filter(p => p.status === 'review').length;
+            const wins = state.savedProjects.filter(p => p.status === 'won').length;
+            const totalConsidered = state.savedProjects.filter(p => p.status !== 'review').length;
+            const winRate = totalConsidered ? Math.round((wins / totalConsidered) * 100) : 0;
 
             if (totalProjectsEl) totalProjectsEl.textContent = totalProjects;
             if (totalValueEl) totalValueEl.textContent = formatCurrency(totalValue);
-            if (activeBidsEl) activeBidsEl.textContent = activeBids;
+            if (reviewEl) reviewEl.textContent = review;
             if (winRateEl) winRateEl.textContent = winRate + '%';
 
             if (!recentList) return;
