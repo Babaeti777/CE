@@ -716,10 +716,14 @@
 
         /* Calculator */
         .calculator-dialog {
-            max-width: 400px;
+            max-width: 420px;
+            background: var(--gradient-dark);
+            color: white;
+            border-radius: 16px;
+            padding: 2rem;
         }
         .calculator-display {
-            background: var(--gray-100);
+            background: rgba(255,255,255,0.1);
             border-radius: 12px;
             padding: 1rem 1.5rem;
             text-align: right;
@@ -728,6 +732,7 @@
             margin-bottom: 1.5rem;
             min-height: 60px;
             word-wrap: break-word;
+            color: white;
         }
         .calculator-grid {
             display: grid;
@@ -737,12 +742,34 @@
         .calculator-grid button {
             padding: 1.25rem;
             font-size: 1.25rem;
+            border-radius: 8px;
         }
         .calculator-grid .btn-secondary {
-            background-color: var(--gray-200);
+            background-color: rgba(255,255,255,0.15);
+            color: white;
         }
         .calculator-grid .btn-primary {
             background-color: var(--primary);
+            color: white;
+        }
+        .mode-switch {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .mode-btn {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--gray-300);
+            background: var(--gray-100);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .mode-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
         }
         .unit-converter {
             margin-top: 1.5rem;
@@ -1109,12 +1136,9 @@
         <div class="modal-dialog calculator-dialog">
             <div class="modal-header"><h2 class="modal-title">Unit Calculator</h2><button class="modal-close" id="closeCalculatorModal">&times;</button></div>
             <div class="calculator-display" id="calculatorDisplay">0</div>
-            <div class="form-group" style="margin-bottom:1rem;">
-                <label class="form-label">Mode</label>
-                <select id="calcMode" class="form-select">
-                    <option value="basic">Basic</option>
-                    <option value="engineering">Engineering</option>
-                </select>
+            <div class="mode-switch">
+                <button id="modeBasic" class="mode-btn active" data-mode="basic">Basic</button>
+                <button id="modeEngineering" class="mode-btn" data-mode="engineering">Engineering</button>
             </div>
             <div class="calculator-grid" id="calculatorGrid">
                 <button class="btn btn-secondary" data-value="clear">C</button>
@@ -1372,10 +1396,12 @@
             document.getElementById('calculatorGrid')?.addEventListener('click', handleCalculatorClick);
             document.getElementById('convertUnitBtn')?.addEventListener('click', handleUnitConversion);
             document.getElementById('useValueBtn')?.addEventListener('click', useCalculatorValue);
-            document.getElementById("calcMode")?.addEventListener("change", updateCalcMode);
+            document.getElementById('modeBasic')?.addEventListener('click', () => updateCalcMode('basic'));
+            document.getElementById('modeEngineering')?.addEventListener('click', () => updateCalcMode('engineering'));
             document.getElementById("shapeSelect")?.addEventListener("change", updateShapeInputs);
             document.getElementById("calcAreaBtn")?.addEventListener("click", calculateArea);
             document.getElementById("planUpload")?.addEventListener("change", handlePlanUpload);
+            updateCalcMode(state.calcMode);
         }
 
         // --- NAVIGATION & UI ---
@@ -1708,11 +1734,12 @@
         }
 
         // --- REPORTING & EXPORTING ---
-function updateCalcMode() {
-    const mode = document.getElementById("calcMode").value;
+function updateCalcMode(mode) {
     state.calcMode = mode;
     document.getElementById("basicTools").style.display = mode === "basic" ? "block" : "none";
     document.getElementById("engineeringBtns").style.display = mode === "engineering" ? "grid" : "none";
+    document.getElementById("modeBasic")?.classList.toggle("active", mode === "basic");
+    document.getElementById("modeEngineering")?.classList.toggle("active", mode === "engineering");
 }
 
 function updateShapeInputs() {
