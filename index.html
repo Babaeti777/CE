@@ -753,6 +753,13 @@
         }
 
         /* Mobile Menu Toggle */
+        #basicTools .form-group {
+            margin-bottom: 0.75rem;
+        }
+        #engineeringBtns {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
         .menu-toggle {
             display: none;
             position: fixed;
@@ -892,10 +899,6 @@
         <button class="nav-item" data-tab="materials">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
             Materials Database
-        </button>
-        <button class="nav-item" data-tab="analytics">
-            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-            Analytics
         </button>
         <button class="nav-item" data-tab="settings">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -1059,14 +1062,6 @@
                 </div>
             </div>
 
-            <!-- Analytics Tab -->
-            <div id="analyticsTab" class="tab-content">
-                <div class="grid-2" style="margin-bottom: 2rem;">
-                    <div class="card"><h3 class="card-title" style="margin-bottom: 1.5rem;">Project Distribution</h3><canvas id="projectChart"></canvas></div>
-                    <div class="card"><h3 class="card-title" style="margin-bottom: 1.5rem;">Monthly Revenue</h3><canvas id="revenueChart"></canvas></div>
-                </div>
-            </div>
-
             <!-- Settings Tab -->
             <div id="settingsTab" class="tab-content">
                 <div class="card">
@@ -1114,6 +1109,13 @@
         <div class="modal-dialog calculator-dialog">
             <div class="modal-header"><h2 class="modal-title">Unit Calculator</h2><button class="modal-close" id="closeCalculatorModal">&times;</button></div>
             <div class="calculator-display" id="calculatorDisplay">0</div>
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label class="form-label">Mode</label>
+                <select id="calcMode" class="form-select">
+                    <option value="basic">Basic</option>
+                    <option value="engineering">Engineering</option>
+                </select>
+            </div>
             <div class="calculator-grid" id="calculatorGrid">
                 <button class="btn btn-secondary" data-value="clear">C</button>
                 <button class="btn btn-secondary" data-value="backspace">⌫</button>
@@ -1135,10 +1137,40 @@
                 <button class="btn" data-value=".">.</button>
                 <button class="btn btn-primary" data-value="=">=</button>
             </div>
+            <div id="engineeringBtns" class="calculator-grid" style="display:none; margin-top:1rem;">
+                <button class="btn" data-value="sin">sin</button>
+                <button class="btn" data-value="cos">cos</button>
+                <button class="btn" data-value="tan">tan</button>
+                <button class="btn" data-value="sqrt">√</button>
+            </div>
             <div class="unit-converter">
                 <select id="unitFrom" class="form-select"><option value="ft">Feet</option><option value="in">Inches</option><option value="sqft">Sq. Ft.</option><option value="sqyd">Sq. Yd.</option></select>
                 <button class="btn btn-secondary" id="convertUnitBtn">&rarr;</button>
                 <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sqyd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
+            </div>
+            <div id="basicTools" style="margin-top:1rem; display:none;">
+                <h3>Simple Takeoff</h3>
+                <div class="form-group">
+                    <label class="form-label">Shape</label>
+                    <select id="shapeSelect" class="form-select">
+                        <option value="rectangle">Rectangle</option>
+                        <option value="circle">Circle</option>
+                        <option value="triangle">Triangle</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <input type="number" id="dim1" class="form-input" placeholder="Length">
+                </div>
+                <div class="form-group" id="dim2Group">
+                    <input type="number" id="dim2" class="form-input" placeholder="Width">
+                </div>
+                <button class="btn btn-primary" id="calcAreaBtn">Calculate Area</button>
+                <p id="takeoffResult" style="margin-top:0.5rem;"></p>
+                <div class="form-group" style="margin-top:1rem;">
+                    <label class="form-label">Upload Plan</label>
+                    <input type="file" id="planUpload" class="form-input">
+                </div>
+                <img id="planPreview" style="max-width:100%; margin-top:1rem; display:none;"/>
             </div>
             <button class="btn btn-success" id="useValueBtn" style="width: 100%; margin-top: 1.5rem;">Use Value</button>
         </div>
@@ -1165,6 +1197,7 @@
             currentEstimate: null,
             lineItemId: 0,
             lastFocusedInput: null,
+            calcMode: "basic",
             calculator: {
                 displayValue: '0',
                 firstOperand: null,
@@ -1339,6 +1372,10 @@
             document.getElementById('calculatorGrid')?.addEventListener('click', handleCalculatorClick);
             document.getElementById('convertUnitBtn')?.addEventListener('click', handleUnitConversion);
             document.getElementById('useValueBtn')?.addEventListener('click', useCalculatorValue);
+            document.getElementById("calcMode")?.addEventListener("change", updateCalcMode);
+            document.getElementById("shapeSelect")?.addEventListener("change", updateShapeInputs);
+            document.getElementById("calcAreaBtn")?.addEventListener("click", calculateArea);
+            document.getElementById("planUpload")?.addEventListener("change", handlePlanUpload);
         }
 
         // --- NAVIGATION & UI ---
@@ -1577,6 +1614,14 @@
                 state.calculator.displayValue = state.calculator.displayValue.slice(0, -1) || '0';
             } else if (value === '%') {
                 state.calculator.displayValue = String(parseFloat(state.calculator.displayValue) / 100);
+            } else if (value === "sin") {
+                state.calculator.displayValue = String(Math.sin(parseFloat(state.calculator.displayValue)));
+            } else if (value === "cos") {
+                state.calculator.displayValue = String(Math.cos(parseFloat(state.calculator.displayValue)));
+            } else if (value === "tan") {
+                state.calculator.displayValue = String(Math.tan(parseFloat(state.calculator.displayValue)));
+            } else if (value === "sqrt") {
+                state.calculator.displayValue = String(Math.sqrt(parseFloat(state.calculator.displayValue)));
             }
             updateCalculatorDisplay();
         }
@@ -1663,6 +1708,52 @@
         }
 
         // --- REPORTING & EXPORTING ---
+function updateCalcMode() {
+    const mode = document.getElementById("calcMode").value;
+    state.calcMode = mode;
+    document.getElementById("basicTools").style.display = mode === "basic" ? "block" : "none";
+    document.getElementById("engineeringBtns").style.display = mode === "engineering" ? "grid" : "none";
+}
+
+function updateShapeInputs() {
+    const shape = document.getElementById("shapeSelect").value;
+    const dim2Group = document.getElementById("dim2Group");
+    if (shape === "circle") {
+        document.getElementById("dim1").placeholder = "Radius";
+        dim2Group.style.display = "none";
+    } else if (shape === "triangle") {
+        document.getElementById("dim1").placeholder = "Base";
+        document.getElementById("dim2").placeholder = "Height";
+        dim2Group.style.display = "block";
+    } else {
+        document.getElementById("dim1").placeholder = "Length";
+        document.getElementById("dim2").placeholder = "Width";
+        dim2Group.style.display = "block";
+    }
+}
+
+function calculateArea() {
+    const shape = document.getElementById("shapeSelect").value;
+    const d1 = parseFloat(document.getElementById("dim1").value) || 0;
+    const d2 = parseFloat(document.getElementById("dim2").value) || 0;
+    let area = 0;
+    if (shape === "rectangle") area = d1 * d2;
+    else if (shape === "circle") area = Math.PI * d1 * d1;
+    else if (shape === "triangle") area = 0.5 * d1 * d2;
+    document.getElementById("takeoffResult").textContent = `Area: ${area.toFixed(2)}`;
+}
+
+function handlePlanUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const img = document.getElementById("planPreview");
+        img.src = ev.target.result;
+        img.style.display = "block";
+    };
+    reader.readAsDataURL(file);
+}
         function getBidDataForExport() {
             const projectName = document.getElementById('bidProjectName').value || 'N/A';
             const clientName = document.getElementById('clientName').value || 'N/A';
@@ -1902,25 +1993,6 @@
                 options: { responsive: true, maintainAspectRatio: false }
             });
 
-            const ctxProject = document.getElementById('projectChart')?.getContext('2d');
-            if (ctxProject) new Chart(ctxProject, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Residential', 'Commercial', 'Industrial', 'Renovation'],
-                    datasets: [{ data: [45, 25, 15, 15], backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#06b6d4'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-
-            const ctxRevenue = document.getElementById('revenueChart')?.getContext('2d');
-            if (ctxRevenue) new Chart(ctxRevenue, {
-                type: 'bar',
-                data: {
-                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                    datasets: [{ label: 'Revenue ($K)', data: [250, 310, 420, 380, 550, 490], backgroundColor: '#6366f1' }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
         }
 
         // --- SETTINGS & UPDATES ---
