@@ -1298,7 +1298,8 @@
     <!-- Toast Container -->
     <div id="toastContainer"></div>
 
-    <script>
+    <script type="module">
+import { calculate as calc, handleUnitConversion as convertUnits } from "./calculator.js";
     (function() {
         'use strict';
 
@@ -1857,21 +1858,13 @@
             if (firstOperand == null && !isNaN(inputValue)) {
                 state.calculator.firstOperand = inputValue;
             } else if (operator) {
-                const result = calculate(firstOperand, inputValue, operator);
+                const result = calc(firstOperand, inputValue, operator);
                 state.calculator.displayValue = `${parseFloat(result.toFixed(7))}`;
                 state.calculator.firstOperand = result;
             }
             
             state.calculator.waitingForSecondOperand = true;
             state.calculator.operator = nextOperator;
-        }
-
-        function calculate(first, second, op) {
-            if (op === '+') return first + second;
-            if (op === '-') return first - second;
-            if (op === '*') return first * second;
-            if (op === '/') return first / second;
-            return second;
         }
 
         function resetCalculator() {
@@ -1882,29 +1875,20 @@
         }
         
         function handleUnitConversion() {
-            const fromUnit = document.getElementById('unitFrom').value;
-            const toUnit = document.getElementById('unitTo').value;
-            let value = parseFloat(state.calculator.displayValue);
-            let result = value;
-
-            const conversions = {
-                'ft-in': val => val * 12,
-                'in-ft': val => val / 12,
-                'sqft-sqyd': val => val / 9,
-                'sqyd-sqft': val => val * 9,
-            };
-            
-            const key = `${fromUnit}-${toUnit}`;
-            if (conversions[key]) {
-                result = conversions[key](value);
-            } else {
-                showToast('Invalid unit conversion', 'error');
+            const fromUnit = document.getElementById("unitFrom").value;
+            const toUnit = document.getElementById("unitTo").value;
+            const value = parseFloat(state.calculator.displayValue);
+            let result;
+            try {
+                result = convertUnits(value, fromUnit, toUnit);
+            } catch (e) {
+                showToast("Invalid unit conversion", "error");
                 return;
             }
-            
             state.calculator.displayValue = String(parseFloat(result.toFixed(5)));
             updateCalculatorDisplay();
         }
+
         
         function useCalculatorValue() {
             if (!state.lastFocusedInput) {
