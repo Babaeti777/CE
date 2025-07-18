@@ -1669,7 +1669,7 @@
             document.getElementById('overhead').value = bid.overheadPercent || 10;
             document.getElementById('profit').value = bid.profitPercent || 15;
             document.getElementById('contingency').value = bid.contingencyPercent || 5;
-            document.getElementById('lineItems').innerHTML = '';
+            document.getElementById('lineItems').textContent = '';
             bid.lineItems.forEach(item => addLineItem(item));
             updateBidTotal();
             switchTab('detailed');
@@ -2212,8 +2212,10 @@ function handlePlanUpload(e) {
             `;
 
             const reportWindow = window.open('', '_blank');
-            reportWindow.document.write(reportHtml);
-            reportWindow.document.close();
+            const parser = new DOMParser();
+            const reportDoc = parser.parseFromString(reportHtml, 'text/html');
+            const imported = reportWindow.document.importNode(reportDoc.documentElement, true);
+            reportWindow.document.replaceChild(imported, reportWindow.document.documentElement);
             showToast('PDF report generated in new tab.', 'success');
         }
 
@@ -2428,7 +2430,7 @@ function handlePlanUpload(e) {
 
         function populateMaterialsTable() {
             const tableBody = document.getElementById('materialsTable');
-            tableBody.innerHTML = '';
+            tableBody.textContent = '';
             Object.entries(state.materialPrices).forEach(([category, materials]) => {
                 Object.entries(materials).forEach(([name, price]) => {
                     const row = tableBody.insertRow();
