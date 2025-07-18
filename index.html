@@ -777,11 +777,16 @@
         /* Calculator */
         .calculator-dialog {
             max-width: 480px;
-            background: white;
-            color: var(--dark);
+            background: var(--gray-100);
+            color: var(--gray-900);
             border-radius: 20px;
             padding: 2rem;
             box-shadow: var(--shadow-xl);
+        }
+
+        body.dark-mode .calculator-dialog {
+            background: var(--gray-200);
+            color: var(--gray-800);
         }
         .calculator-display {
             background: var(--gray-100);
