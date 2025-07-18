@@ -1254,9 +1254,9 @@
                 <button class="btn" data-value="sqrt">√</button>
             </div>
             <div class="unit-converter">
-                <select id="unitFrom" class="form-select"><option value="ft">Feet</option><option value="in">Inches</option><option value="sqft">Sq. Ft.</option><option value="sqyd">Sq. Yd.</option></select>
+                <select id="unitFrom" class="form-select"><option value="ft">Feet</option><option value="in">Inches</option><option value="sqft">Sq. Ft.</option><option value="sq yd">Sq. Yd.</option></select>
                 <button class="btn btn-secondary" id="convertUnitBtn">&rarr;</button>
-                <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sqyd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
+                <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sq yd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
             </div>
             <div id="basicTools" style="margin-top:1rem; display:none;">
                 <h3>Simple Takeoff</h3>
@@ -1890,8 +1890,8 @@
             const conversions = {
                 'ft-in': val => val * 12,
                 'in-ft': val => val / 12,
-                'sqft-sqyd': val => val / 9,
-                'sqyd-sqft': val => val * 9,
+                'sqft-sq yd': val => val / 9,
+                'sq yd-sqft': val => val * 9,
             };
             
             const key = `${fromUnit}-${toUnit}`;
