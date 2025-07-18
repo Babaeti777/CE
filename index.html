@@ -796,6 +796,7 @@
             position: absolute;
             top: 0;
             left: 0;
+            cursor: crosshair;
         }
         .menu-toggle {
             display: none;
@@ -1433,7 +1434,9 @@
             document.getElementById("clearTakeoffBtn")?.addEventListener("click", resetTakeoff);
             document.getElementById("takeoffCanvas")?.addEventListener("click", handleTakeoffClick);
             document.getElementById("takeoffCanvas")?.addEventListener("dblclick", finishArea);
+            window.addEventListener('resize', adjustCanvas);
             updateCalcMode(state.calcMode);
+            updateShapeInputs();
         }
 
         // --- NAVIGATION & UI ---
@@ -1809,15 +1812,22 @@ function handlePlanUpload(e) {
     reader.onload = function(ev) {
         const img = document.getElementById("planPreview");
         img.onload = function() {
-            const canvas = document.getElementById("takeoffCanvas");
-            canvas.width = img.clientWidth;
-            canvas.height = img.clientHeight;
+            adjustCanvas();
             resetTakeoff();
         };
         img.src = ev.target.result;
         document.getElementById("planContainer").style.display = "block";
     };
     reader.readAsDataURL(file);
+}
+
+function adjustCanvas() {
+    const img = document.getElementById("planPreview");
+    const canvas = document.getElementById("takeoffCanvas");
+    if (img && canvas) {
+        canvas.width = img.clientWidth;
+        canvas.height = img.clientHeight;
+    }
 }
 
 let takeoffMode = 'length';
@@ -1855,6 +1865,8 @@ function handleTakeoffClick(e) {
         const len = getDistance(takeoffPoints[0], takeoffPoints[1]) / (parseFloat(document.getElementById('planScale').value) || 1);
         const label = takeoffMode === 'diameter' ? 'Diameter' : 'Length';
         document.getElementById('takeoffMeasurement').textContent = `${label}: ${len.toFixed(2)} ft`;
+        takeoffPoints = [];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 }
 
@@ -1882,6 +1894,10 @@ function finishArea() {
     const areaPx = polygonArea(takeoffPoints);
     const areaFt = areaPx / (scale * scale);
     document.getElementById('takeoffMeasurement').textContent = `Area: ${areaFt.toFixed(2)} sq ft`;
+    takeoffPoints = [];
+    const canvas = document.getElementById('takeoffCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function getDistance(p1, p2) {
