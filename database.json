@@ -1,0 +1,101 @@
+{
+  "materialPrices": {
+    "foundation": { "slab": 4.50, "crawl": 7.00, "basement": 12.00 },
+    "framing": { "wood": 15.00, "steel": 20.00, "concrete": 25.00 },
+    "exterior": { "vinyl": 3.00, "brick": 8.00, "stucco": 6.00, "stone": 15.00 },
+    "roofing": { "asphalt": 3.50, "metal": 7.00, "tile": 10.00 },
+    "flooring": { "carpet": 2.50, "hardwood": 8.00, "tile": 5.00, "laminate": 3.50 },
+    "insulation": { "fiberglass": 0.75, "sprayFoam": 1.50 }
+  },
+  "lineItemCategories": {
+    "General Conditions": [
+      { "name": "Permits & Fees", "unit": "lump sum", "rate": 2500 },
+      { "name": "Project Management", "unit": "hour", "rate": 120 },
+      { "name": "Temporary Fencing", "unit": "ln ft", "rate": 8 },
+      { "name": "Portable Toilets", "unit": "month", "rate": 150 }
+    ],
+    "Site Work": [
+      { "name": "Excavation & Backfill", "unit": "cu yd", "rate": 25 },
+      { "name": "Grading", "unit": "sq ft", "rate": 2.5 },
+      { "name": "Site Clearing", "unit": "acre", "rate": 3500 },
+      { "name": "Asphalt Paving", "unit": "sq yd", "rate": 55 },
+      { "name": "Landscaping", "unit": "sq ft", "rate": 4.5 }
+    ],
+    "Concrete": [
+      { "name": "Concrete Footings", "unit": "cu yd", "rate": 150 },
+      { "name": "Foundation Walls", "unit": "sq ft", "rate": 12 },
+      { "name": "Slab on Grade", "unit": "sq ft", "rate": 7.5 },
+      { "name": "Waterproofing", "unit": "sq ft", "rate": 3.5 },
+      { "name": "Rebar Installation", "unit": "ton", "rate": 1200 },
+      { "name": "Formwork", "unit": "sq ft", "rate": 4 }
+    ],
+    "Masonry": [
+      { "name": "CMU Block Wall", "unit": "sq ft", "rate": 18 },
+      { "name": "Brick Veneer", "unit": "sq ft", "rate": 25 },
+      { "name": "Stone Veneer", "unit": "sq ft", "rate": 35 }
+    ],
+    "Metals": [
+      { "name": "Structural Steel", "unit": "ton", "rate": 3000 },
+      { "name": "Steel Decking", "unit": "sq ft", "rate": 4 },
+      { "name": "Metal Railings", "unit": "ln ft", "rate": 120 }
+    ],
+    "Wood & Plastics": [
+      { "name": "Floor Framing", "unit": "sq ft", "rate": 8 },
+      { "name": "Wall Framing", "unit": "sq ft", "rate": 6 },
+      { "name": "Roof Framing / Trusses", "unit": "sq ft", "rate": 10 },
+      { "name": "Finish Carpentry", "unit": "hour", "rate": 75 }
+    ],
+    "Thermal & Moisture": [
+      { "name": "Batt Insulation", "unit": "sq ft", "rate": 1.5 },
+      { "name": "Roofing (Asphalt Shingle)", "unit": "sq ft", "rate": 4 },
+      { "name": "Roofing (TPO Membrane)", "unit": "sq ft", "rate": 9 },
+      { "name": "Siding (Vinyl)", "unit": "sq ft", "rate": 5 }
+    ],
+    "Doors & Windows": [
+      { "name": "Hollow Metal Doors", "unit": "each", "rate": 950 },
+      { "name": "Wood Doors", "unit": "each", "rate": 750 },
+      { "name": "Aluminum Windows", "unit": "each", "rate": 450 },
+      { "name": "Storefront System", "unit": "sq ft", "rate": 65 }
+    ],
+    "Finishes": [
+      { "name": "Drywall (Hang & Finish)", "unit": "sq ft", "rate": 2.5 },
+      { "name": "Acoustical Ceiling", "unit": "sq ft", "rate": 3.5 },
+      { "name": "Flooring (VCT)", "unit": "sq ft", "rate": 2 },
+      { "name": "Flooring (Carpet)", "unit": "sq ft", "rate": 4 },
+      { "name": "Flooring (Tile)", "unit": "sq ft", "rate": 12 },
+      { "name": "Painting (Interior)", "unit": "sq ft", "rate": 2 }
+    ],
+    "Mechanical (HVAC)": [
+      { "name": "Ductwork", "unit": "ln ft", "rate": 35 },
+      { "name": "Rooftop Unit (RTU)", "unit": "ton", "rate": 3500 },
+      { "name": "Split System", "unit": "ton", "rate": 2800 }
+    ],
+    "Plumbing": [
+      { "name": "Rough-in Piping", "unit": "fixture", "rate": 650 },
+      { "name": "Water Heater (Commercial)", "unit": "each", "rate": 2200 },
+      { "name": "Toilets", "unit": "each", "rate": 450 },
+      { "name": "Sinks", "unit": "each", "rate": 350 }
+    ],
+    "Electrical": [
+      { "name": "Conduit & Wiring", "unit": "sq ft", "rate": 3.5 },
+      { "name": "Lighting Fixtures", "unit": "each", "rate": 180 },
+      { "name": "Panelboards", "unit": "each", "rate": 1500 },
+      { "name": "Fire Alarm System", "unit": "sq ft", "rate": 1.75 }
+    ],
+    "Fire Protection": [
+      { "name": "Sprinkler System", "unit": "sq ft", "rate": 2 },
+      { "name": "Fire Extinguishers", "unit": "each", "rate": 50 },
+      { "name": "Standpipes", "unit": "each", "rate": 500 }
+    ],
+    "Specialties": [
+      { "name": "Toilet Accessories", "unit": "allowance", "rate": 1000 },
+      { "name": "Fire Stopping", "unit": "sq ft", "rate": 3 },
+      { "name": "Signage", "unit": "allowance", "rate": 1500 }
+    ],
+    "Earthwork": [
+      { "name": "Clearing & Grubbing", "unit": "acre", "rate": 2500 },
+      { "name": "Trenching", "unit": "ln ft", "rate": 6 },
+      { "name": "Soil Compaction", "unit": "sq ft", "rate": 1.2 }
+    ]
+  }
+}
