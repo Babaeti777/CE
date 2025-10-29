@@ -680,6 +680,21 @@ import { TakeoffManager } from './takeoff.js';
                     rate: 0,
                     total: 0
                 });
+
+                measurement.subItems.forEach(subItem => {
+                    const subDescription = subItem.label && subItem.label.trim()
+                        ? `${description} - ${subItem.label.trim()}`
+                        : `${description} - Sub-item`;
+                    const subNotes = subItem.notes && subItem.notes.trim() ? ` (${subItem.notes.trim()})` : '';
+                    addLineItem({
+                        category: 'Takeoff Measurements',
+                        description: `${subDescription}${subNotes}`,
+                        quantity: typeof subItem.quantity === 'number' && !Number.isNaN(subItem.quantity) ? subItem.quantity : 0,
+                        unit: subItem.unit || '',
+                        rate: 0,
+                        total: 0
+                    });
+                });
             });
             updateBidTotal();
             showToast('Takeoff measurements added to the detailed estimate.', 'success');
