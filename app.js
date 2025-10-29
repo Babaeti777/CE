@@ -1,6 +1,11 @@
     (function() {
         'use strict';
 
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        if (pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js';
+        }
+
         // --- STATE MANAGEMENT ---
         const state = {
             currentTab: 'dashboard',
@@ -30,6 +35,8 @@
                 context: null
             }
         };
+
+        const TAKEOFF_COLORS = ['#0d6efd', '#ff6b35', '#2ca58d', '#ffc107', '#6f42c1', '#20c997'];
 
         async function loadDatabase() {
             try {
