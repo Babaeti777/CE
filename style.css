@@ -546,171 +546,125 @@
             overflow-x: auto;
         }
 
-        .takeoff-grid {
+        .takeoff-layout {
             display: grid;
-            grid-template-columns: minmax(260px, 320px) 1fr;
-            gap: 2rem;
-            align-items: start;
+            grid-template-columns: 320px 1fr;
+            gap: 1.5rem;
+            align-items: flex-start;
         }
 
-        @media (max-width: 1200px) {
-            .takeoff-grid {
-                grid-template-columns: 1fr;
-            }
+        .takeoff-drawings {
+            position: sticky;
+            top: 1.5rem;
+            align-self: flex-start;
         }
 
-        .takeoff-upload-btn {
+        .takeoff-upload-label {
             position: relative;
             overflow: hidden;
-        }
-
-        .takeoff-upload-btn input[type="file"] {
-            position: absolute;
-            inset: 0;
-            opacity: 0;
             cursor: pointer;
         }
 
-        .takeoff-pages {
+        .takeoff-filters {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
+            margin: 1rem 0;
         }
 
-        .takeoff-page-empty {
-            padding: 1.5rem;
-            text-align: center;
-            color: var(--gray-500);
-            border: 1px dashed var(--gray-300);
+        .takeoff-sort-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .takeoff-drawing-table {
+            position: relative;
+            max-height: 420px;
+            overflow-y: auto;
             border-radius: 16px;
-            background: var(--gray-50);
-            line-height: 1.5;
-        }
-
-        .takeoff-page-item {
             border: 1px solid var(--gray-200);
-            border-radius: 16px;
-            padding: 1rem;
-            background: white;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        body.dark-mode .takeoff-page-item {
-            background: var(--gray-200);
-            border-color: var(--gray-300);
-        }
-
-        .takeoff-page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .takeoff-page-select {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 600;
-            color: var(--gray-700);
-        }
-
-        .takeoff-page-meta {
-            display: grid;
-            gap: 0.75rem;
-        }
-
-        .takeoff-page-meta label {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-            font-size: 0.8rem;
-            color: var(--gray-600);
-        }
-
-        .takeoff-page-meta input,
-        .takeoff-page-meta select {
-            font-size: 0.85rem;
-            border-radius: 10px;
-            border: 1px solid var(--gray-300);
-            padding: 0.45rem 0.6rem;
-        }
-
-        .takeoff-remove-page {
-            border: none;
-            background: transparent;
-            color: var(--gray-500);
-            font-size: 1.25rem;
-            cursor: pointer;
-            transition: color 0.2s ease;
-        }
-
-        .takeoff-remove-page:hover {
-            color: var(--danger);
+            background: var(--gray-0);
         }
 
         .takeoff-workspace {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
-        }
-
-        .takeoff-header {
-            flex-wrap: wrap;
-        }
-
-        .takeoff-controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-            align-items: center;
-        }
-
-        .takeoff-control {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-            font-size: 0.8rem;
-            color: var(--gray-600);
-        }
-
-        .takeoff-control .form-input,
-        .takeoff-control .form-select {
-            min-width: 160px;
         }
 
         .takeoff-plan {
             position: relative;
-            border: 1px dashed var(--gray-300);
-            border-radius: 20px;
-            background: var(--gray-50);
-            min-height: 320px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: auto;
-            padding: 1rem;
-        }
-
-        body.dark-mode .takeoff-plan {
-            background: var(--gray-200);
-            border-color: var(--gray-400);
+            border-radius: 16px;
+            border: 1px solid var(--gray-200);
+            overflow: hidden;
+            background: var(--gray-0);
+            min-height: 280px;
         }
 
         .takeoff-plan img {
-            max-width: 100%;
+            display: block;
+            width: 100%;
             height: auto;
-            display: none;
         }
 
         .takeoff-plan canvas {
             position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: auto;
+            inset: 0;
             cursor: crosshair;
+        }
+
+        .takeoff-mode-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .takeoff-empty {
+            margin: 1rem;
+            color: var(--gray-500);
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .takeoff-meta {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        .takeoff-drawing-row {
+            cursor: pointer;
+        }
+
+        .takeoff-drawing-row.active td {
+            background: rgba(13, 110, 253, 0.08);
+        }
+
+        .takeoff-drawing-row input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .takeoff-drawing-row input:focus {
+            outline: none;
+            border-radius: 8px;
+            background: rgba(13, 110, 253, 0.12);
+        }
+
+        .takeoff-remove-drawing {
+            border: none;
+            background: transparent;
+            color: var(--gray-500);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .takeoff-remove-drawing:hover {
+            color: var(--danger);
         }
 
         /* Line Items */
@@ -1064,6 +1018,24 @@
             border-color: var(--gray-400);
         }
 
+        body.dark-mode .takeoff-plan {
+            background: var(--gray-900);
+            border-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-drawing-table {
+            background: var(--gray-900);
+            border-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-empty {
+            color: var(--gray-400);
+        }
+
+        body.dark-mode .takeoff-drawing-row input {
+            color: var(--gray-100);
+        }
+
         .takeoff-table {
             width: 100%;
             border-collapse: collapse;
@@ -1271,6 +1243,27 @@
             margin-top: 0.75rem;
             font-size: 0.8rem;
             color: var(--gray-500);
+        }
+
+        @media (max-width: 1100px) {
+            .takeoff-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .takeoff-drawings {
+                position: static;
+                order: 2;
+            }
+
+            .takeoff-workspace {
+                order: 1;
+            }
+
+            .takeoff-mode-controls {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.75rem;
+            }
         }
 
         /* Responsive */

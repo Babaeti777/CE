@@ -51,6 +51,10 @@
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
             Materials Database
         </button>
+        <button class="nav-item" data-tab="takeoff">
+            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
+            Takeoff Manager
+        </button>
         <button class="nav-item" data-tab="settings">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
             Settings
@@ -297,6 +301,125 @@
                 </div>
             </div>
 
+            <!-- Takeoff Tab -->
+            <div id="takeoffTab" class="tab-content">
+                <div class="takeoff-layout">
+                    <div class="card takeoff-drawings">
+                        <div class="card-header">
+                            <h3 class="card-title">Drawing Pages</h3>
+                            <label class="btn btn-secondary takeoff-upload-label">
+                                Upload
+                                <input type="file" id="takeoffDrawingInput" accept="application/pdf,image/*" multiple style="display:none">
+                            </label>
+                        </div>
+                        <div class="takeoff-filters">
+                            <input type="search" class="form-input" id="takeoffSearchInput" placeholder="Filter by name, trade, floor...">
+                            <div class="takeoff-sort-group">
+                                <select id="takeoffSortSelect" class="form-select">
+                                    <option value="trade">Sort by Trade</option>
+                                    <option value="floor">Sort by Floor</option>
+                                    <option value="page">Sort by Page</option>
+                                    <option value="name">Sort by Name</option>
+                                </select>
+                                <button type="button" class="btn btn-ghost" id="takeoffSortDirection" aria-label="Toggle sort direction">▲</button>
+                            </div>
+                        </div>
+                        <div class="takeoff-drawing-table">
+                            <table class="takeoff-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Drawing</th>
+                                        <th scope="col">Trade</th>
+                                        <th scope="col">Floor</th>
+                                        <th scope="col">Page</th>
+                                        <th scope="col"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="takeoffDrawingTableBody"></tbody>
+                            </table>
+                            <p id="takeoffDrawingEmpty" class="takeoff-empty">Upload plan files to begin building your takeoff.</p>
+                        </div>
+                    </div>
+                    <div class="takeoff-workspace">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h3 class="card-title">Active Drawing</h3>
+                                    <p id="takeoffActiveMeta" class="takeoff-meta"></p>
+                                </div>
+                                <div class="takeoff-mode-controls">
+                                    <div class="form-group">
+                                        <label class="form-label" for="takeoffModeSelect">Mode</label>
+                                        <select id="takeoffModeSelect" class="form-select">
+                                            <option value="length">Length</option>
+                                            <option value="area">Area</option>
+                                            <option value="count">Count</option>
+                                            <option value="diameter">Diameter</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="takeoffScaleInput">Scale (px per ft)</label>
+                                        <input type="number" id="takeoffScaleInput" class="form-input" value="1" step="0.01" min="0.0001">
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="takeoffPlanContainer" class="takeoff-plan" style="display:none;">
+                                <img id="takeoffPlanPreview" alt="Plan preview">
+                                <canvas id="takeoffCanvas"></canvas>
+                            </div>
+                            <p id="takeoffStatus" class="takeoff-status"></p>
+                            <div class="takeoff-actions">
+                                <button class="btn btn-secondary" id="takeoffClearBtn">Clear Measurements</button>
+                                <button class="btn btn-secondary" id="takeoffExportCsvBtn">Export CSV</button>
+                                <button class="btn btn-primary" id="takeoffPushBtn">Send to Estimate</button>
+                            </div>
+                        </div>
+                        <div class="card" style="margin-top: 1.5rem;">
+                            <h3 class="card-title">Measurements</h3>
+                            <div class="takeoff-table-wrapper">
+                                <table class="takeoff-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Name</th>
+                                            <th scope="col">Mode</th>
+                                            <th scope="col">Quantity</th>
+                                            <th scope="col">Units</th>
+                                            <th scope="col">Details</th>
+                                            <th scope="col"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="takeoffMeasurementTableBody"></tbody>
+                                </table>
+                                <p id="takeoffMeasurementEmpty" class="takeoff-empty">Select a drawing and start measuring to build your takeoff.</p>
+                            </div>
+                        </div>
+                        <div class="card" style="margin-top: 1.5rem;">
+                            <h3 class="card-title">Quick Shapes</h3>
+                            <div class="grid-3" style="gap: 1rem;">
+                                <div class="form-group">
+                                    <label class="form-label" for="takeoffShapeSelect">Shape</label>
+                                    <select id="takeoffShapeSelect" class="form-select">
+                                        <option value="rectangle">Rectangle</option>
+                                        <option value="circle">Circle</option>
+                                        <option value="triangle">Triangle</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="takeoffDim1">Dimension 1</label>
+                                    <input type="number" id="takeoffDim1" class="form-input" placeholder="Length" min="0" step="0.01">
+                                </div>
+                                <div class="form-group" id="takeoffDim2Group">
+                                    <label class="form-label" for="takeoffDim2">Dimension 2</label>
+                                    <input type="number" id="takeoffDim2" class="form-input" placeholder="Width" min="0" step="0.01">
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" id="takeoffQuickCalcBtn" style="margin-top: 1rem;">Calculate Area</button>
+                            <p id="takeoffQuickResult" class="takeoff-status" style="margin-top: 0.5rem;"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Materials Tab -->
             <div id="materialsTab" class="tab-content">
                 <div class="card">
@@ -401,11 +524,6 @@
                 <button class="btn btn-secondary" id="convertUnitBtn">&rarr;</button>
                 <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sqyd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
             </div>
-            <div id="basicTools" style="margin-top:1rem; display:none;">
-                <p style="color: var(--gray-600); line-height: 1.5;">
-                    Looking for takeoff tools? Switch to the <strong>Takeoff</strong> tab to manage drawings and measurements.
-                </p>
-            </div>
             <button class="btn btn-success" id="useValueBtn" style="width: 100%; margin-top: 1.5rem;">Use Value</button>
         </div>
     </div>
@@ -422,6 +540,6 @@
     <!-- Toast Container -->
     <div id="toastContainer"></div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
