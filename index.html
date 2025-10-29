@@ -300,33 +300,9 @@
                 <button class="btn" data-value="sqrt">√</button>
             </div>
             <div class="unit-converter">
-                <select id="unitFrom" class="form-select"><option value="ft">Feet</option><option value="in">Inches</option><option value="sqft">Sq. Ft.</option><option value="sq yd">Sq. Yd.</option></select>
+                <select id="unitFrom" class="form-select"><option value="ft">Feet</option><option value="in">Inches</option><option value="sqft">Sq. Ft.</option><option value="sqyd">Sq. Yd.</option></select>
                 <button class="btn btn-secondary" id="convertUnitBtn">&rarr;</button>
-                <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sq yd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
-            </div>
-            <div id="basicTools" style="margin-top:1rem; display:none;">
-                <h3>Simple Takeoff</h3>
-                <div class="form-group">
-                    <label class="form-label">Shape</label>
-                    <select id="shapeSelect" class="form-select">
-                        <option value="rectangle">Rectangle</option>
-                        <option value="circle">Circle</option>
-                        <option value="triangle">Triangle</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <input type="number" id="dim1" class="form-input" placeholder="Length">
-                </div>
-                <div class="form-group" id="dim2Group">
-                    <input type="number" id="dim2" class="form-input" placeholder="Width">
-                </div>
-                <button class="btn btn-primary" id="calcAreaBtn">Calculate Area</button>
-                <p id="takeoffResult" style="margin-top:0.5rem;"></p>
-                <div class="form-group" style="margin-top:1rem;">
-                    <label class="form-label">Upload Plan</label>
-                    <input type="file" id="planUpload" class="form-input">
-                </div>
-                <img id="planPreview" style="max-width:100%; margin-top:1rem; display:none;"/>
+                <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sqyd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
             </div>
             <div id="basicTools" style="margin-top:1rem; display:none;">
                 <h3>Simple Takeoff</h3>
