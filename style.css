@@ -126,6 +126,10 @@
             font-weight: 500;
         }
 
+        .nav-label {
+            flex: 1;
+        }
+
         .nav-item:hover {
             background: rgba(255, 255, 255, 0.1);
             color: white;
