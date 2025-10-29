@@ -583,28 +583,26 @@
         function handleUnitConversion() {
             const fromUnit = document.getElementById('unitFrom').value;
             const toUnit = document.getElementById('unitTo').value;
-            let value = parseFloat(state.calculator.displayValue);
-            let result = value;
+            const value = parseFloat(state.calculator.displayValue);
 
             const conversions = {
                 'ft-in': val => val * 12,
                 'in-ft': val => val / 12,
-                'sqft-sq yd': val => val / 9,
-                'sq yd-sqft': val => val * 9,
+                'sqft-sqyd': val => val / 9,
+                'sqyd-sqft': val => val * 9,
             };
-            
+
             const key = `${fromUnit}-${toUnit}`;
-            if (conversions[key]) {
-                result = conversions[key](value);
-            } else {
+            if (!conversions[key]) {
                 showToast('Invalid unit conversion', 'error');
                 return;
             }
-            
+
+            const result = conversions[key](value);
             state.calculator.displayValue = String(parseFloat(result.toFixed(5)));
             updateCalculatorDisplay();
         }
-        
+
         function useCalculatorValue() {
             if (!state.lastFocusedInput) {
                 showToast('Select a quantity or rate field first.', 'warning');
@@ -615,54 +613,91 @@
             closeModal('calculatorModal');
         }
 
+        function updateCalcMode(mode) {
+            state.calcMode = mode;
+
+            const basicTools = document.getElementById('basicTools');
+            const engineeringBtns = document.getElementById('engineeringBtns');
+            const modeBasicBtn = document.getElementById('modeBasic');
+            const modeEngineeringBtn = document.getElementById('modeEngineering');
+
+            if (basicTools) basicTools.style.display = mode === 'basic' ? 'block' : 'none';
+            if (engineeringBtns) engineeringBtns.style.display = mode === 'engineering' ? 'grid' : 'none';
+            modeBasicBtn?.classList.toggle('active', mode === 'basic');
+            modeEngineeringBtn?.classList.toggle('active', mode === 'engineering');
+        }
+
+        function updateShapeInputs() {
+            const shapeSelect = document.getElementById('shapeSelect');
+            const dim1Input = document.getElementById('dim1');
+            const dim2Input = document.getElementById('dim2');
+            const dim2Group = document.getElementById('dim2Group');
+
+            if (!shapeSelect || !dim1Input || !dim2Input || !dim2Group) return;
+
+            const shape = shapeSelect.value;
+            if (shape === 'circle') {
+                dim1Input.placeholder = 'Radius';
+                dim2Group.style.display = 'none';
+            } else if (shape === 'triangle') {
+                dim1Input.placeholder = 'Base';
+                dim2Input.placeholder = 'Height';
+                dim2Group.style.display = 'block';
+            } else {
+                dim1Input.placeholder = 'Length';
+                dim2Input.placeholder = 'Width';
+                dim2Group.style.display = 'block';
+            }
+        }
+
+        function calculateArea() {
+            const shapeSelect = document.getElementById('shapeSelect');
+            const dim1Input = document.getElementById('dim1');
+            const dim2Input = document.getElementById('dim2');
+            const resultEl = document.getElementById('takeoffResult');
+
+            if (!shapeSelect || !dim1Input || !dim2Input || !resultEl) return;
+
+            const shape = shapeSelect.value;
+            const d1 = parseFloat(dim1Input.value) || 0;
+            const d2 = parseFloat(dim2Input.value) || 0;
+
+            let area = 0;
+            if (shape === 'rectangle') area = d1 * d2;
+            else if (shape === 'circle') area = Math.PI * d1 * d1;
+            else if (shape === 'triangle') area = 0.5 * d1 * d2;
+
+            resultEl.textContent = `Area: ${area.toFixed(2)}`;
+        }
+
+        function handlePlanUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = document.getElementById('planPreview');
+                const container = document.getElementById('planContainer');
+                const canvas = document.getElementById('takeoffCanvas');
+                if (!img || !container || !canvas) return;
+
+                img.onload = () => {
+                    container.style.display = 'block';
+                    const width = img.clientWidth;
+                    const height = img.clientHeight;
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.clearRect(0, 0, width, height);
+                };
+
+                img.src = ev.target.result;
+                img.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
         // --- REPORTING & EXPORTING ---
-function updateCalcMode(mode) {
-    state.calcMode = mode;
-    document.getElementById("basicTools").style.display = mode === "basic" ? "block" : "none";
-    document.getElementById("engineeringBtns").style.display = mode === "engineering" ? "grid" : "none";
-    document.getElementById("modeBasic")?.classList.toggle("active", mode === "basic");
-    document.getElementById("modeEngineering")?.classList.toggle("active", mode === "engineering");
-}
-
-function updateShapeInputs() {
-    const shape = document.getElementById("shapeSelect").value;
-    const dim2Group = document.getElementById("dim2Group");
-    if (shape === "circle") {
-        document.getElementById("dim1").placeholder = "Radius";
-        dim2Group.style.display = "none";
-    } else if (shape === "triangle") {
-        document.getElementById("dim1").placeholder = "Base";
-        document.getElementById("dim2").placeholder = "Height";
-        dim2Group.style.display = "block";
-    } else {
-        document.getElementById("dim1").placeholder = "Length";
-        document.getElementById("dim2").placeholder = "Width";
-        dim2Group.style.display = "block";
-    }
-}
-
-function calculateArea() {
-    const shape = document.getElementById("shapeSelect").value;
-    const d1 = parseFloat(document.getElementById("dim1").value) || 0;
-    const d2 = parseFloat(document.getElementById("dim2").value) || 0;
-    let area = 0;
-    if (shape === "rectangle") area = d1 * d2;
-    else if (shape === "circle") area = Math.PI * d1 * d1;
-    else if (shape === "triangle") area = 0.5 * d1 * d2;
-    document.getElementById("takeoffResult").textContent = `Area: ${area.toFixed(2)}`;
-}
-
-function handlePlanUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-        const img = document.getElementById("planPreview");
-        img.src = ev.target.result;
-        img.style.display = "block";
-    };
-    reader.readAsDataURL(file);
-}
         function getBidDataForExport() {
             const projectName = document.getElementById('bidProjectName').value || 'N/A';
             const clientName = document.getElementById('clientName').value || 'N/A';
