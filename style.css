@@ -198,6 +198,16 @@
             color: #065f46;
         }
 
+        .sync-badge.warning {
+            background: #fef9c3;
+            color: #92400e;
+        }
+
+        .sync-badge.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
         .sync-dot {
             width: 8px;
             height: 8px;
@@ -872,12 +882,17 @@
             padding: 1.5rem;
             margin-bottom: 1.5rem;
         }
-        
+
+        .update-meta {
+            color: var(--gray-600);
+            margin-bottom: 0.75rem;
+        }
+
         .update-list {
             list-style: none;
             margin-top: 1rem;
         }
-        
+
         .update-item {
             display: flex;
             align-items: center;
@@ -885,10 +900,20 @@
             padding: 0.5rem 0;
             color: var(--gray-700);
         }
-        
+
         .update-icon {
             color: var(--success);
             font-size: 1.25rem;
+        }
+
+        .update-summary {
+            color: var(--gray-600);
+            margin-bottom: 1.5rem;
+        }
+
+        .update-actions {
+            display: flex;
+            gap: 1rem;
         }
 
         /* Calculator */
