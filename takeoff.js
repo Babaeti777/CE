@@ -16,7 +16,14 @@ export class TakeoffManager {
             previewPoint: null,
             sortBy: 'trade',
             sortDir: 'asc',
-            filter: ''
+            filter: '',
+            zoom: 1,
+            isFullscreen: false,
+            countSettings: {
+                color: '#ef4444',
+                shape: 'circle',
+                label: ''
+            }
         };
 
         this.elements = {};
@@ -29,6 +36,10 @@ export class TakeoffManager {
         this.bindEvents();
         this.updateQuickShapeInputs();
         this.updateSortDirectionIcon();
+        this.syncCountControls();
+        this.applyZoom();
+        this.updateCountToolbarVisibility();
+        this.updateFullscreenButton();
         this.renderDrawingList();
         this.updateActiveDrawingDisplay();
         this.renderMeasurementTable();
@@ -45,6 +56,8 @@ export class TakeoffManager {
             drawingTableBody: byId('takeoffDrawingTableBody'),
             drawingEmpty: byId('takeoffDrawingEmpty'),
             planContainer: byId('takeoffPlanContainer'),
+            planStage: byId('takeoffPlanStage'),
+            planInner: byId('takeoffPlanInner'),
             planPreview: byId('takeoffPlanPreview'),
             canvas: byId('takeoffCanvas'),
             modeSelect: byId('takeoffModeSelect'),
@@ -61,7 +74,16 @@ export class TakeoffManager {
             quickDim2: byId('takeoffDim2'),
             quickDim2Group: byId('takeoffDim2Group'),
             quickBtn: byId('takeoffQuickCalcBtn'),
-            quickResult: byId('takeoffQuickResult')
+            quickResult: byId('takeoffQuickResult'),
+            zoomInBtn: byId('takeoffZoomInBtn'),
+            zoomOutBtn: byId('takeoffZoomOutBtn'),
+            zoomResetBtn: byId('takeoffZoomResetBtn'),
+            zoomIndicator: byId('takeoffZoomIndicator'),
+            fullscreenBtn: byId('takeoffFullscreenBtn'),
+            countColorInput: byId('takeoffCountColor'),
+            countShapeSelect: byId('takeoffCountShape'),
+            countLabelInput: byId('takeoffCountLabel'),
+            countToolbar: byId('takeoffCountToolbar')
         };
 
         if (this.elements.canvas) {
@@ -102,6 +124,114 @@ export class TakeoffManager {
 
         this.elements.quickShapeSelect?.addEventListener('change', () => this.updateQuickShapeInputs());
         this.elements.quickBtn?.addEventListener('click', () => this.calculateQuickArea());
+
+        this.elements.zoomInBtn?.addEventListener('click', () => this.adjustZoom(0.1));
+        this.elements.zoomOutBtn?.addEventListener('click', () => this.adjustZoom(-0.1));
+        this.elements.zoomResetBtn?.addEventListener('click', () => this.resetZoom());
+        this.elements.fullscreenBtn?.addEventListener('click', () => this.toggleFullscreen());
+
+        this.elements.countColorInput?.addEventListener('input', (event) => this.updateCountColor(event.target.value));
+        this.elements.countShapeSelect?.addEventListener('change', (event) => this.updateCountShape(event.target.value));
+        this.elements.countLabelInput?.addEventListener('input', (event) => this.updateCountLabel(event.target.value));
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.state.isFullscreen) {
+                this.setFullscreen(false);
+            }
+        });
+    }
+
+    adjustZoom(delta) {
+        const increment = Math.round((this.state.zoom + delta) * 100) / 100;
+        this.setZoom(increment);
+    }
+
+    setZoom(value) {
+        const clamped = Math.min(Math.max(value, 0.25), 6);
+        this.state.zoom = clamped;
+        this.applyZoom();
+    }
+
+    resetZoom() {
+        this.setZoom(1);
+    }
+
+    applyZoom() {
+        if (this.elements.planInner) {
+            this.elements.planInner.style.transform = `scale(${this.state.zoom})`;
+        }
+        if (this.elements.zoomIndicator) {
+            const percent = Math.round(this.state.zoom * 100);
+            this.elements.zoomIndicator.textContent = `${percent}%`;
+        }
+    }
+
+    setFullscreen(enabled) {
+        if (!this.elements.planContainer) return;
+        this.state.isFullscreen = Boolean(enabled);
+        this.elements.planContainer.classList.toggle('takeoff-plan-fullscreen', this.state.isFullscreen);
+        if (this.state.isFullscreen) {
+            document.body.classList.add('takeoff-fullscreen-active');
+        } else {
+            document.body.classList.remove('takeoff-fullscreen-active');
+        }
+        this.updateFullscreenButton();
+    }
+
+    toggleFullscreen() {
+        if (!this.getActiveDrawing()) {
+            this.options.showToast('Select a drawing before using full screen.', 'warning');
+            return;
+        }
+        this.setFullscreen(!this.state.isFullscreen);
+        if (this.state.isFullscreen) {
+            this.elements.planStage?.focus?.();
+        }
+    }
+
+    updateFullscreenButton() {
+        if (!this.elements.fullscreenBtn) return;
+        this.elements.fullscreenBtn.textContent = this.state.isFullscreen ? 'Exit Full Screen' : 'Full Screen';
+        this.elements.fullscreenBtn.setAttribute('aria-pressed', this.state.isFullscreen ? 'true' : 'false');
+    }
+
+    syncCountControls() {
+        if (this.elements.countColorInput) {
+            this.elements.countColorInput.value = this.state.countSettings.color;
+        }
+        if (this.elements.countShapeSelect) {
+            this.elements.countShapeSelect.value = this.state.countSettings.shape;
+        }
+        if (this.elements.countLabelInput) {
+            this.elements.countLabelInput.value = this.state.countSettings.label;
+        }
+    }
+
+    updateCountColor(value) {
+        if (typeof value !== 'string' || !value.trim()) return;
+        this.state.countSettings.color = value;
+    }
+
+    updateCountShape(value) {
+        if (typeof value !== 'string' || !value.trim()) return;
+        this.state.countSettings.shape = value;
+    }
+
+    updateCountLabel(value) {
+        this.state.countSettings.label = value;
+    }
+
+    updateCountToolbarVisibility() {
+        if (!this.elements.countToolbar) return;
+        const shouldShow = this.state.mode === 'count';
+        this.elements.countToolbar.classList.toggle('is-hidden', !shouldShow);
+    }
+
+    getCountStyle(measurement) {
+        const style = (measurement && measurement.style) || {};
+        const color = typeof style.color === 'string' && style.color ? style.color : '#ef4444';
+        const shape = typeof style.shape === 'string' && style.shape ? style.shape : 'circle';
+        return { color, shape };
     }
 
     async handleDrawingUpload(event) {
@@ -372,6 +502,9 @@ export class TakeoffManager {
             if (this.elements.activeMeta) {
                 this.elements.activeMeta.textContent = 'Select a drawing to begin.';
             }
+            this.setFullscreen(false);
+            this.state.countSettings.label = '';
+            this.syncCountControls();
             this.clearCanvas();
             return;
         }
@@ -379,6 +512,8 @@ export class TakeoffManager {
         if (this.elements.planContainer) {
             this.elements.planContainer.style.display = 'block';
         }
+        this.resetZoom();
+        this.syncCountControls();
         if (this.elements.planPreview) {
             this.elements.planPreview.src = drawing.imageUrl;
             if (this.elements.planPreview.complete) {
@@ -409,6 +544,19 @@ export class TakeoffManager {
         this.elements.canvas.height = safeHeight;
         this.elements.canvas.style.width = `${safeWidth}px`;
         this.elements.canvas.style.height = `${safeHeight}px`;
+        if (this.elements.planInner) {
+            this.elements.planInner.style.width = `${safeWidth}px`;
+            this.elements.planInner.style.height = `${safeHeight}px`;
+        }
+        if (this.elements.planPreview) {
+            this.elements.planPreview.style.width = `${safeWidth}px`;
+            this.elements.planPreview.style.height = 'auto';
+        }
+        if (this.elements.planStage) {
+            this.elements.planStage.scrollLeft = 0;
+            this.elements.planStage.scrollTop = 0;
+        }
+        this.applyZoom();
         this.drawMeasurements();
     }
 
@@ -421,6 +569,7 @@ export class TakeoffManager {
         this.state.mode = mode;
         this.state.points = [];
         this.state.previewPoint = null;
+        this.updateCountToolbarVisibility();
         const drawing = this.getActiveDrawing();
         if (drawing) {
             const instructions = {
@@ -430,6 +579,9 @@ export class TakeoffManager {
                 diameter: 'Click two points to measure the diameter.'
             }[mode] || 'Click on the plan to record measurements.';
             this.updateStatus(instructions);
+        }
+        if (mode === 'count') {
+            this.elements.countLabelInput?.focus?.();
         }
         this.drawMeasurements();
     }
@@ -457,17 +609,27 @@ export class TakeoffManager {
         }
         if (!this.elements.canvas) return;
         const rect = this.elements.canvas.getBoundingClientRect();
-        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const zoom = this.state.zoom || 1;
+        const point = {
+            x: (event.clientX - rect.left) / zoom,
+            y: (event.clientY - rect.top) / zoom
+        };
         const mode = this.state.mode;
 
         if (mode === 'count') {
-            const label = `Count ${drawing.counters.count++}`;
+            const baseLabel = (this.state.countSettings.label || '').trim();
+            const label = baseLabel || `Count ${drawing.counters.count}`;
+            drawing.counters.count += 1;
             const measurement = {
                 id: this.createId('measurement'),
                 type: 'count',
                 label,
                 points: [point],
-                count: 1
+                count: 1,
+                style: {
+                    color: this.state.countSettings.color,
+                    shape: this.state.countSettings.shape
+                }
             };
             drawing.measurements.push(measurement);
             this.renderMeasurementTable();
@@ -494,7 +656,11 @@ export class TakeoffManager {
     handleCanvasMove(event) {
         if (!this.state.points.length || !this.elements.canvas) return;
         const rect = this.elements.canvas.getBoundingClientRect();
-        this.state.previewPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const zoom = this.state.zoom || 1;
+        this.state.previewPoint = {
+            x: (event.clientX - rect.left) / zoom,
+            y: (event.clientY - rect.top) / zoom
+        };
         this.drawMeasurements();
     }
 
@@ -692,9 +858,45 @@ export class TakeoffManager {
             this.drawLabel(centroid.x, centroid.y, label);
         } else if (measurement.type === 'count') {
             const point = measurement.points[0];
-            this.drawHandle(point);
-            this.drawLabel(point.x, point.y, measurement.label);
+            const style = this.getCountStyle(measurement);
+            this.drawCountMarker(point, style);
+            const background = this.hexToRgba(style.color, 0.9);
+            const textColor = this.getReadableTextColor(style.color);
+            this.drawLabel(point.x, point.y, measurement.label, { backgroundColor: background, textColor });
         }
+        this.canvasContext.restore();
+    }
+
+    drawCountMarker(point, style) {
+        if (!this.canvasContext) return;
+        const size = 14;
+        const half = size / 2;
+        const color = style.color || '#ef4444';
+        const shape = style.shape || 'circle';
+        this.canvasContext.save();
+        this.canvasContext.fillStyle = color;
+        this.canvasContext.strokeStyle = '#ffffff';
+        this.canvasContext.lineWidth = 2;
+        this.canvasContext.beginPath();
+        if (shape === 'square') {
+            this.canvasContext.rect(point.x - half, point.y - half, size, size);
+        } else if (shape === 'diamond') {
+            this.canvasContext.moveTo(point.x, point.y - half);
+            this.canvasContext.lineTo(point.x + half, point.y);
+            this.canvasContext.lineTo(point.x, point.y + half);
+            this.canvasContext.lineTo(point.x - half, point.y);
+            this.canvasContext.closePath();
+        } else if (shape === 'triangle') {
+            const height = size * 0.9;
+            this.canvasContext.moveTo(point.x, point.y - height / 2);
+            this.canvasContext.lineTo(point.x + half, point.y + height / 2);
+            this.canvasContext.lineTo(point.x - half, point.y + height / 2);
+            this.canvasContext.closePath();
+        } else {
+            this.canvasContext.arc(point.x, point.y, size / 2.2, 0, Math.PI * 2);
+        }
+        this.canvasContext.fill();
+        this.canvasContext.stroke();
         this.canvasContext.restore();
     }
 
@@ -708,8 +910,10 @@ export class TakeoffManager {
         this.canvasContext.restore();
     }
 
-    drawLabel(x, y, text) {
+    drawLabel(x, y, text, options = {}) {
         if (!this.canvasContext || !this.elements.canvas) return;
+        const backgroundColor = options.backgroundColor || 'rgba(15, 23, 42, 0.85)';
+        const textColor = options.textColor || '#ffffff';
         this.canvasContext.save();
         this.canvasContext.font = '12px Inter, sans-serif';
         this.canvasContext.textBaseline = 'top';
@@ -722,11 +926,54 @@ export class TakeoffManager {
         rectX = Math.min(Math.max(rectX, 0), this.elements.canvas.width - textWidth - padding * 2);
         rectY = Math.min(Math.max(rectY, 0), this.elements.canvas.height - textHeight - padding);
         rectY = Math.max(rectY, 0);
-        this.canvasContext.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        this.canvasContext.fillStyle = backgroundColor;
         this.canvasContext.fillRect(rectX, rectY, textWidth + padding * 2, textHeight + padding);
-        this.canvasContext.fillStyle = '#ffffff';
+        this.canvasContext.fillStyle = textColor;
         this.canvasContext.fillText(text, rectX + padding, rectY + padding / 2);
         this.canvasContext.restore();
+    }
+
+    hexToRgba(hex, alpha = 1) {
+        if (typeof hex !== 'string') {
+            return `rgba(15, 23, 42, ${alpha})`;
+        }
+        let normalized = hex.replace('#', '').trim();
+        if (normalized.length === 3) {
+            normalized = normalized.split('').map((char) => char + char).join('');
+        }
+        if (normalized.length !== 6 || /[^0-9a-f]/i.test(normalized)) {
+            return `rgba(15, 23, 42, ${alpha})`;
+        }
+        const int = Number.parseInt(normalized, 16);
+        if (Number.isNaN(int)) {
+            return `rgba(15, 23, 42, ${alpha})`;
+        }
+        const r = (int >> 16) & 255;
+        const g = (int >> 8) & 255;
+        const b = int & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    getReadableTextColor(hex) {
+        if (typeof hex !== 'string') {
+            return '#ffffff';
+        }
+        let normalized = hex.replace('#', '').trim();
+        if (normalized.length === 3) {
+            normalized = normalized.split('').map((char) => char + char).join('');
+        }
+        if (normalized.length !== 6 || /[^0-9a-f]/i.test(normalized)) {
+            return '#ffffff';
+        }
+        const int = Number.parseInt(normalized, 16);
+        if (Number.isNaN(int)) {
+            return '#ffffff';
+        }
+        const r = (int >> 16) & 255;
+        const g = (int >> 8) & 255;
+        const b = int & 255;
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luminance > 0.6 ? '#0f172a' : '#ffffff';
     }
 
     calculateCentroid(points) {
@@ -788,6 +1035,18 @@ export class TakeoffManager {
     }
 
     getMeasurementDetails(measurement, drawing) {
+        if (measurement.type === 'count') {
+            const style = this.getCountStyle(measurement);
+            const parts = [];
+            if (style.shape) {
+                const label = style.shape.charAt(0).toUpperCase() + style.shape.slice(1);
+                parts.push(`Shape: ${label}`);
+            }
+            if (style.color) {
+                parts.push(`Color: ${style.color.toUpperCase()}`);
+            }
+            return parts.join(' • ');
+        }
         if (measurement.type !== 'area') return '';
         const scale = drawing.scale > 0 ? drawing.scale : 1;
         const perimeter = measurement.pixelPerimeter / scale;
