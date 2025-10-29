@@ -261,6 +261,15 @@
             margin-bottom: 1.5rem;
         }
 
+        .card-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.25rem;
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }
+
         .card-title {
             font-size: 1.25rem;
             font-weight: 700;
@@ -891,6 +900,7 @@
         .update-list {
             list-style: none;
             margin-top: 1rem;
+            padding: 0;
         }
 
         .update-item {
@@ -1328,6 +1338,9 @@
             }
             .header-actions {
                 gap: 0.5rem;
+            }
+            .card-meta {
+                align-items: flex-start;
             }
             .sync-badge span {
                 display: none;

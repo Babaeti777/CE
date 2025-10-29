@@ -132,9 +132,9 @@
                                 <div class="form-group"><label class="form-label">Number of Floors</label><input type="number" class="form-input" id="floors" value="1" min="1" required></div>
                                 <div class="form-group"><label class="form-label">Labor Multiplier</label><input type="number" class="form-input" id="laborCost" value="1.5" step="0.1" min="1"></div>
                             </div>
-                            <div class="form-group"><label class="form-label">Foundation Type</label><div class="material-grid"><div class="material-card" data-foundation="slab"><div class="material-name">Slab</div><div class="material-price">$4.50/sqft</div></div><div class="material-card" data-foundation="crawl"><div class="material-name">Crawl Space</div><div class="material-price">$7.00/sqft</div></div><div class="material-card" data-foundation="basement"><div class="material-name">Basement</div><div class="material-price">$12.00/sqft</div></div></div></div>
-                            <div class="form-group"><label class="form-label">Framing Material</label><div class="material-grid"><div class="material-card" data-framing="wood"><div class="material-name">Wood</div><div class="material-price">$15/sqft</div></div><div class="material-card" data-framing="steel"><div class="material-name">Steel</div><div class="material-price">$20/sqft</div></div><div class="material-card" data-framing="concrete"><div class="material-name">Concrete</div><div class="material-price">$25/sqft</div></div></div></div>
-                            <div class="form-group"><label class="form-label">Exterior Finish</label><div class="material-grid"><div class="material-card" data-exterior="vinyl"><div class="material-name">Vinyl</div><div class="material-price">$3/sqft</div></div><div class="material-card" data-exterior="brick"><div class="material-name">Brick</div><div class="material-price">$8/sqft</div></div><div class="material-card" data-exterior="stucco"><div class="material-name">Stucco</div><div class="material-price">$6/sqft</div></div><div class="material-card" data-exterior="stone"><div class="material-name">Stone</div><div class="material-price">$15/sqft</div></div></div></div>
+                            <div class="form-group"><label class="form-label">Foundation Type</label><div class="material-grid"><div class="material-card" data-category="foundation" data-material="slab"><div class="material-name">Slab</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="crawl"><div class="material-name">Crawl Space</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="basement"><div class="material-name">Basement</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="pier"><div class="material-name">Pier & Grade Beam</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="mat"><div class="material-name">Mat Foundation</div><div class="material-price">--</div></div></div></div>
+                            <div class="form-group"><label class="form-label">Framing Material</label><div class="material-grid"><div class="material-card" data-category="framing" data-material="wood"><div class="material-name">Wood Stud</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="steel"><div class="material-name">Structural Steel</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="concrete"><div class="material-name">Cast-in-Place Concrete</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="massTimber"><div class="material-name">Mass Timber</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="coldFormed"><div class="material-name">Cold-Formed Steel</div><div class="material-price">--</div></div></div></div>
+                            <div class="form-group"><label class="form-label">Exterior Finish</label><div class="material-grid"><div class="material-card" data-category="exterior" data-material="vinyl"><div class="material-name">Vinyl</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="brick"><div class="material-name">Brick Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stucco"><div class="material-name">Stucco</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stone"><div class="material-name">Stone Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="fiberCement"><div class="material-name">Fiber Cement</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="curtainWall"><div class="material-name">Curtain Wall</div><div class="material-price">--</div></div></div></div>
                             <button type="submit" class="btn btn-primary" style="width: 100%;"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>Calculate Estimate</button>
                         </form>
                     </div>
@@ -423,10 +423,45 @@
             <!-- Materials Tab -->
             <div id="materialsTab" class="tab-content">
                 <div class="card">
-                    <div class="card-header"><h3 class="card-title">Material Price Database</h3><span style="color: var(--gray-600);">Last updated: <span id="lastUpdate">Today</span></span></div>
+                    <div class="card-header">
+                        <h3 class="card-title">Material Price Database</h3>
+                        <div class="card-meta">
+                            <span>Last updated: <span id="lastUpdate">--</span></span>
+                            <span>Last synced: <span id="lastSynced">--</span></span>
+                            <span>Last checked: <span id="lastCheck">--</span></span>
+                            <span>Next auto-check: <span id="nextSync">--</span></span>
+                        </div>
+                    </div>
                     <table class="modern-table" style="margin-top: 2rem;">
-                        <thead><tr><th>Material</th><th>Category</th><th>Price</th><th>Unit</th><th>Trend</th></tr></thead>
+                        <thead><tr><th>Material</th><th>Category</th><th>Price</th><th>Unit</th><th>Change</th></tr></thead>
                         <tbody id="materialsTable"></tbody>
+                    </table>
+                    <div class="source-footer">
+                        <h4>Source references</h4>
+                        <ul id="sourceList" class="source-list"></ul>
+                    </div>
+                </div>
+                <div class="grid-2" style="gap: 2rem; margin-top: 2rem;">
+                    <div class="card">
+                        <div class="card-header"><h3 class="card-title">Labor Rates</h3></div>
+                        <table class="modern-table" style="margin-top: 1.5rem;">
+                            <thead><tr><th>Trade</th><th>Rate</th><th>Unit</th><th>Burden</th><th>Notes</th></tr></thead>
+                            <tbody id="laborTable"></tbody>
+                        </table>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h3 class="card-title">Equipment Rental Rates</h3></div>
+                        <table class="modern-table" style="margin-top: 1.5rem;">
+                            <thead><tr><th>Equipment</th><th>Rate</th><th>Unit</th><th>Notes</th></tr></thead>
+                            <tbody id="equipmentTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card" style="margin-top: 2rem;">
+                    <div class="card-header"><h3 class="card-title">Regional Cost Multipliers</h3></div>
+                    <table class="modern-table" style="margin-top: 1.5rem;">
+                        <thead><tr><th>Region</th><th>Multiplier</th><th>Major Markets</th><th>Notes</th></tr></thead>
+                        <tbody id="regionTable"></tbody>
                     </table>
                 </div>
             </div>
