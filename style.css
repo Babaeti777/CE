@@ -546,13 +546,125 @@
             overflow-x: auto;
         }
 
+        .takeoff-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .takeoff-drawings {
+            position: sticky;
+            top: 1.5rem;
+            align-self: flex-start;
+        }
+
+        .takeoff-upload-label {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .takeoff-filters {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1rem 0;
+        }
+
+        .takeoff-sort-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .takeoff-drawing-table {
+            position: relative;
+            max-height: 420px;
+            overflow-y: auto;
+            border-radius: 16px;
+            border: 1px solid var(--gray-200);
+            background: var(--gray-0);
+        }
+
+        .takeoff-workspace {
+            display: flex;
+            flex-direction: column;
+        }
+
         .takeoff-plan {
-            max-height: 70vh;
-            overflow: auto;
+            position: relative;
+            border-radius: 16px;
+            border: 1px solid var(--gray-200);
+            overflow: hidden;
+            background: var(--gray-0);
+            min-height: 280px;
+        }
+
+        .takeoff-plan img {
+            display: block;
+            width: 100%;
+            height: auto;
         }
 
         .takeoff-plan canvas {
+            position: absolute;
+            inset: 0;
             cursor: crosshair;
+        }
+
+        .takeoff-mode-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .takeoff-empty {
+            margin: 1rem;
+            color: var(--gray-500);
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .takeoff-meta {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        .takeoff-drawing-row {
+            cursor: pointer;
+        }
+
+        .takeoff-drawing-row.active td {
+            background: rgba(13, 110, 253, 0.08);
+        }
+
+        .takeoff-drawing-row input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .takeoff-drawing-row input:focus {
+            outline: none;
+            border-radius: 8px;
+            background: rgba(13, 110, 253, 0.12);
+        }
+
+        .takeoff-remove-drawing {
+            border: none;
+            background: transparent;
+            color: var(--gray-500);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .takeoff-remove-drawing:hover {
+            color: var(--danger);
         }
 
         /* Line Items */
@@ -918,6 +1030,24 @@
             border-color: var(--gray-400);
         }
 
+        body.dark-mode .takeoff-plan {
+            background: var(--gray-900);
+            border-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-drawing-table {
+            background: var(--gray-900);
+            border-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-empty {
+            color: var(--gray-400);
+        }
+
+        body.dark-mode .takeoff-drawing-row input {
+            color: var(--gray-100);
+        }
+
         .takeoff-table {
             width: 100%;
             border-collapse: collapse;
@@ -978,6 +1108,27 @@
             margin-top: 0.75rem;
             font-size: 0.8rem;
             color: var(--gray-500);
+        }
+
+        @media (max-width: 1100px) {
+            .takeoff-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .takeoff-drawings {
+                position: static;
+                order: 2;
+            }
+
+            .takeoff-workspace {
+                order: 1;
+            }
+
+            .takeoff-mode-controls {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.75rem;
+            }
         }
 
         /* Responsive */
