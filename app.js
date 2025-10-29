@@ -3,10 +3,26 @@ import { TakeoffManager } from './takeoff.js';
 (function() {
         'use strict';
 
+        const DATABASE_CACHE_KEY = 'ce:materials:cache:v2';
+        const SETTINGS_STORAGE_KEY = 'ce:settings';
+        const SYNC_STATUS_RESET_DELAY = 2500;
+        const FREQUENCY_INTERVALS = {
+            daily: 24 * 60 * 60 * 1000,
+            weekly: 7 * 24 * 60 * 60 * 1000,
+            monthly: 30 * 24 * 60 * 60 * 1000
+        };
+
         // --- STATE MANAGEMENT ---
         const state = {
             currentTab: 'dashboard',
             materialPrices: {},
+            lineItemCategories: {},
+            laborRates: {},
+            equipmentRates: {},
+            regionalAdjustments: {},
+            costIndices: {},
+            referenceAssemblies: [],
+            databaseMeta: {},
             savedProjects: [],
             companyInfo: { name: '', address: '', phone: '', email: '' },
             currentEstimate: null,
@@ -20,23 +36,544 @@ import { TakeoffManager } from './takeoff.js';
                 waitingForSecondOperand: false,
                 operator: null
             },
-            lineItemCategories: {}
+            pendingUpdate: null,
+            pendingReleaseNotes: null,
+            autoUpdate: 'enabled',
+            updateFrequency: 'weekly',
+            lastSyncCheck: null,
+            nextSyncPlanned: null
         };
 
         let takeoffManager = null;
+        let autoSyncTimeoutId = null;
+        let autoSyncInFlight = false;
 
         async function loadDatabase() {
             try {
-                const res = await fetch('database.json');
-                const data = await res.json();
-                state.materialPrices = data.materialPrices || {};
-                state.lineItemCategories = data.lineItemCategories || {};
+                const storedSettings = loadSettingsFromStorage();
+                if (storedSettings.autoUpdate) state.autoUpdate = storedSettings.autoUpdate;
+                if (storedSettings.updateFrequency) state.updateFrequency = storedSettings.updateFrequency;
+                if (storedSettings.lastSyncCheck) state.lastSyncCheck = storedSettings.lastSyncCheck;
+
+                const localData = await fetchJson('database.json');
+                applyDatabasePayload(localData, { source: 'local', suppressReleaseNotes: true });
+
+                const cachedData = loadCachedDatabase();
+                if (cachedData && isNewerVersion(localData?.metadata?.version, cachedData?.metadata?.version)) {
+                    applyDatabasePayload(cachedData, { fromRemote: true, source: 'cache', suppressReleaseNotes: true });
+                }
+
+                if (state.autoUpdate !== 'disabled' && state.databaseMeta.updateUrl) {
+                    await syncDatabase({ autoApply: true, silent: true });
+                } else {
+                    setSyncBadge('Database synced', 'success');
+                }
+                scheduleAutoSync();
             } catch (err) {
                 console.error('Error loading database:', err);
+                showToast('Unable to load cost database.', 'error');
             }
         }
 
-        // --- INITIALIZATION ---
+        function fetchJson(url, options = {}) {
+            return fetch(url, { cache: 'no-store', ...options }).then(res => {
+                if (!res.ok) {
+                    throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+                }
+                return res.json();
+            });
+        }
+
+        function loadCachedDatabase() {
+            try {
+                const raw = localStorage.getItem(DATABASE_CACHE_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (error) {
+                console.warn('Unable to parse cached database', error);
+                return null;
+            }
+        }
+
+        function persistDatabase(payload) {
+            if (!payload) return;
+            try {
+                const metadata = { ...(payload.metadata || {}), lastSynced: new Date().toISOString() };
+                const storedPayload = { ...payload, metadata };
+                localStorage.setItem(DATABASE_CACHE_KEY, JSON.stringify(storedPayload));
+            } catch (error) {
+                console.warn('Unable to persist database cache', error);
+            }
+        }
+
+        function parseVersion(version) {
+            return String(version || '')
+                .split(/[^0-9]+/)
+                .filter(Boolean)
+                .map(num => parseInt(num, 10));
+        }
+
+        function isNewerVersion(current, next) {
+            if (!next) return false;
+            if (!current) return true;
+            const currentParts = parseVersion(current);
+            const nextParts = parseVersion(next);
+            const length = Math.max(currentParts.length, nextParts.length);
+            for (let i = 0; i < length; i++) {
+                const a = currentParts[i] ?? 0;
+                const b = nextParts[i] ?? 0;
+                if (b > a) return true;
+                if (b < a) return false;
+            }
+            return false;
+        }
+
+        function formatDate(value) {
+            if (!value) return 'Unknown';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function formatDateTime(value) {
+            if (!value) return 'Unknown';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatMaterialName(name) {
+            return String(name || '')
+                .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+                .replace(/[-_]/g, ' ')
+                .trim()
+                .split(' ')
+                .filter(Boolean)
+                .map(word => word.length <= 3 ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+        }
+
+        function formatCategoryName(name) {
+            return formatMaterialName(name);
+        }
+
+        function loadSettingsFromStorage() {
+            try {
+                const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (error) {
+                console.warn('Unable to parse settings', error);
+                return {};
+            }
+        }
+
+        function saveSettings() {
+            try {
+                const payload = {
+                    autoUpdate: state.autoUpdate,
+                    updateFrequency: state.updateFrequency,
+                    lastSyncCheck: state.lastSyncCheck
+                };
+                localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
+            } catch (error) {
+                console.warn('Unable to persist settings', error);
+            }
+        }
+
+        function getFrequencyInterval(frequency = state.updateFrequency) {
+            return FREQUENCY_INTERVALS[frequency] || FREQUENCY_INTERVALS.weekly;
+        }
+
+        function clearAutoSyncTimer() {
+            if (autoSyncTimeoutId) {
+                clearTimeout(autoSyncTimeoutId);
+                autoSyncTimeoutId = null;
+            }
+        }
+
+        function scheduleAutoSync({ immediate = false } = {}) {
+            clearAutoSyncTimer();
+
+            if (state.autoUpdate === 'disabled') {
+                state.nextSyncPlanned = null;
+                updateLastUpdateDisplay();
+                return;
+            }
+
+            const now = Date.now();
+            const interval = getFrequencyInterval();
+            const lastCheck = state.lastSyncCheck ? new Date(state.lastSyncCheck).getTime() : null;
+
+            let delay = interval;
+            if (immediate) {
+                delay = 0;
+            } else if (lastCheck) {
+                const elapsed = now - lastCheck;
+                delay = elapsed >= interval ? 0 : interval - elapsed;
+            } else {
+                delay = 0;
+            }
+
+            const nextRun = new Date(now + delay);
+            state.nextSyncPlanned = nextRun.toISOString();
+            updateLastUpdateDisplay();
+
+            autoSyncTimeoutId = setTimeout(runAutoSyncCycle, delay);
+        }
+
+        async function runAutoSyncCycle() {
+            if (autoSyncInFlight || state.autoUpdate === 'disabled') return;
+            autoSyncInFlight = true;
+            try {
+                await syncDatabase({ autoApply: true, silent: true });
+            } finally {
+                autoSyncInFlight = false;
+            }
+        }
+
+        function applyDatabasePayload(payload, { fromRemote = false, source = 'local', persist = false, suppressReleaseNotes = false } = {}) {
+            if (!payload) return;
+
+            if (!fromRemote || suppressReleaseNotes) {
+                state.pendingReleaseNotes = null;
+            }
+
+            const previousCategories = state.lineItemCategories || {};
+
+            state.materialPrices = payload.materialPrices || {};
+            state.lineItemCategories = payload.lineItemCategories ? { ...payload.lineItemCategories } : {};
+            if (previousCategories['Takeoff Measurements'] && !state.lineItemCategories['Takeoff Measurements']) {
+                state.lineItemCategories['Takeoff Measurements'] = previousCategories['Takeoff Measurements'];
+            }
+            state.laborRates = payload.laborRates || {};
+            state.equipmentRates = payload.equipmentRates || {};
+            state.regionalAdjustments = payload.regionalAdjustments || {};
+            state.costIndices = payload.costIndices || {};
+            state.referenceAssemblies = payload.referenceAssemblies || [];
+
+            const metadata = payload.metadata || {};
+            const previousMeta = state.databaseMeta || {};
+            const lastSynced = fromRemote
+                ? metadata.lastSynced || new Date().toISOString()
+                : metadata.lastSynced || previousMeta.lastSynced || null;
+
+            state.databaseMeta = {
+                version: metadata.version || previousMeta.version || '0.0.0',
+                lastUpdated: metadata.lastUpdated || previousMeta.lastUpdated || null,
+                updateUrl: metadata.updateUrl || previousMeta.updateUrl || null,
+                releaseTitle: metadata.releaseTitle || previousMeta.releaseTitle || '',
+                description: metadata.description || previousMeta.description || '',
+                primarySource: metadata.primarySource || previousMeta.primarySource || '',
+                sources: metadata.sources || previousMeta.sources || [],
+                highlights: metadata.highlights || previousMeta.highlights || [],
+                lastSynced
+            };
+
+            if (fromRemote && !suppressReleaseNotes) {
+                state.pendingReleaseNotes = payload.metadata || null;
+            }
+
+            if (persist && fromRemote) {
+                persistDatabase(payload);
+            }
+
+            refreshMaterialDependentViews();
+        }
+
+        function refreshMaterialDependentViews() {
+            updateQuickEstimatorCards();
+            populateMaterialsTable();
+            populateLaborTable();
+            populateEquipmentTable();
+            populateRegionTable();
+            updateLastUpdateDisplay();
+            refreshLineItemCategoryOptions();
+        }
+
+        function setSyncBadge(message, status = 'idle') {
+            const badge = document.getElementById('syncStatus');
+            if (!badge) return;
+            badge.classList.remove('syncing', 'success', 'error');
+            if (status === 'syncing') badge.classList.add('syncing');
+            if (status === 'success') badge.classList.add('success');
+            if (status === 'error') badge.classList.add('error');
+            const span = badge.querySelector('span');
+            if (span) span.textContent = message;
+        }
+
+        async function syncDatabase({ autoApply = false, silent = false, manual = false } = {}) {
+            const checkTimestamp = new Date().toISOString();
+            state.lastSyncCheck = checkTimestamp;
+            saveSettings();
+            updateLastUpdateDisplay();
+
+            const updateUrl = state.databaseMeta?.updateUrl;
+            if (!updateUrl) {
+                if (manual) showToast('No update source configured.', 'warning');
+                scheduleAutoSync();
+                return { status: 'no-source' };
+            }
+
+            setSyncBadge('Checking for updates…', 'syncing');
+
+            try {
+                const cacheBuster = updateUrl.includes('?') ? '&' : '?';
+                const remoteData = await fetchJson(`${updateUrl}${cacheBuster}t=${Date.now()}`);
+                if (!remoteData?.metadata?.version) {
+                    throw new Error('Remote database missing version metadata.');
+                }
+
+                const currentVersion = state.databaseMeta?.version;
+                const remoteVersion = remoteData.metadata.version;
+                const updateAvailable = !currentVersion || isNewerVersion(currentVersion, remoteVersion);
+
+                if (!updateAvailable) {
+                    setSyncBadge('Database synced', 'success');
+                    if (manual && !silent) showToast('Database is already up to date.', 'success');
+                    state.pendingUpdate = null;
+                    return { status: 'up-to-date' };
+                }
+
+                if (autoApply) {
+                    applyDatabasePayload(remoteData, { fromRemote: true, persist: true, suppressReleaseNotes: silent });
+                    setSyncBadge(`Synced to ${remoteVersion}`, 'success');
+                    if (!silent) showToast(`Database updated to version ${remoteVersion}.`, 'success');
+                } else {
+                    state.pendingUpdate = remoteData;
+                    populateUpdateModal(remoteData.metadata);
+                    openModal('updateModal');
+                    setSyncBadge('Update ready', 'success');
+                }
+
+                return { status: 'update-available', applied: autoApply };
+            } catch (error) {
+                console.warn('Unable to sync database', error);
+                setSyncBadge('Sync unavailable', 'error');
+                if (manual && !silent) showToast('Unable to reach update source.', 'error');
+                return { status: 'error', error };
+            } finally {
+                scheduleAutoSync();
+                if (!autoApply && !state.pendingUpdate) {
+                    setTimeout(() => setSyncBadge('Database synced', 'success'), SYNC_STATUS_RESET_DELAY);
+                }
+            }
+        }
+
+        function populateUpdateModal(metadata) {
+            const titleEl = document.getElementById('updateModalTitle');
+            const metaEl = document.getElementById('updateModalMeta');
+            const descriptionEl = document.getElementById('updateModalDescription');
+            const listEl = document.getElementById('updateChangeList');
+
+            if (!metadata) {
+                if (descriptionEl) descriptionEl.textContent = 'No update information available.';
+                if (listEl) listEl.innerHTML = '';
+                return;
+            }
+
+            if (titleEl) {
+                titleEl.textContent = metadata.releaseTitle || `Database Version ${metadata.version || ''}`;
+            }
+
+            if (metaEl) {
+                const details = [];
+                if (metadata.version) details.push(`Version ${metadata.version}`);
+                if (metadata.lastUpdated) details.push(formatDate(metadata.lastUpdated));
+                if (metadata.primarySource) details.push(metadata.primarySource);
+                metaEl.textContent = details.join(' • ');
+            }
+
+            if (descriptionEl) {
+                descriptionEl.textContent = metadata.description || 'The latest cost data is ready to apply.';
+            }
+
+            if (listEl) {
+                listEl.innerHTML = '';
+                const highlights = metadata.highlights || [];
+                if (highlights.length === 0) {
+                    const li = document.createElement('li');
+                    li.className = 'update-item';
+                    li.innerHTML = `<span class="update-icon">•</span><span>No release notes were provided.</span>`;
+                    listEl.appendChild(li);
+                } else {
+                    highlights.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'update-item';
+                        li.innerHTML = `<span class="update-icon">✓</span><span>${item}</span>`;
+                        listEl.appendChild(li);
+                    });
+                }
+            }
+        }
+
+        function getMaterialEntry(category, key) {
+            return state.materialPrices?.[category]?.[key] ?? null;
+        }
+
+        function getMaterialPrice(category, key) {
+            const entry = getMaterialEntry(category, key);
+            if (entry == null) return 0;
+            if (typeof entry === 'number') return entry;
+            if (typeof entry === 'object' && entry.price != null) return Number(entry.price);
+            return 0;
+        }
+
+        function getMaterialUnit(category, key) {
+            const entry = getMaterialEntry(category, key);
+            if (typeof entry === 'object' && entry.unit) return entry.unit;
+            return 'unit';
+        }
+
+        function updateQuickEstimatorCards() {
+            document.querySelectorAll('.material-card').forEach(card => {
+                const category = card.dataset.category;
+                const key = card.dataset.material || card.dataset.foundation || card.dataset.framing || card.dataset.exterior;
+                if (!category || !key) return;
+                const price = getMaterialPrice(category, key);
+                const unit = getMaterialUnit(category, key);
+                const priceElement = card.querySelector('.material-price');
+                if (priceElement) {
+                    priceElement.textContent = price ? `${formatCurrency(price)}/${unit}` : 'N/A';
+                }
+            });
+        }
+
+        function populateMaterialsTable() {
+            const tableBody = document.getElementById('materialsTable');
+            if (!tableBody) return;
+            tableBody.innerHTML = '';
+
+            const entries = [];
+            Object.entries(state.materialPrices).forEach(([category, materials]) => {
+                Object.entries(materials || {}).forEach(([name, data]) => {
+                    const price = typeof data === 'object' ? data.price : data;
+                    const unit = typeof data === 'object' && data.unit ? data.unit : 'unit';
+                    const trend = typeof data === 'object' && typeof data.trend === 'number' ? data.trend : 0;
+                    const source = typeof data === 'object' && data.source ? data.source : '';
+                    entries.push({ category, name, price, unit, trend, source });
+                });
+            });
+
+            entries.sort((a, b) => {
+                const categoryCompare = formatCategoryName(a.category).localeCompare(formatCategoryName(b.category));
+                if (categoryCompare !== 0) return categoryCompare;
+                return formatMaterialName(a.name).localeCompare(formatMaterialName(b.name));
+            });
+
+            entries.forEach(entry => {
+                const row = tableBody.insertRow();
+                const trendSymbol = entry.trend > 0 ? '▲' : entry.trend < 0 ? '▼' : '●';
+                const trendColor = entry.trend > 0 ? 'var(--danger)' : entry.trend < 0 ? 'var(--success)' : 'var(--gray-500)';
+                const trendText = entry.trend === 0 ? 'No change' : `${trendSymbol} ${Math.abs(entry.trend).toFixed(1)}%`;
+                if (entry.source) row.title = `Source: ${entry.source}`;
+                row.innerHTML = `
+                    <td>${formatMaterialName(entry.name)}</td>
+                    <td>${formatCategoryName(entry.category)}</td>
+                    <td>${formatCurrency(entry.price || 0)}</td>
+                    <td>${entry.unit}</td>
+                    <td style="color: ${trendColor}; font-weight: 600;">${trendText}</td>
+                `;
+            });
+        }
+
+        function populateLaborTable() {
+            const tableBody = document.getElementById('laborTable');
+            if (!tableBody) return;
+            tableBody.innerHTML = '';
+
+            Object.entries(state.laborRates || {})
+                .sort(([a], [b]) => a.localeCompare(b))
+                .forEach(([trade, info]) => {
+                    const row = tableBody.insertRow();
+                    const burden = typeof info.burden === 'number' ? `${info.burden.toFixed(1)}%` : '—';
+                    row.innerHTML = `
+                        <td>${trade}</td>
+                        <td>${formatCurrency(info.rate || 0)}</td>
+                        <td>${info.unit || 'hour'}</td>
+                        <td>${burden}</td>
+                        <td>${info.notes || ''}</td>
+                    `;
+                });
+        }
+
+        function populateEquipmentTable() {
+            const tableBody = document.getElementById('equipmentTable');
+            if (!tableBody) return;
+            tableBody.innerHTML = '';
+
+            Object.entries(state.equipmentRates || {})
+                .sort(([a], [b]) => a.localeCompare(b))
+                .forEach(([name, info]) => {
+                    const row = tableBody.insertRow();
+                    row.innerHTML = `
+                        <td>${name}</td>
+                        <td>${formatCurrency(info.rate || 0)}</td>
+                        <td>${info.unit || 'day'}</td>
+                        <td>${info.notes || ''}</td>
+                    `;
+                });
+        }
+
+        function populateRegionTable() {
+            const tableBody = document.getElementById('regionTable');
+            if (!tableBody) return;
+            tableBody.innerHTML = '';
+
+            const regions = Array.isArray(state.regionalAdjustments?.regions) ? state.regionalAdjustments.regions : [];
+            regions.forEach(region => {
+                const row = tableBody.insertRow();
+                const markets = Array.isArray(region.markets) ? region.markets.join(', ') : '';
+                const multiplier = typeof region.multiplier === 'number' ? region.multiplier.toFixed(2) : region.multiplier || '';
+                row.innerHTML = `
+                    <td>${region.name || ''}</td>
+                    <td>${multiplier}</td>
+                    <td>${markets}</td>
+                    <td>${region.notes || ''}</td>
+                `;
+            });
+        }
+
+        function updateLastUpdateDisplay() {
+            const lastUpdateEl = document.getElementById('lastUpdate');
+            const lastSyncedEl = document.getElementById('lastSynced');
+            const lastCheckEl = document.getElementById('lastCheck');
+            const nextSyncEl = document.getElementById('nextSync');
+            if (lastUpdateEl) lastUpdateEl.textContent = state.databaseMeta?.lastUpdated ? formatDate(state.databaseMeta.lastUpdated) : 'Unknown';
+            if (lastSyncedEl) lastSyncedEl.textContent = state.databaseMeta?.lastSynced ? formatDate(state.databaseMeta.lastSynced) : 'Not synced';
+            if (lastCheckEl) lastCheckEl.textContent = state.lastSyncCheck ? formatDateTime(state.lastSyncCheck) : 'No checks yet';
+            if (nextSyncEl) {
+                if (state.autoUpdate === 'disabled') {
+                    nextSyncEl.textContent = 'Auto update off';
+                } else if (state.nextSyncPlanned) {
+                    nextSyncEl.textContent = formatDateTime(state.nextSyncPlanned);
+                } else {
+                    nextSyncEl.textContent = 'Scheduling…';
+                }
+            }
+
+            const sourceList = document.getElementById('sourceList');
+            if (sourceList) {
+                sourceList.innerHTML = '';
+                const sources = state.databaseMeta?.sources || [];
+                if (sources.length === 0) {
+                    const li = document.createElement('li');
+                    li.textContent = 'No source information available.';
+                    sourceList.appendChild(li);
+                } else {
+                    sources.forEach(src => {
+                        const li = document.createElement('li');
+                        li.textContent = src;
+                        sourceList.appendChild(li);
+                    });
+                }
+            }
+        }
         function init() {
             loadSavedData();
             setupEventListeners();
@@ -70,6 +607,14 @@ import { TakeoffManager } from './takeoff.js';
                 document.getElementById('companyAddress').value = state.companyInfo.address || '';
                 document.getElementById('companyPhone').value = state.companyInfo.phone || '';
                 document.getElementById('companyEmail').value = state.companyInfo.email || '';
+                const settings = loadSettingsFromStorage();
+                state.autoUpdate = settings.autoUpdate || state.autoUpdate;
+                state.updateFrequency = settings.updateFrequency || state.updateFrequency;
+                state.lastSyncCheck = settings.lastSyncCheck || state.lastSyncCheck;
+                const autoUpdateSelect = document.getElementById('autoUpdate');
+                if (autoUpdateSelect) autoUpdateSelect.value = state.autoUpdate;
+                const frequencySelect = document.getElementById('updateFrequency');
+                if (frequencySelect) frequencySelect.value = state.updateFrequency;
                 const theme = localStorage.getItem('darkMode');
                 if (theme === 'on') document.body.classList.add('dark-mode');
             } catch (e) {
@@ -107,7 +652,9 @@ import { TakeoffManager } from './takeoff.js';
             document.getElementById('startQuickBtn')?.addEventListener('click', () => { closeModal('newProjectModal'); switchTab('estimator'); });
             document.getElementById('startDetailedBtn')?.addEventListener('click', () => { closeModal('newProjectModal'); switchTab('detailed'); });
             document.getElementById('closeNewProjectModal')?.addEventListener('click', () => closeModal('newProjectModal'));
-            
+            document.getElementById('autoUpdate')?.addEventListener('change', handleAutoUpdateChange);
+            document.getElementById('updateFrequency')?.addEventListener('change', handleUpdateFrequencyChange);
+
             // Modals
             document.getElementById('closeUpdateModal')?.addEventListener('click', () => closeModal('updateModal'));
             document.getElementById('calculatorBtn')?.addEventListener('click', () => openModal('calculatorModal'));
@@ -195,11 +742,30 @@ import { TakeoffManager } from './takeoff.js';
             localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
         }
 
+        async function handleAutoUpdateChange(event) {
+            state.autoUpdate = event.target.value;
+            saveSettings();
+            if (state.autoUpdate === 'disabled') {
+                clearAutoSyncTimer();
+                state.nextSyncPlanned = null;
+                updateLastUpdateDisplay();
+                setSyncBadge('Auto updates off', 'idle');
+                return;
+            }
+            await syncDatabase({ autoApply: true, manual: true, silent: false });
+        }
+
+        function handleUpdateFrequencyChange(event) {
+            state.updateFrequency = event.target.value;
+            saveSettings();
+            scheduleAutoSync();
+        }
+
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            
+
             const icon = type === 'success' ? '✓' : type === 'error' ? '!' : '?';
             
             toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
@@ -235,9 +801,9 @@ import { TakeoffManager } from './takeoff.js';
             const laborMultiplier = parseFloat(form.querySelector('#laborCost').value);
 
             const selected = {
-                foundation: document.querySelector('[data-foundation].selected')?.dataset.foundation,
-                framing: document.querySelector('[data-framing].selected')?.dataset.framing,
-                exterior: document.querySelector('[data-exterior].selected')?.dataset.exterior,
+                foundation: document.querySelector('.material-card[data-category="foundation"].selected')?.dataset.material,
+                framing: document.querySelector('.material-card[data-category="framing"].selected')?.dataset.material,
+                exterior: document.querySelector('.material-card[data-category="exterior"].selected')?.dataset.material,
             };
 
             if (!selected.foundation || !selected.framing || !selected.exterior) {
@@ -246,9 +812,9 @@ import { TakeoffManager } from './takeoff.js';
             }
 
             const costs = {
-                foundation: state.materialPrices.foundation[selected.foundation] * sqft,
-                framing: state.materialPrices.framing[selected.framing] * sqft * floors,
-                exterior: state.materialPrices.exterior[selected.exterior] * sqft * floors * 0.8,
+                foundation: getMaterialPrice('foundation', selected.foundation) * sqft,
+                framing: getMaterialPrice('framing', selected.framing) * sqft * floors,
+                exterior: getMaterialPrice('exterior', selected.exterior) * sqft * floors * 0.8,
             };
 
             const materialTotal = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
@@ -316,14 +882,14 @@ import { TakeoffManager } from './takeoff.js';
             document.getElementById('floors').value = data.floors || '';
             document.getElementById('laborCost').value = data.laborMultiplier || '';
 
-            document.querySelectorAll('[data-foundation]').forEach(c => {
-                c.classList.toggle('selected', c.dataset.foundation === data.selected?.foundation);
+            document.querySelectorAll('.material-card[data-category="foundation"]').forEach(c => {
+                c.classList.toggle('selected', c.dataset.material === data.selected?.foundation);
             });
-            document.querySelectorAll('[data-framing]').forEach(c => {
-                c.classList.toggle('selected', c.dataset.framing === data.selected?.framing);
+            document.querySelectorAll('.material-card[data-category="framing"]').forEach(c => {
+                c.classList.toggle('selected', c.dataset.material === data.selected?.framing);
             });
-            document.querySelectorAll('[data-exterior]').forEach(c => {
-                c.classList.toggle('selected', c.dataset.exterior === data.selected?.exterior);
+            document.querySelectorAll('.material-card[data-category="exterior"]').forEach(c => {
+                c.classList.toggle('selected', c.dataset.material === data.selected?.exterior);
             });
         }
 
@@ -365,6 +931,24 @@ import { TakeoffManager } from './takeoff.js';
             showToast('Company information saved!', 'success');
         }
 
+        function refreshLineItemCategoryOptions() {
+            const categories = Object.keys(state.lineItemCategories || {});
+            document.querySelectorAll('.line-item-row').forEach(row => {
+                const categorySelect = row.querySelector('[data-field="category"]');
+                const descriptionSelect = row.querySelector('[data-field="description"]');
+                if (!categorySelect || !descriptionSelect) return;
+                const previousCategory = categorySelect.value;
+                const previousDescription = descriptionSelect.value;
+                categorySelect.innerHTML = categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+                if (categories.includes(previousCategory)) {
+                    categorySelect.value = previousCategory;
+                } else if (categories.length) {
+                    categorySelect.value = categories[0];
+                }
+                updateItemSelectionOptions(row, { preserveExisting: true, previousDescription });
+            });
+        }
+
         // --- DETAILED BIDDING ---
         function addLineItem(item = null) {
             if (item?.category && !state.lineItemCategories[item.category]) {
@@ -376,7 +960,8 @@ import { TakeoffManager } from './takeoff.js';
             div.className = 'line-item-row';
             div.dataset.id = state.lineItemId;
 
-            const categoryOptions = Object.keys(state.lineItemCategories)
+            const categories = Object.keys(state.lineItemCategories);
+            const categoryOptions = categories
                 .map(cat => `<option value="${cat}">${cat}</option>`)
                 .join('');
 
@@ -396,16 +981,16 @@ import { TakeoffManager } from './takeoff.js';
             container.appendChild(div);
 
             const categorySelect = div.querySelector('[data-field="category"]');
-            if (item?.category) {
+            if (item?.category && state.lineItemCategories[item.category]) {
                 categorySelect.value = item.category;
             }
 
-            updateItemSelectionOptions(div);
+            updateItemSelectionOptions(div, { preserveExisting: !!item, previousDescription: item?.description });
 
             if (item) {
                 const descriptionSelect = div.querySelector('[data-field="description"]');
                 if (item.category && !state.lineItemCategories[item.category]?.some(entry => entry.name === item.description)) {
-                    descriptionSelect.innerHTML = `<option value="${item.description}">${item.description}</option>`;
+                    descriptionSelect.innerHTML += `<option value="${item.description}">${item.description}</option>`;
                 }
                 if (item.description) {
                     descriptionSelect.value = item.description;
@@ -417,26 +1002,45 @@ import { TakeoffManager } from './takeoff.js';
             }
         }
         
-        function updateItemSelectionOptions(row) {
+        function updateItemSelectionOptions(row, { preserveExisting = false, previousDescription } = {}) {
             const categorySelect = row.querySelector('[data-field="category"]');
             const descriptionSelect = row.querySelector('[data-field="description"]');
+            if (!categorySelect || !descriptionSelect) return;
             const selectedCategory = categorySelect.value;
-            
+
             const items = state.lineItemCategories[selectedCategory] || [];
             descriptionSelect.innerHTML = items.map(item => `<option value="${item.name}">${item.name}</option>`).join('');
-            updateLineItemFromSelection(descriptionSelect);
+            const hasPrevious = previousDescription && items.some(item => item.name === previousDescription);
+            if (preserveExisting && hasPrevious) {
+                descriptionSelect.value = previousDescription;
+            } else if (items.length) {
+                descriptionSelect.value = items[0].name;
+            } else {
+                descriptionSelect.value = '';
+            }
+            updateLineItemFromSelection(descriptionSelect, { preserveExisting });
         }
 
-        function updateLineItemFromSelection(selectElement) {
+        function updateLineItemFromSelection(selectElement, { preserveExisting = false } = {}) {
             const row = selectElement.closest('.line-item-row');
+            if (!row) return;
             const category = row.querySelector('[data-field="category"]').value;
             const description = selectElement.value;
-            
+
             const itemData = state.lineItemCategories[category]?.find(i => i.name === description);
-            
+
             if (itemData) {
-                row.querySelector('[data-field="unit"]').value = itemData.unit;
-                row.querySelector('[data-field="rate"]').value = itemData.rate;
+                const unitField = row.querySelector('[data-field="unit"]');
+                const rateField = row.querySelector('[data-field="rate"]');
+                if (unitField && (!preserveExisting || !unitField.value)) {
+                    unitField.value = itemData.unit || '';
+                }
+                if (rateField) {
+                    const currentRate = parseFloat(rateField.value);
+                    if (!preserveExisting || !currentRate) {
+                        rateField.value = itemData.rate ?? 0;
+                    }
+                }
                 updateLineItemTotal(row);
             }
         }
@@ -1031,25 +1635,6 @@ import { TakeoffManager } from './takeoff.js';
             });
         }
 
-        function populateMaterialsTable() {
-            const tableBody = document.getElementById('materialsTable');
-            tableBody.innerHTML = '';
-            Object.entries(state.materialPrices).forEach(([category, materials]) => {
-                Object.entries(materials).forEach(([name, price]) => {
-                    const row = tableBody.insertRow();
-                    const trend = Math.random() > 0.5 ? '▲' : '▼';
-                    const trendColor = trend === '▲' ? 'var(--danger)' : 'var(--success)';
-                    row.innerHTML = `
-                        <td>${name.charAt(0).toUpperCase() + name.slice(1)}</td>
-                        <td>${category.charAt(0).toUpperCase() + category.slice(1)}</td>
-                        <td>${formatCurrency(price)}</td>
-                        <td>sqft</td>
-                        <td style="color: ${trendColor}; font-weight: bold;">${trend} ${(Math.random() * 5).toFixed(1)}%</td>
-                    `;
-                });
-            });
-        }
-
         // --- CHARTS ---
         function initCharts() {
             const ctxPrice = document.getElementById('priceChart')?.getContext('2d');
@@ -1070,41 +1655,29 @@ import { TakeoffManager } from './takeoff.js';
         // --- SETTINGS & UPDATES ---
         function checkForUpdatesOnLoad() {
             setTimeout(() => {
-                openModal('updateModal');
-            }, 3000);
+                if (state.pendingReleaseNotes) {
+                    populateUpdateModal(state.pendingReleaseNotes);
+                    openModal('updateModal');
+                    state.pendingReleaseNotes = null;
+                }
+            }, 1500);
         }
-        
+
         function checkForUpdates() {
-            const syncBadge = document.getElementById('syncStatus');
-            syncBadge.classList.add('syncing');
-            syncBadge.querySelector('span').textContent = 'Checking...';
-            
-            setTimeout(() => {
-                syncBadge.classList.remove('syncing');
-                openModal('updateModal');
-            }, 2000);
+            syncDatabase({ autoApply: false, manual: true });
         }
 
         function applyUpdate() {
-            const syncBadge = document.getElementById('syncStatus');
-            syncBadge.classList.add('syncing');
-            syncBadge.querySelector('span').textContent = 'Updating...';
-            
-            setTimeout(() => {
-                state.materialPrices.framing.wood *= 0.95;
-                state.materialPrices.framing.steel *= 1.03;
-                
-                closeModal('updateModal');
-                populateMaterialsTable();
-                
-                syncBadge.classList.remove('syncing');
-                syncBadge.classList.add('success');
-                syncBadge.querySelector('span').textContent = 'Database Synced';
-                
-                showToast('Material database updated!', 'success');
-                
-                setTimeout(() => syncBadge.classList.remove('success'), 3000);
-            }, 2500);
+            if (!state.pendingUpdate) {
+                showToast('No update package ready to install.', 'warning');
+                return;
+            }
+            applyDatabasePayload(state.pendingUpdate, { fromRemote: true, persist: true });
+            const appliedVersion = state.pendingUpdate.metadata?.version || state.databaseMeta.version;
+            state.pendingUpdate = null;
+            closeModal('updateModal');
+            setSyncBadge(`Synced to ${appliedVersion}`, 'success');
+            showToast(`Database updated to version ${appliedVersion}.`, 'success');
         }
         
         // --- RUN APP ---

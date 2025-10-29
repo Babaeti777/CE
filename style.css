@@ -198,6 +198,11 @@
             color: #065f46;
         }
 
+        .sync-badge.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
         .sync-dot {
             width: 8px;
             height: 8px;
@@ -249,6 +254,15 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1.5rem;
+        }
+
+        .card-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.25rem;
+            color: var(--gray-600);
+            font-size: 0.875rem;
         }
 
         .card-title {
@@ -876,6 +890,7 @@
         .update-list {
             list-style: none;
             margin-top: 1rem;
+            padding: 0;
         }
         
         .update-item {
@@ -889,6 +904,31 @@
         .update-icon {
             color: var(--success);
             font-size: 1.25rem;
+        }
+
+        .update-meta {
+            color: var(--gray-700);
+            font-size: 0.9rem;
+        }
+
+        .source-footer {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .source-footer h4 {
+            font-size: 1rem;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+        }
+
+        .source-list {
+            list-style: disc;
+            margin-left: 1.25rem;
+            color: var(--gray-600);
+            font-size: 0.9rem;
+            line-height: 1.5;
         }
 
         /* Calculator */
@@ -1303,6 +1343,9 @@
             }
             .header-actions {
                 gap: 0.5rem;
+            }
+            .card-meta {
+                align-items: flex-start;
             }
             .sync-badge span {
                 display: none;

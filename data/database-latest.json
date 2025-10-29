@@ -1,0 +1,323 @@
+{
+  "metadata": {
+    "version": "2025.07.1",
+    "lastUpdated": "2025-07-18T00:00:00Z",
+    "releaseTitle": "Mid-Summer Market Refresh",
+    "description": "July pricing update incorporating commodity futures, union agreements, and mid-year supplier quotes.",
+    "primarySource": "ENR Building Cost Index July 2025",
+    "sources": [
+      "RSMeans 2025 Quarterly Update Bulletin",
+      "Engineering News-Record Cost Index – July 2025",
+      "Associated General Contractors Wage Bulletin – July 2025"
+    ],
+    "highlights": [
+      "Steel mill surcharges increased structural packages by 2.2%.",
+      "Mechanical equipment lead times improving; HVAC equipment down 1.5%.",
+      "Added regional multipliers for fast-growing secondary markets.",
+      "Expanded database with live mechanical, electrical, sitework, and specialty system pricing feeds."
+    ],
+    "updateUrl": "data/database-latest.json"
+  },
+  "materialPrices": {
+    "foundation": {
+      "slab": { "price": 4.95, "unit": "sqft", "trend": 2.1, "source": "RSMeans Concrete Update Jul 2025", "notes": "Includes summer fuel surcharge." },
+      "crawl": { "price": 7.35, "unit": "sqft", "trend": 1.4, "source": "RSMeans Concrete Update Jul 2025", "notes": "Additional termite treatment requirements." },
+      "basement": { "price": 13.1, "unit": "sqft", "trend": 2.6, "source": "RSMeans Concrete Update Jul 2025", "notes": "Includes exterior insulation board." },
+      "pier": { "price": 9.65, "unit": "sqft", "trend": 2.1, "source": "RSMeans Concrete Update Jul 2025", "notes": "Production drilling crew escalation." },
+      "mat": { "price": 14.55, "unit": "sqft", "trend": 2.4, "source": "ENR Cost Index", "notes": "Added epoxy coated reinforcing." }
+    },
+    "framing": {
+      "wood": { "price": 16.1, "unit": "sqft", "trend": -1.5, "source": "Random Lengths Composite Price", "notes": "Lumber futures pulled back in July." },
+      "steel": { "price": 23.25, "unit": "sqft", "trend": 2.2, "source": "AISC Market Data 2025", "notes": "Mill surcharge effective July 15." },
+      "concrete": { "price": 28.25, "unit": "sqft", "trend": 1.6, "source": "RSMeans Concrete Update Jul 2025", "notes": "Labor premium for heat mitigation." },
+      "massTimber": { "price": 24.95, "unit": "sqft", "trend": 1.4, "source": "WoodWorks Market Update", "notes": "Stable pricing with extended lead times." },
+      "coldFormed": { "price": 19.45, "unit": "sqft", "trend": 1.5, "source": "AISI Pricing", "notes": "Supplier freight adjustments." }
+    },
+    "exterior": {
+      "vinyl": { "price": 3.4, "unit": "sqft", "trend": 1.5, "source": "RSMeans Siding 2025", "notes": "Resin shortage impacts coils." },
+      "brick": { "price": 28.1, "unit": "sqft", "trend": 2.2, "source": "Brick Industry Assoc. July 2025", "notes": "Fuel surcharges on kiln-fired products." },
+      "stucco": { "price": 9.1, "unit": "sqft", "trend": 1.8, "source": "RSMeans Finishes 2025", "notes": "Added acrylic finish upgrade." },
+      "stone": { "price": 35.4, "unit": "sqft", "trend": 2.3, "source": "ENR Cost Index", "notes": "Imported stone tariffs reinstated." },
+      "fiberCement": { "price": 6.55, "unit": "sqft", "trend": 2.3, "source": "James Hardie Contractor Pricing", "notes": "New fire-resistive spec for multifamily." },
+      "curtainWall": { "price": 59.8, "unit": "sqft", "trend": 2.2, "source": "CSI Div 08 Benchmark", "notes": "Triple-glazed upgrade for energy code compliance." }
+    },
+    "roofing": {
+      "asphaltShingle": { "price": 3.55, "unit": "sqft", "trend": -2.7, "source": "NRCA Market Analysis", "notes": "Oil futures softened; asphalt binder down." },
+      "standingSeamMetal": { "price": 10.15, "unit": "sqft", "trend": 3.6, "source": "Metal Construction Association", "notes": "Galvalume supply constraints." },
+      "tpoMembrane": { "price": 8.15, "unit": "sqft", "trend": -1.9, "source": "NRCA Roofing Report 2025", "notes": "Manufacturers offering mid-year rebates." },
+      "pvcMembrane": { "price": 10.85, "unit": "sqft", "trend": 2.4, "source": "NRCA Roofing Report 2025", "notes": "Resin price recovery continuing." },
+      "builtUp": { "price": 7.9, "unit": "sqft", "trend": 1.9, "source": "RSMeans Roofing 2025", "notes": "Felts and asphalt both up modestly." },
+      "greenRoof": { "price": 18.6, "unit": "sqft", "trend": 2.2, "source": "Green Roof Industry Outlook", "notes": "Plant material availability tight in July heat." }
+    },
+    "flooring": {
+      "carpetTile": { "price": 4.35, "unit": "sqft", "trend": 2.4, "source": "Carpet & Rug Institute", "notes": "Backing supplier surcharge in effect." },
+      "hardwood": { "price": 9.95, "unit": "sqft", "trend": 2.1, "source": "National Wood Flooring Assoc.", "notes": "Moisture acclimation requirements extended." },
+      "porcelainTile": { "price": 11.1, "unit": "sqft", "trend": 2.8, "source": "Tile Council of North America", "notes": "Euro exchange rate affecting imports." },
+      "lvt": { "price": 5.75, "unit": "sqft", "trend": 2.7, "source": "Floor Covering Weekly 2025", "notes": "Tariff compliance documentation adds cost." },
+      "polishedConcrete": { "price": 5.05, "unit": "sqft", "trend": 2.0, "source": "Concrete Network", "notes": "Crew overtime for night shifts." },
+      "epoxy": { "price": 6.45, "unit": "sqft", "trend": 4.0, "source": "Protective Coatings Inst.", "notes": "Resin components affected by chemical plant shutdown." }
+    },
+    "insulation": {
+      "fiberglassBatt": { "price": 0.85, "unit": "sqft", "trend": 3.7, "source": "NAIMA 2025", "notes": "Glass batch cost increases." },
+      "celluloseBlown": { "price": 1.18, "unit": "sqft", "trend": 2.6, "source": "RSMeans Thermal 2025", "notes": "Transportation fuel surcharge." },
+      "sprayFoamClosedCell": { "price": 2.05, "unit": "sqft", "trend": 5.1, "source": "SPFA Market Report", "notes": "MDI chemical shortage impacting availability." },
+      "mineralWool": { "price": 1.45, "unit": "sqft", "trend": 5.1, "source": "RSMeans Thermal 2025", "notes": "Import duties on basalt fiber." },
+      "rigidPolyiso": { "price": 1.68, "unit": "sqft", "trend": 3.7, "source": "Polyiso Manufacturers Assoc.", "notes": "Blowing agent regulations effective July." }
+    },
+    "mechanical": {
+      "packagedRooftopUnit": { "price": 1895, "unit": "ton", "trend": 2.9, "source": "ASHRAE Market Tracker Jul 2025", "notes": "15-ton high-efficiency RTU with smoke detector." },
+      "variableAirVolumeBox": { "price": 892, "unit": "each", "trend": 1.6, "source": "RSMeans Mechanical Update Jul 2025", "notes": "Pressure-independent VAV box with hot water reheat coil." },
+      "ductworkGalvanized": { "price": 5.45, "unit": "lb", "trend": 3.1, "source": "SMACNA Fabrication Cost Index", "notes": "24 ga galvanized duct, insulated and sealed." },
+      "hydronicPumps": { "price": 7395, "unit": "each", "trend": 3.4, "source": "ENR Mechanical Equipment", "notes": "End-suction pump, 50 HP with factory VFD and commissioning." },
+      "ddcControls": { "price": 4.95, "unit": "sqft", "trend": 4.1, "source": "BAS Integrator Survey", "notes": "DDC expansion with analytics dashboard." }
+    },
+    "electrical": {
+      "ledTroffer24": { "price": 149, "unit": "each", "trend": 1.9, "source": "NECA Lighting Index", "notes": "2x4 LED troffer, 4000K with wireless controls." },
+      "panelboard400A": { "price": 3525, "unit": "each", "trend": 2.9, "source": "Graybar Pricing Bulletin", "notes": "400A, 208Y/120V panelboard with surge protection." },
+      "copperFeeder4in": { "price": 16.4, "unit": "lf", "trend": 4.1, "source": "BLS Copper Producer Index", "notes": "4 in copper feeder in EMT conduit." },
+      "emtConduit1in": { "price": 3.05, "unit": "lf", "trend": 2.0, "source": "Electrical Contractor Cost Guide", "notes": "1 in EMT with compression fittings." },
+      "standbyGenerator": { "price": 49950, "unit": "each", "trend": 3.0, "source": "Generator Manufacturer Quotes", "notes": "175 kW diesel standby with load bank test." }
+    },
+    "interiors": {
+      "demountablePartitions": { "price": 33.4, "unit": "sqft", "trend": 2.1, "source": "CSI Division 10 Benchmark", "notes": "Frameless glazed partition with acoustic rating." },
+      "solidSurfaceCounters": { "price": 184, "unit": "lf", "trend": 2.8, "source": "Kitchen & Bath Market Index", "notes": "3cm solid surface with waterfall edge." },
+      "decorativeLighting": { "price": 389, "unit": "each", "trend": 2.7, "source": "IESNA Lighting Market", "notes": "Statement pendant with programmable driver." },
+      "resilientBase": { "price": 2.25, "unit": "lf", "trend": 1.3, "source": "RSMeans Finishes 2025", "notes": "4 in cove vinyl base installed." },
+      "featureWallPanel": { "price": 19.2, "unit": "sqft", "trend": 3.1, "source": "Interior Design Pricing Study", "notes": "Wood veneer feature wall with concealed fasteners." }
+    },
+    "sitework": {
+      "asphaltPavingHeavy": { "price": 4.05, "unit": "sqft", "trend": 2.4, "source": "APA Asphalt Index", "notes": "3 in asphalt over 8 in aggregate base for drives." },
+      "concreteCurbGutter": { "price": 25.4, "unit": "lf", "trend": 2.2, "source": "ACI Cost Database", "notes": "6 in curb and gutter, formed and placed." },
+      "stormPipeRcp": { "price": 44.1, "unit": "lf", "trend": 3.6, "source": "Stormwater Supplier Quotes", "notes": "24 in reinforced concrete pipe including bedding." },
+      "siteConcretePaving": { "price": 8.1, "unit": "sqft", "trend": 2.9, "source": "ACI Cost Database", "notes": "5 in reinforced concrete paving." },
+      "landscapeIrrigation": { "price": 4.35, "unit": "sqft", "trend": 3.8, "source": "Landscape Industry Council", "notes": "Planting and irrigation package." }
+    },
+    "specialtySystems": {
+      "fireAlarmPanel": { "price": 5985, "unit": "each", "trend": 3.3, "source": "NFPA Supplier Survey", "notes": "Addressable fire alarm control panel with remote annunciator." },
+      "securityAccess": { "price": 1925, "unit": "each", "trend": 2.9, "source": "Security Integrator Index", "notes": "Card reader, electrified hardware, and controller." },
+      "nurseCallSystem": { "price": 4325, "unit": "each", "trend": 2.4, "source": "Healthcare Technology Update", "notes": "Nurse call head-end with 12 room stations." },
+      "audioVisualPackage": { "price": 16.2, "unit": "sqft", "trend": 4.0, "source": "AV Integrator Pricing", "notes": "Conference room AV allowance with control processor." },
+      "solarPvArray": { "price": 2.38, "unit": "watt", "trend": -0.8, "source": "Solar Energy Industries Assoc.", "notes": "Ballasted rooftop PV system." }
+    }
+  },
+  "laborRates": {
+    "Carpenter": { "rate": 43.6, "unit": "hour", "burden": 18.9, "notes": "New union agreement effective July 1." },
+    "Concrete Finisher": { "rate": 42.8, "unit": "hour", "burden": 18.5, "notes": "Night pour premiums included." },
+    "Ironworker": { "rate": 48.9, "unit": "hour", "burden": 21.9, "notes": "Hazard pay for high-rise work." },
+    "Electrician": { "rate": 50.4, "unit": "hour", "burden": 23.1, "notes": "JATC wage increase." },
+    "Plumber": { "rate": 49.6, "unit": "hour", "burden": 22.9, "notes": "Service truck fuel escalator." },
+    "HVAC Technician": { "rate": 45.5, "unit": "hour", "burden": 20.2, "notes": "Contractor discounts on prefabrication balanced lower rate." },
+    "Roofer": { "rate": 39.1, "unit": "hour", "burden": 16.5, "notes": "Heat safety protocols add paid breaks." },
+    "Painter": { "rate": 37.4, "unit": "hour", "burden": 15.7, "notes": "Equipment upgrade allocation." },
+    "Laborer": { "rate": 33.1, "unit": "hour", "burden": 14.1, "notes": "Living wage ordinance in effect." },
+    "Operator": { "rate": 45.9, "unit": "hour", "burden": 19.8, "notes": "Fuel escalation clause triggered." },
+    "Mason": { "rate": 44.8, "unit": "hour", "burden": 19.2, "notes": "Shift differential for fast-track schedules." },
+    "Drywall Hanger": { "rate": 39.4, "unit": "hour", "burden": 16.8, "notes": "Productivity incentive included." },
+    "Low Voltage Tech": { "rate": 42.6, "unit": "hour", "burden": 18.1, "notes": "Certification stipend added." },
+    "Fire Sprinkler Fitter": { "rate": 46.7, "unit": "hour", "burden": 20.3, "notes": "National agreement wage update." }
+  },
+  "equipmentRates": {
+    "Skid Steer Loader": { "rate": 168, "unit": "day", "notes": "Seasonal demand uptick." },
+    "Excavator 30,000 lb": { "rate": 498, "unit": "day", "notes": "Fuel surcharge from rental supplier." },
+    "Dozer D5": { "rate": 635, "unit": "day", "notes": "Includes GPS calibration service." },
+    "Tower Crane 200'": { "rate": 7980, "unit": "month", "notes": "Reduced mobilization rebate applied." },
+    "Rough Terrain Forklift": { "rate": 332, "unit": "day", "notes": "High demand in multi-family sector." },
+    "Scissor Lift 26'": { "rate": 152, "unit": "day", "notes": "Battery replacement program rolled in." },
+    "Air Compressor 185 CFM": { "rate": 118, "unit": "day", "notes": "Diesel exhaust fluid surcharge." },
+    "Concrete Pump 32m": { "rate": 665, "unit": "day", "notes": "Includes travel charge in metro areas." },
+    "Trencher Ride-On": { "rate": 292, "unit": "day", "notes": "Carb compliance testing fee." },
+    "Laser Screed": { "rate": 988, "unit": "day", "notes": "Operator standby clause included." }
+  },
+  "regionalAdjustments": {
+    "baseIndex": 1,
+    "regions": [
+      { "name": "Northeast", "multiplier": 1.11, "markets": ["Boston, MA", "New York, NY", "Philadelphia, PA", "Hartford, CT"], "notes": "Collective bargaining adjustments July 2025." },
+      { "name": "Southeast", "multiplier": 0.97, "markets": ["Atlanta, GA", "Charlotte, NC", "Orlando, FL", "Nashville, TN"], "notes": "Industrial boom markets trending upward." },
+      { "name": "Midwest", "multiplier": 1.03, "markets": ["Chicago, IL", "Minneapolis, MN", "Columbus, OH", "Detroit, MI"], "notes": "Automotive investments increasing demand." },
+      { "name": "Mountain", "multiplier": 1.06, "markets": ["Denver, CO", "Salt Lake City, UT", "Boise, ID", "Billings, MT"], "notes": "Logistics premiums remain in effect." },
+      { "name": "Southwest", "multiplier": 1.09, "markets": ["Phoenix, AZ", "Las Vegas, NV", "Albuquerque, NM", "El Paso, TX"], "notes": "Data center projects driving wages." },
+      { "name": "West Coast", "multiplier": 1.16, "markets": ["Los Angeles, CA", "San Francisco, CA", "Seattle, WA", "Portland, OR"], "notes": "Environmental compliance impacts material costs." }
+    ]
+  },
+  "costIndices": {
+    "commercial": [
+      { "year": 2023, "index": 100.0 },
+      { "year": 2024, "index": 104.2 },
+      { "year": 2025, "index": 110.3 }
+    ],
+    "residential": [
+      { "year": 2023, "index": 100.0 },
+      { "year": 2024, "index": 106.9 },
+      { "year": 2025, "index": 113.7 }
+    ],
+    "infrastructure": [
+      { "year": 2023, "index": 100.0 },
+      { "year": 2024, "index": 105.1 },
+      { "year": 2025, "index": 114.9 }
+    ]
+  },
+  "referenceAssemblies": [
+    {
+      "name": "Tilt-Up Warehouse Shell",
+      "unit": "sqft",
+      "unitCost": 66.8,
+      "components": [
+        "6\" concrete slab with densifier",
+        "Panelized tilt-up concrete walls with reveals",
+        "Open web steel joists with TPO roof",
+        "Basic LED high-bay lighting and unit heaters"
+      ]
+    },
+    {
+      "name": "Class A Office Tenant Finish",
+      "unit": "sqft",
+      "unitCost": 80.6,
+      "components": [
+        "Demountable glass office fronts",
+        "Suspended acoustic ceiling with LED troffers",
+        "LVT and carpet tile flooring",
+        "Variable air volume terminal units with DDC controls"
+      ]
+    },
+    {
+      "name": "Outpatient Clinic Build-Out",
+      "unit": "sqft",
+      "unitCost": 135.2,
+      "components": [
+        "Lead-lined exam room partitions",
+        "Medical gas rough-in and outlets",
+        "Self-contained rooftop HVAC units",
+        "Millwork nurse stations and reception"
+      ]
+    }
+  ],
+  "lineItemCategories": {
+    "General Conditions": [
+      { "name": "Project Management", "unit": "month", "rate": 18950 },
+      { "name": "Superintendent", "unit": "month", "rate": 17600 },
+      { "name": "Field Engineering", "unit": "month", "rate": 8425 },
+      { "name": "Permits & Fees", "unit": "allowance", "rate": 5750 },
+      { "name": "Site Utilities Temporary", "unit": "month", "rate": 2250 },
+      { "name": "Temporary Facilities", "unit": "month", "rate": 3325 },
+      { "name": "Jobsite Technology", "unit": "month", "rate": 1325 },
+      { "name": "Safety Program", "unit": "month", "rate": 1725 }
+    ],
+    "Site Work": [
+      { "name": "Survey Layout", "unit": "acre", "rate": 980 },
+      { "name": "Clearing & Grubbing", "unit": "acre", "rate": 2925 },
+      { "name": "Mass Excavation", "unit": "cu yd", "rate": 7.9 },
+      { "name": "Fine Grading", "unit": "sq ft", "rate": 0.47 },
+      { "name": "Stormwater Management", "unit": "sq ft", "rate": 1.92 },
+      { "name": "Subgrade Stabilization", "unit": "sq yd", "rate": 6.7 },
+      { "name": "Segmental Retaining Wall", "unit": "sq ft", "rate": 39.8 }
+    ],
+    "Earthwork": [
+      { "name": "Trenching Utilities", "unit": "ln ft", "rate": 13.1 },
+      { "name": "Rock Excavation", "unit": "cu yd", "rate": 49.5 },
+      { "name": "Structural Fill", "unit": "cu yd", "rate": 23.4 },
+      { "name": "Soil Compaction", "unit": "sq ft", "rate": 1.42 }
+    ],
+    "Concrete": [
+      { "name": "Spread Footings", "unit": "cu yd", "rate": 166 },
+      { "name": "Pile Caps", "unit": "cu yd", "rate": 205 },
+      { "name": "Slab on Grade", "unit": "sq ft", "rate": 8.6 },
+      { "name": "Reinforcing Steel", "unit": "ton", "rate": 1485 },
+      { "name": "Formwork", "unit": "sq ft", "rate": 4.85 },
+      { "name": "Post-Tension Tendons", "unit": "sq ft", "rate": 3.25 },
+      { "name": "Concrete Stairs", "unit": "flight", "rate": 4960 }
+    ],
+    "Masonry": [
+      { "name": "8\" CMU Structural Wall", "unit": "sq ft", "rate": 20.4 },
+      { "name": "4\" Brick Veneer", "unit": "sq ft", "rate": 29.6 },
+      { "name": "Architectural Precast Panels", "unit": "sq ft", "rate": 44.1 }
+    ],
+    "Metals": [
+      { "name": "Structural Steel Erection", "unit": "ton", "rate": 3585 },
+      { "name": "Steel Deck Installation", "unit": "sq ft", "rate": 4.9 },
+      { "name": "Metal Stud Framing", "unit": "sq ft", "rate": 8.1 },
+      { "name": "Miscellaneous Metals", "unit": "lb", "rate": 4.4 }
+    ],
+    "Wood & Plastics": [
+      { "name": "Wood Framing Walls", "unit": "sq ft", "rate": 6.7 },
+      { "name": "Roof Trusses", "unit": "sq ft", "rate": 10.2 },
+      { "name": "Finish Carpentry", "unit": "hour", "rate": 80 },
+      { "name": "Cabinetry", "unit": "lf", "rate": 358 }
+    ],
+    "Thermal & Moisture": [
+      { "name": "Air Barrier", "unit": "sq ft", "rate": 2.42 },
+      { "name": "Spray Foam Insulation", "unit": "sq ft", "rate": 2.05 },
+      { "name": "Built-Up Roofing", "unit": "sq ft", "rate": 9.65 },
+      { "name": "Standing Seam Metal Roofing", "unit": "sq ft", "rate": 13.1 }
+    ],
+    "Doors & Windows": [
+      { "name": "Hollow Metal Door & Frame", "unit": "each", "rate": 1125 },
+      { "name": "Solid Core Wood Door", "unit": "each", "rate": 872 },
+      { "name": "Aluminum Storefront", "unit": "sq ft", "rate": 74 },
+      { "name": "Curtain Wall", "unit": "sq ft", "rate": 71 }
+    ],
+    "Finishes": [
+      { "name": "Drywall Hang & Finish", "unit": "sq ft", "rate": 2.95 },
+      { "name": "Acoustic Ceiling Tile", "unit": "sq ft", "rate": 3.85 },
+      { "name": "Interior Painting", "unit": "sq ft", "rate": 2.22 },
+      { "name": "Wallcovering", "unit": "sq ft", "rate": 4.65 },
+      { "name": "Restroom Tile", "unit": "sq ft", "rate": 15.4 }
+    ],
+    "Specialties": [
+      { "name": "Toilet Accessories Package", "unit": "allowance", "rate": 1420 },
+      { "name": "Firestopping", "unit": "sq ft", "rate": 3.6 },
+      { "name": "Operable Partitions", "unit": "sq ft", "rate": 39.5 }
+    ],
+    "Equipment": [
+      { "name": "Food Service Equipment", "unit": "allowance", "rate": 29350 },
+      { "name": "Medical Equipment Rough-In", "unit": "room", "rate": 5340 },
+      { "name": "Roof Screen Wall", "unit": "lf", "rate": 278 }
+    ],
+    "Furnishings": [
+      { "name": "Systems Furniture", "unit": "workstation", "rate": 3525 },
+      { "name": "Window Coverings", "unit": "sq ft", "rate": 3.25 },
+      { "name": "Fixed Seating", "unit": "seat", "rate": 478 }
+    ],
+    "Mechanical (HVAC)": [
+      { "name": "Packaged Rooftop Unit", "unit": "ton", "rate": 3575 },
+      { "name": "VAV Terminal", "unit": "each", "rate": 935 },
+      { "name": "Sheet Metal Ductwork", "unit": "lb", "rate": 5.0 },
+      { "name": "Hydronic Piping", "unit": "ln ft", "rate": 17.9 },
+      { "name": "Energy Recovery Ventilator", "unit": "each", "rate": 12890 },
+      { "name": "VRF Branch Controller", "unit": "each", "rate": 3275 }
+    ],
+    "Plumbing": [
+      { "name": "Domestic Water Rough-In", "unit": "fixture", "rate": 702 },
+      { "name": "Sanitary Waste & Vent", "unit": "fixture", "rate": 655 },
+      { "name": "Commercial Water Heater", "unit": "each", "rate": 2415 },
+      { "name": "Grease Waste Interceptor", "unit": "each", "rate": 4220 },
+      { "name": "Medical Gas Manifold", "unit": "each", "rate": 9725 }
+    ],
+    "Electrical": [
+      { "name": "Primary Service Entrance", "unit": "lf", "rate": 192 },
+      { "name": "Branch Power Rough-In", "unit": "sq ft", "rate": 4.18 },
+      { "name": "LED Lighting Package", "unit": "sq ft", "rate": 3.35 },
+      { "name": "Fire Alarm System", "unit": "sq ft", "rate": 2.02 },
+      { "name": "Access Control Door", "unit": "each", "rate": 1695 },
+      { "name": "UPS System", "unit": "kVA", "rate": 298 }
+    ],
+    "Fire Protection": [
+      { "name": "Wet Pipe Sprinkler", "unit": "sq ft", "rate": 2.42 },
+      { "name": "Dry Pipe Sprinkler", "unit": "sq ft", "rate": 3.52 },
+      { "name": "Clean Agent System", "unit": "sq ft", "rate": 7.05 },
+      { "name": "Fire Pump Package", "unit": "each", "rate": 37850 }
+    ],
+    "Exterior Improvements": [
+      { "name": "Concrete Sidewalk", "unit": "sq ft", "rate": 7.15 },
+      { "name": "Asphalt Paving", "unit": "sq yd", "rate": 61.2 },
+      { "name": "Parking Lot Lighting", "unit": "fixture", "rate": 1895 },
+      { "name": "Landscaping Allowance", "unit": "sq ft", "rate": 4.95 },
+      { "name": "Perimeter Security Fencing", "unit": "lf", "rate": 50.5 }
+    ],
+    "Utilities": [
+      { "name": "Water Service Tap", "unit": "each", "rate": 5980 },
+      { "name": "Sanitary Connection", "unit": "each", "rate": 6320 },
+      { "name": "Electrical Utility Fees", "unit": "allowance", "rate": 8650 },
+      { "name": "Fiber Backbone", "unit": "lf", "rate": 12.9 }
+    ]
+  }
+}
