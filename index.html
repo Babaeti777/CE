@@ -245,7 +245,7 @@
                         </div>
                     </div>
                     <div class="takeoff-workspace">
-                        <div class="card">
+                        <div class="card takeoff-plan-card">
                             <div class="card-header">
                                 <div>
                                     <h3 class="card-title">Active Drawing</h3>
@@ -303,6 +303,11 @@
                                         <img id="takeoffPlanPreview" alt="Plan preview">
                                         <canvas id="takeoffCanvas"></canvas>
                                     </div>
+                                    <button type="button" class="btn btn-secondary takeoff-fullscreen-toggle" id="takeoffFullScreenToggle" aria-pressed="false">Full View</button>
+                                </div>
+                                <div id="takeoffPlanContainer" class="takeoff-plan" style="display:none;">
+                                    <img id="takeoffPlanPreview" alt="Plan preview">
+                                    <canvas id="takeoffCanvas"></canvas>
                                 </div>
                             </div>
                             <p id="takeoffStatus" class="takeoff-status"></p>

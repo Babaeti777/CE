@@ -613,6 +613,35 @@
         .takeoff-workspace {
             display: flex;
             flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .takeoff-plan-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .takeoff-plan-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .takeoff-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .takeoff-mode-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: flex-end;
         }
 
         .takeoff-plan {
@@ -621,7 +650,6 @@
             flex-direction: column;
             border-radius: 16px;
             border: 1px solid var(--gray-200);
-            overflow: hidden;
             background: var(--gray-0);
             min-height: 320px;
         }
@@ -640,7 +668,6 @@
 
         .takeoff-plan img {
             display: block;
-            width: 100%;
             height: auto;
             user-select: none;
             pointer-events: none;
@@ -760,6 +787,57 @@
         }
 
         body.takeoff-fullscreen-active {
+            overflow: hidden;
+        }
+
+        .takeoff-count-controls.is-hidden {
+            display: none;
+        }
+
+        .takeoff-color-input {
+            width: 52px;
+            height: 42px;
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            background: var(--gray-0);
+        }
+
+        .takeoff-fullscreen-toggle {
+            margin-left: auto;
+        }
+
+        .takeoff-plan-shell.is-fullscreen {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1200;
+            padding: 1.5rem;
+            background: rgba(248, 250, 252, 0.95);
+            backdrop-filter: blur(4px);
+            overflow: auto;
+        }
+
+        .takeoff-plan-shell.is-fullscreen .takeoff-plan {
+            flex: 1;
+            max-height: none;
+            min-height: 0;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.16);
+        }
+
+        .takeoff-plan-shell.is-fullscreen .takeoff-toolbar {
+            position: sticky;
+            top: 0;
+            padding: 1rem;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+            z-index: 5;
+        }
+
+        body.takeoff-fullscreen {
             overflow: hidden;
         }
 
