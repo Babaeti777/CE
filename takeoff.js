@@ -16,18 +16,25 @@ export class TakeoffManager {
             previewPoint: null,
             sortBy: 'trade',
             sortDir: 'asc',
-            filter: ''
+            filter: '',
+            zoom: 1,
+            isFullScreen: false,
+            countOptions: { shape: 'circle', color: '#ef4444' }
         };
 
         this.elements = {};
         this.canvasContext = null;
         this.pdfWorkerConfigured = false;
+        this.zoomLimits = { min: 0.5, max: 3 };
     }
 
     init() {
         this.cacheDom();
         this.bindEvents();
         this.updateQuickShapeInputs();
+        this.updateCountControlsVisibility();
+        this.syncZoomControls();
+        this.updateZoomButtonState();
         this.updateSortDirectionIcon();
         this.renderDrawingList();
         this.updateActiveDrawingDisplay();
@@ -45,10 +52,19 @@ export class TakeoffManager {
             drawingTableBody: byId('takeoffDrawingTableBody'),
             drawingEmpty: byId('takeoffDrawingEmpty'),
             planContainer: byId('takeoffPlanContainer'),
+            planShell: byId('takeoffPlanShell'),
             planPreview: byId('takeoffPlanPreview'),
             canvas: byId('takeoffCanvas'),
             modeSelect: byId('takeoffModeSelect'),
             scaleInput: byId('takeoffScaleInput'),
+            zoomInput: byId('takeoffZoomInput'),
+            zoomValue: byId('takeoffZoomValue'),
+            zoomInBtn: byId('takeoffZoomIn'),
+            zoomOutBtn: byId('takeoffZoomOut'),
+            countControls: byId('takeoffCountControls'),
+            countShapeSelect: byId('takeoffCountShape'),
+            countColorInput: byId('takeoffCountColor'),
+            fullScreenToggle: byId('takeoffFullScreenToggle'),
             status: byId('takeoffStatus'),
             clearBtn: byId('takeoffClearBtn'),
             exportBtn: byId('takeoffExportCsvBtn'),
@@ -88,6 +104,17 @@ export class TakeoffManager {
 
         this.elements.modeSelect?.addEventListener('change', (event) => this.updateMode(event.target.value));
         this.elements.scaleInput?.addEventListener('input', (event) => this.updateScale(event.target.value));
+        this.elements.zoomInput?.addEventListener('input', (event) => this.handleZoomInput(event.target.value));
+        this.elements.zoomInBtn?.addEventListener('click', () => this.stepZoom(0.1));
+        this.elements.zoomOutBtn?.addEventListener('click', () => this.stepZoom(-0.1));
+        this.elements.countShapeSelect?.addEventListener('change', (event) => this.updateCountShape(event.target.value));
+        const handleColorChange = (event) => this.updateCountColor(event.target.value);
+        this.elements.countColorInput?.addEventListener('input', handleColorChange);
+        this.elements.countColorInput?.addEventListener('change', handleColorChange);
+        this.elements.fullScreenToggle?.addEventListener('click', () => this.toggleFullScreen());
+        if (typeof document !== 'undefined') {
+            document.addEventListener('keydown', (event) => this.handleDocumentKeydown(event));
+        }
         this.elements.clearBtn?.addEventListener('click', () => this.clearMeasurements());
         this.elements.exportBtn?.addEventListener('click', () => this.exportCsv());
         this.elements.pushBtn?.addEventListener('click', () => this.pushToEstimate());
@@ -369,6 +396,7 @@ export class TakeoffManager {
             if (this.elements.planContainer) {
                 this.elements.planContainer.style.display = 'none';
             }
+            this.setFullScreen(false);
             if (this.elements.activeMeta) {
                 this.elements.activeMeta.textContent = 'Select a drawing to begin.';
             }
@@ -379,7 +407,11 @@ export class TakeoffManager {
         if (this.elements.planContainer) {
             this.elements.planContainer.style.display = 'block';
         }
+        this.state.zoom = 1;
+        this.syncZoomControls();
+        this.updateZoomButtonState();
         if (this.elements.planPreview) {
+            this.elements.planPreview.onload = null;
             this.elements.planPreview.src = drawing.imageUrl;
             if (this.elements.planPreview.complete) {
                 this.prepareCanvas(this.elements.planPreview.naturalWidth, this.elements.planPreview.naturalHeight);
@@ -407,20 +439,26 @@ export class TakeoffManager {
         const safeHeight = Math.max(1, Math.round(height));
         this.elements.canvas.width = safeWidth;
         this.elements.canvas.height = safeHeight;
-        this.elements.canvas.style.width = `${safeWidth}px`;
-        this.elements.canvas.style.height = `${safeHeight}px`;
+        this.applyZoom();
         this.drawMeasurements();
     }
 
     clearCanvas() {
         if (!this.elements.canvas || !this.canvasContext) return;
         this.canvasContext.clearRect(0, 0, this.elements.canvas.width, this.elements.canvas.height);
+        this.elements.canvas.style.width = '';
+        this.elements.canvas.style.height = '';
+        if (this.elements.planPreview) {
+            this.elements.planPreview.style.width = '';
+            this.elements.planPreview.style.height = '';
+        }
     }
 
     updateMode(mode) {
         this.state.mode = mode;
         this.state.points = [];
         this.state.previewPoint = null;
+        this.updateCountControlsVisibility();
         const drawing = this.getActiveDrawing();
         if (drawing) {
             const instructions = {
@@ -456,23 +494,24 @@ export class TakeoffManager {
             return;
         }
         if (!this.elements.canvas) return;
-        const rect = this.elements.canvas.getBoundingClientRect();
-        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const point = this.getCanvasPoint(event);
+        if (!point) return;
         const mode = this.state.mode;
 
         if (mode === 'count') {
-            const label = `Count ${drawing.counters.count++}`;
+            const defaultLabel = `Count ${drawing.counters.count++}`;
             const measurement = {
                 id: this.createId('measurement'),
                 type: 'count',
-                label,
+                label: this.promptForMeasurementLabel(defaultLabel),
                 points: [point],
-                count: 1
+                count: 1,
+                style: { ...this.state.countOptions }
             };
             drawing.measurements.push(measurement);
             this.renderMeasurementTable();
             this.drawMeasurements();
-            this.updateStatus(`${label} saved.`);
+            this.updateStatus(`${measurement.label} saved.`);
             return;
         }
 
@@ -493,8 +532,9 @@ export class TakeoffManager {
 
     handleCanvasMove(event) {
         if (!this.state.points.length || !this.elements.canvas) return;
-        const rect = this.elements.canvas.getBoundingClientRect();
-        this.state.previewPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const point = this.getCanvasPoint(event);
+        if (!point) return;
+        this.state.previewPoint = point;
         this.drawMeasurements();
     }
 
@@ -508,15 +548,28 @@ export class TakeoffManager {
         this.finalizeAreaMeasurement();
     }
 
+    getCanvasPoint(event) {
+        if (!this.elements.canvas) return null;
+        const rect = this.elements.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        const scaleX = this.elements.canvas.width / rect.width;
+        const scaleY = this.elements.canvas.height / rect.height;
+        return {
+            x: (event.clientX - rect.left) * scaleX,
+            y: (event.clientY - rect.top) * scaleY
+        };
+    }
+
     finalizeLengthMeasurement(type) {
         const drawing = this.getActiveDrawing();
         if (!drawing) return;
         const [start, end] = this.state.points;
         const pixels = Math.hypot(end.x - start.x, end.y - start.y);
+        const defaultLabel = `${type === 'diameter' ? 'Diameter' : 'Length'} ${drawing.counters[type]++}`;
         const measurement = {
             id: this.createId('measurement'),
             type,
-            label: `${type === 'diameter' ? 'Diameter' : 'Length'} ${drawing.counters[type]++}`,
+            label: this.promptForMeasurementLabel(defaultLabel),
             points: [start, end],
             pixels
         };
@@ -533,10 +586,11 @@ export class TakeoffManager {
         const drawing = this.getActiveDrawing();
         if (!drawing) return;
         const points = [...this.state.points];
+        const defaultLabel = `Area ${drawing.counters.area++}`;
         const measurement = {
             id: this.createId('measurement'),
             type: 'area',
-            label: `Area ${drawing.counters.area++}`,
+            label: this.promptForMeasurementLabel(defaultLabel),
             points,
             pixelArea: this.calculatePolygonArea(points),
             pixelPerimeter: this.calculatePolygonPerimeter(points)
@@ -692,10 +746,61 @@ export class TakeoffManager {
             this.drawLabel(centroid.x, centroid.y, label);
         } else if (measurement.type === 'count') {
             const point = measurement.points[0];
-            this.drawHandle(point);
+            this.drawCountMarker(point, measurement);
             this.drawLabel(point.x, point.y, measurement.label);
         }
         this.canvasContext.restore();
+    }
+
+    drawCountMarker(point, measurement) {
+        if (!this.canvasContext) return;
+        const style = measurement.style || {};
+        const color = typeof style.color === 'string' ? style.color : this.state.countOptions.color;
+        const shape = typeof style.shape === 'string' ? style.shape : this.state.countOptions.shape;
+        const size = 10;
+        this.canvasContext.save();
+        this.canvasContext.translate(point.x, point.y);
+        this.canvasContext.lineWidth = 2;
+        this.canvasContext.lineJoin = 'round';
+        this.canvasContext.lineCap = 'round';
+        this.canvasContext.strokeStyle = color;
+        this.canvasContext.fillStyle = this.hexToRgba(color, 0.2);
+        this.canvasContext.beginPath();
+        if (shape === 'square') {
+            this.canvasContext.rect(-size, -size, size * 2, size * 2);
+        } else if (shape === 'diamond') {
+            this.canvasContext.moveTo(0, -size);
+            this.canvasContext.lineTo(size, 0);
+            this.canvasContext.lineTo(0, size);
+            this.canvasContext.lineTo(-size, 0);
+            this.canvasContext.closePath();
+        } else {
+            this.canvasContext.arc(0, 0, size, 0, Math.PI * 2);
+        }
+        this.canvasContext.fill();
+        this.canvasContext.stroke();
+        this.canvasContext.beginPath();
+        this.canvasContext.arc(0, 0, 3, 0, Math.PI * 2);
+        this.canvasContext.fillStyle = color;
+        this.canvasContext.fill();
+        this.canvasContext.restore();
+    }
+
+    hexToRgba(hex, alpha) {
+        const sanitized = typeof hex === 'string' ? hex.trim() : '';
+        const match = /^#?([a-f\d]{3}|[a-f\d]{6})$/i.exec(sanitized);
+        if (!match) {
+            return `rgba(239, 68, 68, ${alpha})`;
+        }
+        let value = match[1];
+        if (value.length === 3) {
+            value = value.split('').map((char) => char + char).join('');
+        }
+        const int = parseInt(value, 16);
+        const r = (int >> 16) & 255;
+        const g = (int >> 8) & 255;
+        const b = int & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
     drawHandle(point, preview = false) {
@@ -864,6 +969,143 @@ export class TakeoffManager {
         if (this.elements.status) {
             this.elements.status.textContent = message;
         }
+    }
+
+    handleZoomInput(value) {
+        const parsed = parseFloat(value);
+        if (!Number.isFinite(parsed)) {
+            return;
+        }
+        this.setZoom(parsed);
+    }
+
+    stepZoom(delta) {
+        const next = this.state.zoom + delta;
+        this.setZoom(next);
+    }
+
+    setZoom(value) {
+        const zoom = this.clampZoom(value);
+        if (Math.abs(zoom - this.state.zoom) < 0.0001) {
+            this.syncZoomControls();
+            this.updateZoomButtonState();
+            return;
+        }
+        this.state.zoom = zoom;
+        this.applyZoom();
+        this.updateZoomButtonState();
+    }
+
+    clampZoom(value) {
+        const { min, max } = this.zoomLimits;
+        return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+    }
+
+    applyZoom() {
+        if (!this.elements.canvas || !this.elements.planPreview) {
+            this.syncZoomControls();
+            return;
+        }
+        const width = this.elements.canvas.width;
+        const height = this.elements.canvas.height;
+        if (!width || !height) {
+            this.syncZoomControls();
+            return;
+        }
+        const zoom = this.state.zoom;
+        const scaledWidth = Math.max(1, Math.round(width * zoom));
+        const scaledHeight = Math.max(1, Math.round(height * zoom));
+        this.elements.canvas.style.width = `${scaledWidth}px`;
+        this.elements.canvas.style.height = `${scaledHeight}px`;
+        this.elements.planPreview.style.width = `${scaledWidth}px`;
+        this.elements.planPreview.style.height = `${scaledHeight}px`;
+        this.syncZoomControls();
+    }
+
+    syncZoomControls() {
+        if (this.elements.zoomInput) {
+            const sliderValue = Number(this.state.zoom.toFixed(2));
+            this.elements.zoomInput.value = String(sliderValue);
+        }
+        if (this.elements.zoomValue) {
+            this.elements.zoomValue.textContent = `${Math.round(this.state.zoom * 100)}%`;
+        }
+    }
+
+    updateZoomButtonState() {
+        const epsilon = 0.0001;
+        if (this.elements.zoomInBtn) {
+            const disabled = this.state.zoom >= this.zoomLimits.max - epsilon;
+            this.elements.zoomInBtn.disabled = disabled;
+        }
+        if (this.elements.zoomOutBtn) {
+            const disabled = this.state.zoom <= this.zoomLimits.min + epsilon;
+            this.elements.zoomOutBtn.disabled = disabled;
+        }
+    }
+
+    toggleFullScreen() {
+        if (!this.elements.planContainer || this.elements.planContainer.style.display === 'none') {
+            this.options.showToast('Load a drawing before entering full view.', 'warning');
+            return;
+        }
+        this.setFullScreen(!this.state.isFullScreen);
+    }
+
+    setFullScreen(enabled) {
+        if (!this.elements.planShell) return;
+        this.state.isFullScreen = Boolean(enabled);
+        this.elements.planShell.classList.toggle('is-fullscreen', this.state.isFullScreen);
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.toggle('takeoff-fullscreen', this.state.isFullScreen);
+        }
+        if (this.elements.fullScreenToggle) {
+            this.elements.fullScreenToggle.textContent = this.state.isFullScreen ? 'Exit Full View' : 'Full View';
+            this.elements.fullScreenToggle.setAttribute('aria-pressed', String(this.state.isFullScreen));
+        }
+    }
+
+    handleDocumentKeydown(event) {
+        if (event.key === 'Escape' && this.state.isFullScreen) {
+            this.setFullScreen(false);
+        }
+    }
+
+    updateCountControlsVisibility() {
+        const isCount = this.state.mode === 'count';
+        if (this.elements.countControls) {
+            this.elements.countControls.classList.toggle('is-hidden', !isCount);
+            this.elements.countControls.setAttribute('aria-hidden', String(!isCount));
+        }
+    }
+
+    updateCountShape(value) {
+        if (typeof value !== 'string') return;
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        this.state.countOptions = { ...this.state.countOptions, shape: trimmed };
+    }
+
+    updateCountColor(value) {
+        if (typeof value !== 'string') return;
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        this.state.countOptions = { ...this.state.countOptions, color: trimmed };
+        if (this.elements.countColorInput && this.elements.countColorInput.value !== trimmed) {
+            this.elements.countColorInput.value = trimmed;
+        }
+    }
+
+    promptForMeasurementLabel(defaultLabel) {
+        if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
+            return defaultLabel;
+        }
+        const response = window.prompt('Name this measurement', defaultLabel);
+        if (typeof response === 'string') {
+            const trimmed = response.trim();
+            if (trimmed) return trimmed;
+        }
+        return defaultLabel;
     }
 
     updateQuickShapeInputs() {
