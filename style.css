@@ -546,12 +546,170 @@
             overflow-x: auto;
         }
 
+        .takeoff-grid {
+            display: grid;
+            grid-template-columns: minmax(260px, 320px) 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1200px) {
+            .takeoff-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .takeoff-upload-btn {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .takeoff-upload-btn input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .takeoff-pages {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .takeoff-page-empty {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--gray-500);
+            border: 1px dashed var(--gray-300);
+            border-radius: 16px;
+            background: var(--gray-50);
+            line-height: 1.5;
+        }
+
+        .takeoff-page-item {
+            border: 1px solid var(--gray-200);
+            border-radius: 16px;
+            padding: 1rem;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        body.dark-mode .takeoff-page-item {
+            background: var(--gray-200);
+            border-color: var(--gray-300);
+        }
+
+        .takeoff-page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .takeoff-page-select {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .takeoff-page-meta {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .takeoff-page-meta label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .takeoff-page-meta input,
+        .takeoff-page-meta select {
+            font-size: 0.85rem;
+            border-radius: 10px;
+            border: 1px solid var(--gray-300);
+            padding: 0.45rem 0.6rem;
+        }
+
+        .takeoff-remove-page {
+            border: none;
+            background: transparent;
+            color: var(--gray-500);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .takeoff-remove-page:hover {
+            color: var(--danger);
+        }
+
+        .takeoff-workspace {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .takeoff-header {
+            flex-wrap: wrap;
+        }
+
+        .takeoff-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .takeoff-control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .takeoff-control .form-input,
+        .takeoff-control .form-select {
+            min-width: 160px;
+        }
+
         .takeoff-plan {
-            max-height: 70vh;
+            position: relative;
+            border: 1px dashed var(--gray-300);
+            border-radius: 20px;
+            background: var(--gray-50);
+            min-height: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             overflow: auto;
+            padding: 1rem;
+        }
+
+        body.dark-mode .takeoff-plan {
+            background: var(--gray-200);
+            border-color: var(--gray-400);
+        }
+
+        .takeoff-plan img {
+            max-width: 100%;
+            height: auto;
+            display: none;
         }
 
         .takeoff-plan canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: auto;
             cursor: crosshair;
         }
 
@@ -886,18 +1044,6 @@
             margin-top: 1rem;
         }
 
-        .takeoff-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-            margin-top: 1rem;
-        }
-
-        .takeoff-actions .btn {
-            flex: 1;
-            min-width: 140px;
-        }
-
         .takeoff-status {
             margin-top: 0.5rem;
             font-size: 0.9rem;
@@ -942,6 +1088,11 @@
             border-bottom: 1px solid var(--gray-200);
         }
 
+        .takeoff-table thead th:first-child {
+            text-align: center;
+            width: 2.5rem;
+        }
+
         body.dark-mode .takeoff-table th,
         body.dark-mode .takeoff-table td {
             border-color: var(--gray-300);
@@ -958,6 +1109,148 @@
             border: 1px solid var(--gray-300);
             background: white;
             font-size: 0.9rem;
+        }
+
+        .takeoff-row > td:first-child {
+            width: 2.5rem;
+            text-align: center;
+        }
+
+        .takeoff-toggle {
+            width: 100%;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            color: var(--gray-600);
+        }
+
+        .takeoff-toggle:hover {
+            color: var(--gray-900);
+        }
+
+        body.dark-mode .takeoff-toggle {
+            color: var(--gray-800);
+        }
+
+        body.dark-mode .takeoff-toggle:hover {
+            color: var(--gray-900);
+        }
+
+        .takeoff-quantity-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .takeoff-quantity-hint {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            line-height: 1.2;
+            white-space: normal;
+        }
+
+        body.dark-mode .takeoff-quantity-hint {
+            color: var(--gray-700);
+        }
+
+        .takeoff-actions-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .btn-compact {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.8rem;
+        }
+
+        .takeoff-subitems-row td {
+            background: var(--gray-50);
+            border-bottom: none;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        body.dark-mode .takeoff-subitems-row td {
+            background: var(--gray-200);
+            border-top: 1px solid var(--gray-300);
+        }
+
+        .takeoff-subitems {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 0.75rem 0.5rem 0.5rem;
+        }
+
+        .takeoff-measurement-summary {
+            font-size: 0.85rem;
+            color: var(--gray-600);
+        }
+
+        body.dark-mode .takeoff-measurement-summary {
+            color: var(--gray-800);
+        }
+
+        .takeoff-subitems-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .takeoff-subitems-header span {
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-subitems-header span {
+            color: var(--gray-900);
+        }
+
+        .takeoff-subitems-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .takeoff-subitems-table thead {
+            background: var(--gray-100);
+        }
+
+        body.dark-mode .takeoff-subitems-table thead {
+            background: var(--gray-300);
+        }
+
+        .takeoff-subitems-table th,
+        .takeoff-subitems-table td {
+            padding: 0.4rem 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        body.dark-mode .takeoff-subitems-table th,
+        body.dark-mode .takeoff-subitems-table td {
+            border-color: var(--gray-300);
+        }
+
+        .takeoff-subitems-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .takeoff-subitem-input {
+            width: 100%;
+            padding: 0.35rem 0.45rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            background: white;
+        }
+
+        body.dark-mode .takeoff-subitem-input {
+            background: var(--gray-100);
+            border-color: var(--gray-400);
+            color: var(--gray-900);
         }
 
         body.dark-mode .takeoff-name-input {
@@ -1060,3 +1353,50 @@
             }
         }
 
+
+
+        /* Updated takeoff table layout overrides */
+        .takeoff-filter-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .takeoff-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .takeoff-filter-bar .form-select {
+            min-width: 160px;
+        }
+
+        .takeoff-table-wrapper {
+            border-radius: 16px;
+            max-height: 360px;
+        }
+
+        .takeoff-name-input,
+        .takeoff-meta-input,
+        .takeoff-meta-select {
+            border-radius: 8px;
+        }
+
+        .takeoff-meta-input,
+        .takeoff-meta-select {
+            width: 100%;
+            padding: 0.4rem 0.5rem;
+            border: 1px solid var(--gray-300);
+            background: white;
+            font-size: 0.9rem;
+        }
+
+        body.dark-mode .takeoff-meta-input,
+        body.dark-mode .takeoff-meta-select {
+            background: var(--gray-100);
+            border-color: var(--gray-400);
+            color: var(--gray-900);
+        }

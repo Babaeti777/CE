@@ -25,14 +25,15 @@
             },
             lineItemCategories: {},
             takeoff: {
-                mode: 'length',
-                scale: 1,
+                mode: 'line',
+                pages: [],
+                activePageId: null,
                 points: [],
                 previewPoint: null,
-                measurements: [],
-                counters: { length: 1, area: 1, count: 1, diameter: 1 },
+                counters: { line: 1, perimeter: 1, area: 1, count: 1, diameter: 1 },
                 canvas: null,
-                context: null
+                context: null,
+                filters: { page: 'all', trade: 'all', floor: 'all', method: 'all', sort: 'page' }
             }
         };
 
@@ -167,14 +168,22 @@
             document.getElementById('modeEngineering')?.addEventListener('click', () => updateCalcMode('engineering'));
             document.getElementById("shapeSelect")?.addEventListener("change", updateShapeInputs);
             document.getElementById("calcAreaBtn")?.addEventListener("click", calculateArea);
-            document.getElementById("planUpload")?.addEventListener("change", handlePlanUpload);
+            document.getElementById('takeoffUpload')?.addEventListener('change', handleTakeoffUpload);
             document.getElementById('takeoffMode')?.addEventListener('change', (e) => setTakeoffMode(e.target.value));
-            document.getElementById('planScale')?.addEventListener('input', (e) => updateTakeoffScale(e.target.value));
-            document.getElementById('clearTakeoffBtn')?.addEventListener('click', () => clearTakeoffMeasurements());
+            document.getElementById('takeoffScale')?.addEventListener('input', (e) => updateActivePageScale(e.target.value));
+            document.getElementById('clearTakeoffBtn')?.addEventListener('click', clearActiveTakeoff);
             document.getElementById('exportTakeoffCsvBtn')?.addEventListener('click', exportTakeoffCsv);
             document.getElementById('pushTakeoffToBidBtn')?.addEventListener('click', pushTakeoffToEstimate);
+            document.getElementById('takeoffPages')?.addEventListener('input', handleTakeoffPageInput);
+            document.getElementById('takeoffPages')?.addEventListener('click', handleTakeoffPageClick);
+            document.getElementById('takeoffFilterPage')?.addEventListener('change', (e) => updateTakeoffFilter('page', e.target.value));
+            document.getElementById('takeoffFilterTrade')?.addEventListener('change', (e) => updateTakeoffFilter('trade', e.target.value));
+            document.getElementById('takeoffFilterFloor')?.addEventListener('change', (e) => updateTakeoffFilter('floor', e.target.value));
+            document.getElementById('takeoffFilterMethod')?.addEventListener('change', (e) => updateTakeoffFilter('method', e.target.value));
+            document.getElementById('takeoffSort')?.addEventListener('change', (e) => updateTakeoffFilter('sort', e.target.value));
             const takeoffTable = document.getElementById('takeoffTableBody');
             takeoffTable?.addEventListener('input', handleTakeoffTableInput);
+            takeoffTable?.addEventListener('change', handleTakeoffTableChange);
             takeoffTable?.addEventListener('click', handleTakeoffTableClick);
             document.getElementById('viewAllProjectsBtn')?.addEventListener('click', () => switchTab('projects'));
             updateCalcMode(state.calcMode);
@@ -726,70 +735,6 @@
             resultEl.textContent = `Area: ${area.toFixed(2)}`;
         }
 
-        async function handlePlanUpload(e) {
-            const fileInput = e.target;
-            const file = fileInput.files?.[0];
-            if (!file) return;
-
-            try {
-                const isPdf = (file.type && file.type.toLowerCase() === 'application/pdf') || file.name.toLowerCase().endsWith('.pdf');
-                if (isPdf) {
-                    if (typeof pdfjsLib === 'undefined') {
-                        showToast('PDF support is unavailable. Please check your connection.', 'error');
-                        return;
-                    }
-                    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                    }
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-                    const page = await pdf.getPage(1);
-                    const viewport = page.getViewport({ scale: 1.5 });
-                    const tempCanvas = document.createElement('canvas');
-                    const tempContext = tempCanvas.getContext('2d');
-                    tempCanvas.width = viewport.width;
-                    tempCanvas.height = viewport.height;
-                    await page.render({ canvasContext: tempContext, viewport }).promise;
-                    const dataUrl = tempCanvas.toDataURL('image/png');
-                    loadPlanImage(dataUrl);
-                } else {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                        const result = typeof ev.target?.result === 'string' ? ev.target.result : null;
-                        if (result) {
-                            loadPlanImage(result);
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-            } catch (error) {
-                console.error('Error loading plan:', error);
-                showToast('Unable to load plan file.', 'error');
-            } finally {
-                fileInput.value = '';
-            }
-        }
-
-        function loadPlanImage(dataUrl) {
-            const img = document.getElementById('planPreview');
-            const container = document.getElementById('planContainer');
-            if (!img || !container) return;
-
-            img.onload = () => {
-                container.style.display = 'block';
-                requestAnimationFrame(() => {
-                    const rect = img.getBoundingClientRect();
-                    const width = rect.width || img.naturalWidth || container.clientWidth || 0;
-                    const height = rect.height || img.naturalHeight || container.clientHeight || 0;
-                    prepareTakeoffCanvas(width, height);
-                    clearTakeoffMeasurements(true);
-                    updateTakeoffStatus('Plan loaded. Choose a takeoff mode to begin measuring.');
-                });
-            };
-            img.src = dataUrl;
-            img.style.display = 'block';
-        }
-
         // --- TAKEOFF TOOLS ---
         function initializeTakeoff() {
             const canvas = document.getElementById('takeoffCanvas');
@@ -801,10 +746,823 @@
             canvas?.addEventListener('mouseleave', handleTakeoffCanvasLeave);
             canvas?.addEventListener('dblclick', handleTakeoffCanvasDoubleClick);
 
-            updateTakeoffScale(document.getElementById('planScale')?.value || state.takeoff.scale);
-            setTakeoffMode(state.takeoff.mode);
-            renderTakeoffTable();
-            updateTakeoffStatus('Upload a plan to begin measuring.');
+            renderTakeoffPages();
+            renderTakeoffFilters();
+            renderTakeoffMeasurements();
+            updateTakeoffStatus('Upload drawings to begin measuring.');
+        }
+
+        async function handleTakeoffUpload(event) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+
+            const newPages = [];
+            for (const file of files) {
+                try {
+                    const pages = await createTakeoffPagesFromFile(file);
+                    newPages.push(...pages);
+                } catch (error) {
+                    console.error('Error loading plan:', error);
+                    showToast(`Unable to load ${file.name}.`, 'error');
+                }
+            }
+
+            if (newPages.length) {
+                state.takeoff.pages.push(...newPages);
+                if (!state.takeoff.activePageId) {
+                    setActiveTakeoffPage(newPages[0].id);
+                } else {
+                    renderTakeoffPages();
+                    renderTakeoffMeasurements();
+                }
+                renderTakeoffFilters();
+                updateTakeoffStatus('Drawing uploaded. Select a page to begin measuring.');
+            }
+
+            event.target.value = '';
+        }
+
+        async function createTakeoffPagesFromFile(file) {
+            const pages = [];
+            const isPdf = (file.type && file.type.toLowerCase() === 'application/pdf') || file.name.toLowerCase().endsWith('.pdf');
+
+            if (isPdf) {
+                if (typeof pdfjsLib === 'undefined') {
+                    showToast('PDF support is unavailable. Please check your connection.', 'error');
+                    return pages;
+                }
+                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js';
+                }
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    const tempCanvas = document.createElement('canvas');
+                    const tempContext = tempCanvas.getContext('2d');
+                    tempCanvas.width = viewport.width;
+                    tempCanvas.height = viewport.height;
+                    await page.render({ canvasContext: tempContext, viewport }).promise;
+                    const dataUrl = tempCanvas.toDataURL('image/png');
+                    pages.push(createTakeoffPage({
+                        name: `${file.name.replace(/\.pdf$/i, '')} - Page ${i}`,
+                        pageNumber: i,
+                        imageSrc: dataUrl
+                    }));
+                }
+            } else {
+                const dataUrl = await readFileAsDataUrl(file);
+                pages.push(createTakeoffPage({ name: file.name, imageSrc: dataUrl }));
+            }
+
+            return pages;
+        }
+
+        async function readFileAsDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const result = typeof ev.target?.result === 'string' ? ev.target.result : null;
+                    if (result) resolve(result);
+                    else reject(new Error('Unable to read file.'));
+                };
+                reader.onerror = () => reject(new Error('Unable to read file.'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function createTakeoffPage({ name, imageSrc, pageNumber = null }) {
+            return {
+                id: createTakeoffId('page'),
+                name: name || `Page ${state.takeoff.pages.length + 1}`.trim(),
+                trade: '',
+                floor: '',
+                method: '',
+                pageNumber,
+                scale: 1,
+                imageSrc: imageSrc || '',
+                measurements: [],
+                createdAt: Date.now()
+            };
+        }
+
+        function getActiveTakeoffPage() {
+            return state.takeoff.pages.find(page => page.id === state.takeoff.activePageId) || null;
+        }
+
+        function setActiveTakeoffPage(pageId) {
+            if (state.takeoff.activePageId === pageId) return;
+            state.takeoff.activePageId = pageId || null;
+            state.takeoff.points = [];
+            state.takeoff.previewPoint = null;
+
+            const page = getActiveTakeoffPage();
+            const scaleInput = document.getElementById('takeoffScale');
+            if (scaleInput) {
+                scaleInput.value = page ? page.scale : 1;
+                scaleInput.disabled = !page;
+            }
+
+            const img = document.getElementById('takeoffPreview');
+            if (img) {
+                if (!page || !page.imageSrc) {
+                    img.style.display = 'none';
+                    img.removeAttribute('src');
+                    prepareTakeoffCanvas(0, 0);
+                    drawTakeoff();
+                } else {
+                    img.onload = () => {
+                        requestAnimationFrame(() => {
+                            const rect = img.getBoundingClientRect();
+                            const width = rect.width || img.naturalWidth || 0;
+                            const height = rect.height || img.naturalHeight || 0;
+                            prepareTakeoffCanvas(width, height);
+                            drawTakeoff();
+                        });
+                        img.style.display = 'block';
+                    };
+                    img.src = page.imageSrc;
+                }
+            }
+
+            renderTakeoffPages();
+            renderTakeoffMeasurements();
+            updateTakeoffStatus(page ? 'Select a takeoff mode and start measuring.' : 'Upload drawings to begin measuring.');
+        }
+
+        function renderTakeoffPages() {
+            const container = document.getElementById('takeoffPages');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (!state.takeoff.pages.length) {
+                const empty = document.createElement('div');
+                empty.className = 'takeoff-page-empty';
+                empty.innerHTML = 'Upload plan sheets to build your takeoff workspace.';
+                container.appendChild(empty);
+                return;
+            }
+
+            state.takeoff.pages
+                .slice()
+                .sort((a, b) => a.createdAt - b.createdAt)
+                .forEach(page => {
+                    const item = document.createElement('div');
+                    item.className = 'takeoff-page-item';
+                    item.dataset.id = page.id;
+
+                    const header = document.createElement('div');
+                    header.className = 'takeoff-page-header';
+
+                    const label = document.createElement('label');
+                    label.className = 'takeoff-page-select';
+
+                    const radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.name = 'takeoffPage';
+                    radio.value = page.id;
+                    radio.checked = page.id === state.takeoff.activePageId;
+
+                    const title = document.createElement('input');
+                    title.type = 'text';
+                    title.className = 'takeoff-meta-input';
+                    title.dataset.field = 'name';
+                    title.value = page.name;
+                    title.placeholder = 'Page name';
+
+                    label.append(radio, title);
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'takeoff-remove-page';
+                    removeBtn.dataset.action = 'remove';
+                    removeBtn.innerHTML = '&times;';
+
+                    header.append(label, removeBtn);
+                    item.appendChild(header);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'takeoff-page-meta';
+                    meta.append(
+                        createTakeoffPageField('Trade', 'trade', page.trade, 'e.g. Electrical'),
+                        createTakeoffPageField('Floor', 'floor', page.floor, 'e.g. Level 2'),
+                        createTakeoffPageField('Method', 'method', page.method, 'e.g. Linear')
+                    );
+                    if (page.pageNumber !== null) {
+                        meta.append(createTakeoffPageField('Page #', 'pageNumber', page.pageNumber));
+                    }
+                    item.appendChild(meta);
+
+                    container.appendChild(item);
+                });
+        }
+
+        function createTakeoffPageField(labelText, field, value, placeholder = '') {
+            const wrapper = document.createElement('label');
+            wrapper.className = 'takeoff-page-field';
+
+            const span = document.createElement('span');
+            span.textContent = labelText;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'takeoff-meta-input';
+            input.dataset.field = field;
+            input.value = value ?? '';
+            if (placeholder) input.placeholder = placeholder;
+
+            wrapper.append(span, input);
+            return wrapper;
+        }
+
+        function handleTakeoffPageInput(event) {
+            const field = event.target.dataset.field;
+            if (!field) return;
+            const item = event.target.closest('.takeoff-page-item');
+            if (!item?.dataset.id) return;
+
+            const page = state.takeoff.pages.find(p => p.id === item.dataset.id);
+            if (!page) return;
+
+            if (field === 'pageNumber') {
+                page.pageNumber = event.target.value;
+            } else {
+                page[field] = event.target.value;
+            }
+
+            if (field === 'name') {
+                renderTakeoffPages();
+                renderTakeoffMeasurements();
+            } else if (['trade', 'floor', 'method'].includes(field)) {
+                renderTakeoffMeasurements();
+                renderTakeoffFilters();
+            }
+        }
+
+        function handleTakeoffPageClick(event) {
+            const item = event.target.closest('.takeoff-page-item');
+            if (!item?.dataset.id) return;
+            const pageId = item.dataset.id;
+
+            if (event.target.matches('input[type="radio"]')) {
+                setActiveTakeoffPage(pageId);
+            } else if (event.target.closest('[data-action="remove"]')) {
+                removeTakeoffPage(pageId);
+            }
+        }
+
+        function removeTakeoffPage(pageId) {
+            const index = state.takeoff.pages.findIndex(page => page.id === pageId);
+            if (index === -1) return;
+
+            const [removed] = state.takeoff.pages.splice(index, 1);
+            if (removed?.measurements?.length) {
+                showToast(`Removed ${removed.measurements.length} measurement(s) with the page.`, 'warning');
+            }
+
+            if (state.takeoff.activePageId === pageId) {
+                state.takeoff.activePageId = state.takeoff.pages[0]?.id || null;
+                state.takeoff.points = [];
+                state.takeoff.previewPoint = null;
+            }
+
+            renderTakeoffPages();
+            renderTakeoffFilters();
+            renderTakeoffMeasurements();
+            drawTakeoff();
+            updateTakeoffStatus(state.takeoff.activePageId ? 'Select a mode to continue measuring.' : 'Upload drawings to begin measuring.');
+        }
+
+        function updateActivePageScale(value) {
+            const page = getActiveTakeoffPage();
+            if (!page) return;
+            const numericValue = parseFloat(value);
+            if (!Number.isFinite(numericValue) || numericValue <= 0) return;
+            page.scale = numericValue;
+            renderTakeoffMeasurements();
+            drawTakeoff();
+        }
+
+        function clearActiveTakeoff() {
+            const page = getActiveTakeoffPage();
+            if (!page) {
+                showToast('Select a drawing page first.', 'warning');
+                return;
+            }
+            page.measurements = [];
+            state.takeoff.points = [];
+            state.takeoff.previewPoint = null;
+            renderTakeoffMeasurements();
+            drawTakeoff();
+            updateTakeoffStatus('All measurements cleared from this page.');
+        }
+
+        function renderTakeoffFilters() {
+            const pageSelect = document.getElementById('takeoffFilterPage');
+            if (pageSelect) {
+                const previous = pageSelect.value || 'all';
+                pageSelect.innerHTML = '<option value="all">All Pages</option>' + state.takeoff.pages
+                    .map(page => `<option value="${page.id}">${page.name || 'Untitled Page'}</option>`)
+                    .join('');
+                pageSelect.value = previous;
+            }
+
+            const tradeSelect = document.getElementById('takeoffFilterTrade');
+            const floorSelect = document.getElementById('takeoffFilterFloor');
+            const methodSelect = document.getElementById('takeoffFilterMethod');
+
+            const trades = new Set();
+            const floors = new Set();
+            const methods = new Set();
+
+            getAllTakeoffMeasurements().forEach(({ measurement }) => {
+                if (measurement.trade) trades.add(measurement.trade);
+                if (measurement.floor) floors.add(measurement.floor);
+                if (measurement.method) methods.add(measurement.method);
+            });
+
+            if (tradeSelect) {
+                const prev = tradeSelect.value || 'all';
+                tradeSelect.innerHTML = '<option value="all">All Trades</option>' + Array.from(trades)
+                    .sort()
+                    .map(val => `<option value="${val}">${val}</option>`)
+                    .join('');
+                tradeSelect.value = prev;
+            }
+
+            if (floorSelect) {
+                const prev = floorSelect.value || 'all';
+                floorSelect.innerHTML = '<option value="all">All Floors</option>' + Array.from(floors)
+                    .sort()
+                    .map(val => `<option value="${val}">${val}</option>`)
+                    .join('');
+                floorSelect.value = prev;
+            }
+
+            if (methodSelect) {
+                const prev = methodSelect.value || 'all';
+                methodSelect.innerHTML = '<option value="all">All Methods</option>' + Array.from(methods)
+                    .sort()
+                    .map(val => `<option value="${val}">${val}</option>`)
+                    .join('');
+                methodSelect.value = prev;
+            }
+        }
+
+        function updateTakeoffFilter(field, value) {
+            state.takeoff.filters[field] = value;
+            renderTakeoffMeasurements();
+        }
+
+        function getAllTakeoffMeasurements() {
+            return state.takeoff.pages.flatMap(page =>
+                page.measurements.map(measurement => ({ measurement, page }))
+            );
+        }
+
+        function ensureMeasurementFields(measurement) {
+            if (!measurement) return;
+            if (!Array.isArray(measurement.subItems)) {
+                measurement.subItems = [];
+            }
+            if (typeof measurement.itemDescription !== 'string') {
+                measurement.itemDescription = '';
+            }
+            if (typeof measurement.itemNotes !== 'string') {
+                measurement.itemNotes = '';
+            }
+            if (typeof measurement.itemUnit !== 'string' || !measurement.itemUnit) {
+                measurement.itemUnit = getTakeoffUnits(measurement);
+            }
+            if (typeof measurement.itemQuantity !== 'number' || Number.isNaN(measurement.itemQuantity)) {
+                measurement.itemQuantity = parseFloat(getTakeoffValue(measurement).toFixed(2));
+            }
+            if (typeof measurement.showSubItems !== 'boolean') {
+                measurement.showSubItems = false;
+            }
+        }
+
+        function renderTakeoffMeasurements() {
+            const tbody = document.getElementById('takeoffTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const filters = state.takeoff.filters;
+            const measurements = getAllTakeoffMeasurements().filter(({ measurement, page }) => {
+                if (filters.page !== 'all' && measurement.pageId !== filters.page) return false;
+                if (filters.trade !== 'all' && measurement.trade !== filters.trade) return false;
+                if (filters.floor !== 'all' && measurement.floor !== filters.floor) return false;
+                if (filters.method !== 'all' && measurement.method !== filters.method) return false;
+                return true;
+            });
+
+            const sorters = {
+                page: (a, b) => (a.page.name || '').localeCompare(b.page.name || ''),
+                trade: (a, b) => (a.measurement.trade || '').localeCompare(b.measurement.trade || ''),
+                floor: (a, b) => (a.measurement.floor || '').localeCompare(b.measurement.floor || ''),
+                method: (a, b) => (a.measurement.method || '').localeCompare(b.measurement.method || ''),
+                label: (a, b) => a.measurement.label.localeCompare(b.measurement.label)
+            };
+            const sorter = sorters[filters.sort] || sorters.page;
+            measurements.sort(sorter);
+
+            if (!measurements.length) {
+                const emptyRow = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 12;
+                cell.style.padding = '0.75rem';
+                cell.style.color = 'var(--gray-500)';
+                cell.textContent = 'No measurements yet.';
+                emptyRow.appendChild(cell);
+                tbody.appendChild(emptyRow);
+                return;
+            }
+
+            const pageOptions = state.takeoff.pages.map(page => ({ id: page.id, name: page.name || 'Untitled Page' }));
+
+            measurements.forEach(({ measurement }) => {
+                ensureMeasurementFields(measurement);
+
+                const measuredValue = getTakeoffValue(measurement).toFixed(2);
+                const measuredUnits = getTakeoffUnits(measurement);
+                const measuredDetails = getTakeoffDetails(measurement);
+
+                const row = document.createElement('tr');
+                row.className = 'takeoff-row';
+                row.dataset.id = measurement.id;
+
+                const toggleCell = document.createElement('td');
+                const toggleBtn = document.createElement('button');
+                toggleBtn.type = 'button';
+                toggleBtn.className = 'takeoff-toggle';
+                toggleBtn.dataset.action = 'toggle-subitems';
+                toggleBtn.title = measurement.showSubItems ? 'Hide sub-items' : 'Show sub-items';
+                toggleBtn.setAttribute('aria-expanded', measurement.showSubItems ? 'true' : 'false');
+                toggleBtn.setAttribute('aria-label', measurement.showSubItems ? 'Hide sub-items' : 'Show sub-items');
+                toggleBtn.textContent = measurement.showSubItems ? '▾' : '▸';
+                toggleCell.appendChild(toggleBtn);
+
+                const nameCell = document.createElement('td');
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'takeoff-name-input';
+                nameInput.value = measurement.label;
+                nameInput.dataset.field = 'label';
+                nameCell.appendChild(nameInput);
+
+                const descriptionCell = document.createElement('td');
+                const descriptionInput = document.createElement('input');
+                descriptionInput.type = 'text';
+                descriptionInput.className = 'takeoff-meta-input takeoff-description-input';
+                descriptionInput.dataset.field = 'itemDescription';
+                descriptionInput.placeholder = 'Describe the item';
+                descriptionInput.value = measurement.itemDescription || '';
+                descriptionCell.appendChild(descriptionInput);
+
+                const pageCell = document.createElement('td');
+                const pageSelect = document.createElement('select');
+                pageSelect.className = 'takeoff-meta-select';
+                pageSelect.dataset.field = 'pageId';
+                pageOptions.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option.id;
+                    opt.textContent = option.name;
+                    if (option.id === measurement.pageId) opt.selected = true;
+                    pageSelect.appendChild(opt);
+                });
+                pageCell.appendChild(pageSelect);
+
+                const tradeCell = document.createElement('td');
+                const tradeInput = document.createElement('input');
+                tradeInput.type = 'text';
+                tradeInput.className = 'takeoff-meta-input';
+                tradeInput.dataset.field = 'trade';
+                tradeInput.value = measurement.trade || '';
+                tradeCell.appendChild(tradeInput);
+
+                const floorCell = document.createElement('td');
+                const floorInput = document.createElement('input');
+                floorInput.type = 'text';
+                floorInput.className = 'takeoff-meta-input';
+                floorInput.dataset.field = 'floor';
+                floorInput.value = measurement.floor || '';
+                floorCell.appendChild(floorInput);
+
+                const methodCell = document.createElement('td');
+                const methodInput = document.createElement('input');
+                methodInput.type = 'text';
+                methodInput.className = 'takeoff-meta-input';
+                methodInput.dataset.field = 'method';
+                methodInput.value = measurement.method || '';
+                methodCell.appendChild(methodInput);
+
+                const modeCell = document.createElement('td');
+                modeCell.textContent = formatTakeoffModeLabel(measurement.type);
+
+                const quantityCell = document.createElement('td');
+                const quantityWrapper = document.createElement('div');
+                quantityWrapper.className = 'takeoff-quantity-wrapper';
+                const quantityInput = document.createElement('input');
+                quantityInput.type = 'number';
+                quantityInput.min = '0';
+                quantityInput.step = '0.01';
+                quantityInput.className = 'takeoff-meta-input takeoff-quantity-input';
+                quantityInput.dataset.field = 'itemQuantity';
+                quantityInput.value = measurement.itemQuantity ?? measuredValue;
+                quantityInput.placeholder = measuredValue;
+                const quantityHint = document.createElement('div');
+                quantityHint.className = 'takeoff-quantity-hint';
+                quantityHint.textContent = measuredDetails
+                    ? `Measured: ${measuredValue} ${measuredUnits} (${measuredDetails})`
+                    : `Measured: ${measuredValue} ${measuredUnits}`;
+                quantityWrapper.append(quantityInput, quantityHint);
+                quantityCell.appendChild(quantityWrapper);
+
+                const unitsCell = document.createElement('td');
+                const unitInput = document.createElement('input');
+                unitInput.type = 'text';
+                unitInput.className = 'takeoff-meta-input takeoff-unit-input';
+                unitInput.dataset.field = 'itemUnit';
+                unitInput.value = measurement.itemUnit || measuredUnits;
+                unitsCell.appendChild(unitInput);
+
+                const notesCell = document.createElement('td');
+                const notesInput = document.createElement('input');
+                notesInput.type = 'text';
+                notesInput.className = 'takeoff-meta-input takeoff-notes-input';
+                notesInput.dataset.field = 'itemNotes';
+                notesInput.placeholder = 'Add notes';
+                notesInput.value = measurement.itemNotes || '';
+                notesCell.appendChild(notesInput);
+
+                const actionCell = document.createElement('td');
+                actionCell.className = 'takeoff-actions-cell';
+                const addSubItemBtn = document.createElement('button');
+                addSubItemBtn.type = 'button';
+                addSubItemBtn.className = 'btn btn-secondary btn-compact';
+                addSubItemBtn.dataset.action = 'add-subitem';
+                addSubItemBtn.textContent = '+ Sub-item';
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'takeoff-remove';
+                removeBtn.dataset.action = 'remove-measurement';
+                removeBtn.textContent = '×';
+                actionCell.append(addSubItemBtn, removeBtn);
+
+                row.append(toggleCell, nameCell, descriptionCell, pageCell, tradeCell, floorCell, methodCell, modeCell, quantityCell, unitsCell, notesCell, actionCell);
+                tbody.appendChild(row);
+
+                if (measurement.showSubItems || measurement.subItems.length) {
+                    const subRow = document.createElement('tr');
+                    subRow.className = 'takeoff-subitems-row';
+                    subRow.dataset.parentId = measurement.id;
+                    const subCell = document.createElement('td');
+                    subCell.colSpan = 12;
+                    const subContainer = document.createElement('div');
+                    subContainer.className = 'takeoff-subitems';
+
+                    const summary = document.createElement('div');
+                    summary.className = 'takeoff-measurement-summary';
+                    summary.textContent = measuredDetails
+                        ? `${formatTakeoffModeLabel(measurement.type)} • ${measuredValue} ${measuredUnits} • ${measuredDetails}`
+                        : `${formatTakeoffModeLabel(measurement.type)} • ${measuredValue} ${measuredUnits}`;
+                    subContainer.appendChild(summary);
+
+                    const subHeader = document.createElement('div');
+                    subHeader.className = 'takeoff-subitems-header';
+                    const subTitle = document.createElement('span');
+                    subTitle.textContent = measurement.subItems.length ? 'Sub-items' : 'No sub-items yet';
+                    const subAddBtn = document.createElement('button');
+                    subAddBtn.type = 'button';
+                    subAddBtn.className = 'btn btn-secondary btn-compact';
+                    subAddBtn.dataset.action = 'add-subitem';
+                    subAddBtn.textContent = 'Add Sub-item';
+                    subHeader.append(subTitle, subAddBtn);
+                    subContainer.appendChild(subHeader);
+
+                    if (measurement.subItems.length) {
+                        const subTable = document.createElement('table');
+                        subTable.className = 'takeoff-subitems-table';
+                        const subHead = document.createElement('thead');
+                        subHead.innerHTML = '<tr><th>Name</th><th>Quantity</th><th>Unit</th><th>Notes</th><th></th></tr>';
+                        const subBody = document.createElement('tbody');
+
+                        measurement.subItems.forEach(subItem => {
+                            const subItemRow = document.createElement('tr');
+
+                            const subNameCell = document.createElement('td');
+                            const subNameInput = document.createElement('input');
+                            subNameInput.type = 'text';
+                            subNameInput.className = 'takeoff-subitem-input';
+                            subNameInput.dataset.subitemField = 'label';
+                            subNameInput.dataset.subitemId = subItem.id;
+                            subNameInput.value = subItem.label || '';
+                            subNameInput.placeholder = 'Name';
+                            subNameCell.appendChild(subNameInput);
+
+                            const subQuantityCell = document.createElement('td');
+                            const subQuantityInput = document.createElement('input');
+                            subQuantityInput.type = 'number';
+                            subQuantityInput.min = '0';
+                            subQuantityInput.step = '0.01';
+                            subQuantityInput.className = 'takeoff-subitem-input';
+                            subQuantityInput.dataset.subitemField = 'quantity';
+                            subQuantityInput.dataset.subitemId = subItem.id;
+                            subQuantityInput.value = subItem.quantity ?? '';
+                            subQuantityInput.placeholder = 'Qty';
+                            subQuantityCell.appendChild(subQuantityInput);
+
+                            const subUnitCell = document.createElement('td');
+                            const subUnitInput = document.createElement('input');
+                            subUnitInput.type = 'text';
+                            subUnitInput.className = 'takeoff-subitem-input';
+                            subUnitInput.dataset.subitemField = 'unit';
+                            subUnitInput.dataset.subitemId = subItem.id;
+                            subUnitInput.value = subItem.unit || '';
+                            subUnitInput.placeholder = 'Unit';
+                            subUnitCell.appendChild(subUnitInput);
+
+                            const subNotesCell = document.createElement('td');
+                            const subNotesInput = document.createElement('input');
+                            subNotesInput.type = 'text';
+                            subNotesInput.className = 'takeoff-subitem-input';
+                            subNotesInput.dataset.subitemField = 'notes';
+                            subNotesInput.dataset.subitemId = subItem.id;
+                            subNotesInput.value = subItem.notes || '';
+                            subNotesInput.placeholder = 'Notes';
+                            subNotesCell.appendChild(subNotesInput);
+
+                            const subActionCell = document.createElement('td');
+                            const subRemoveBtn = document.createElement('button');
+                            subRemoveBtn.type = 'button';
+                            subRemoveBtn.className = 'takeoff-remove';
+                            subRemoveBtn.dataset.action = 'remove-subitem';
+                            subRemoveBtn.dataset.subitemId = subItem.id;
+                            subRemoveBtn.textContent = '×';
+                            subActionCell.appendChild(subRemoveBtn);
+
+                            subItemRow.append(subNameCell, subQuantityCell, subUnitCell, subNotesCell, subActionCell);
+                            subBody.appendChild(subItemRow);
+                        });
+
+                        subTable.append(subHead, subBody);
+                        subContainer.appendChild(subTable);
+                    }
+
+                    subCell.appendChild(subContainer);
+                    subRow.appendChild(subCell);
+                    if (!measurement.showSubItems && measurement.subItems.length) {
+                        subRow.style.display = 'none';
+                    }
+                    tbody.appendChild(subRow);
+                }
+            });
+        }
+
+        function handleTakeoffTableInput(event) {
+            const subitemField = event.target.dataset.subitemField;
+            if (subitemField) {
+                const subRow = event.target.closest('.takeoff-subitems-row');
+                if (!subRow?.dataset.parentId) return;
+                const info = findTakeoffMeasurement(subRow.dataset.parentId);
+                if (!info) return;
+                ensureMeasurementFields(info.measurement);
+                const subItem = info.measurement.subItems.find(item => item.id === event.target.dataset.subitemId);
+                if (!subItem) return;
+                if (subitemField === 'quantity') {
+                    const value = parseFloat(event.target.value);
+                    subItem.quantity = Number.isNaN(value) ? undefined : value;
+                } else {
+                    subItem[subitemField] = event.target.value;
+                }
+                return;
+            }
+
+            const field = event.target.dataset.field;
+            if (!field || event.target.tagName === 'SELECT') return;
+            const row = event.target.closest('tr.takeoff-row');
+            if (!row?.dataset.id) return;
+            const info = findTakeoffMeasurement(row.dataset.id);
+            if (!info) return;
+            const { measurement } = info;
+            ensureMeasurementFields(measurement);
+
+            if (field === 'label') {
+                measurement.label = event.target.value;
+            } else if (['trade', 'floor', 'method'].includes(field)) {
+                measurement[field] = event.target.value;
+                renderTakeoffFilters();
+            } else if (field === 'itemDescription') {
+                measurement.itemDescription = event.target.value;
+            } else if (field === 'itemNotes') {
+                measurement.itemNotes = event.target.value;
+            } else if (field === 'itemQuantity') {
+                const value = parseFloat(event.target.value);
+                measurement.itemQuantity = Number.isNaN(value) ? undefined : value;
+            } else if (field === 'itemUnit') {
+                measurement.itemUnit = event.target.value;
+            }
+        }
+
+        function handleTakeoffTableChange(event) {
+            const field = event.target.dataset.field;
+            if (!field) return;
+            const row = event.target.closest('tr.takeoff-row');
+            if (!row?.dataset.id) return;
+            const info = findTakeoffMeasurement(row.dataset.id);
+            if (!info) return;
+            const { measurement, page } = info;
+            ensureMeasurementFields(measurement);
+
+            if (field === 'pageId') {
+                if (measurement.pageId === event.target.value) return;
+                page.measurements = page.measurements.filter(item => item.id !== measurement.id);
+                const nextPage = state.takeoff.pages.find(p => p.id === event.target.value);
+                if (nextPage) {
+                    measurement.pageId = nextPage.id;
+                    nextPage.measurements.push(measurement);
+                }
+                renderTakeoffMeasurements();
+                renderTakeoffPages();
+                drawTakeoff();
+            }
+        }
+
+        function handleTakeoffTableClick(event) {
+            const actionEl = event.target.closest('[data-action]');
+            if (!actionEl) return;
+            const action = actionEl.dataset.action;
+
+            if (action === 'remove-measurement') {
+                const row = actionEl.closest('tr.takeoff-row');
+                if (!row?.dataset.id) return;
+                const info = findTakeoffMeasurement(row.dataset.id);
+                if (!info) return;
+                const { measurement, page } = info;
+                page.measurements = page.measurements.filter(item => item.id !== measurement.id);
+                renderTakeoffMeasurements();
+                renderTakeoffFilters();
+                drawTakeoff();
+                updateTakeoffStatus('Measurement removed.');
+                return;
+            }
+
+            let measurementId = null;
+            const measurementRow = actionEl.closest('tr.takeoff-row');
+            if (measurementRow?.dataset.id) {
+                measurementId = measurementRow.dataset.id;
+            } else {
+                const subRow = actionEl.closest('.takeoff-subitems-row');
+                if (subRow?.dataset.parentId) {
+                    measurementId = subRow.dataset.parentId;
+                }
+            }
+
+            if (!measurementId) return;
+            const info = findTakeoffMeasurement(measurementId);
+            if (!info) return;
+            const { measurement } = info;
+            ensureMeasurementFields(measurement);
+
+            if (action === 'toggle-subitems') {
+                measurement.showSubItems = !measurement.showSubItems;
+                renderTakeoffMeasurements();
+            } else if (action === 'add-subitem') {
+                const defaultQuantity = typeof measurement.itemQuantity === 'number' && !Number.isNaN(measurement.itemQuantity)
+                    ? measurement.itemQuantity
+                    : parseFloat(getTakeoffValue(measurement).toFixed(2));
+                const defaultUnit = measurement.itemUnit || getTakeoffUnits(measurement);
+                measurement.subItems.push({
+                    id: createTakeoffId('subitem'),
+                    label: '',
+                    quantity: defaultQuantity,
+                    unit: defaultUnit,
+                    notes: ''
+                });
+                measurement.showSubItems = true;
+                renderTakeoffMeasurements();
+                updateTakeoffStatus('Sub-item added.');
+            } else if (action === 'remove-subitem') {
+                const subItemId = actionEl.dataset.subitemId;
+                if (!subItemId) return;
+                measurement.subItems = measurement.subItems.filter(subItem => subItem.id !== subItemId);
+                if (!measurement.subItems.length) {
+                    measurement.showSubItems = false;
+                }
+                renderTakeoffMeasurements();
+                updateTakeoffStatus('Sub-item removed.');
+            }
+        }
+
+        function findTakeoffMeasurement(id) {
+            for (const page of state.takeoff.pages) {
+                const measurement = page.measurements.find(item => item.id === id);
+                if (measurement) {
+                    return { measurement, page };
+                }
+            }
+            return null;
         }
 
         function setTakeoffMode(mode) {
@@ -814,52 +1572,20 @@
             drawTakeoff();
 
             const instructions = {
-                length: 'Click a start and end point to measure length.',
+                line: 'Click a start and end point to measure length.',
+                perimeter: 'Click to add points and double-click to finish the perimeter.',
                 area: 'Click to add vertices, then double-click to finish the area.',
                 count: 'Click each item on the plan to add to the quantity.',
                 diameter: 'Click two points to measure the diameter.'
-            }[mode] || 'Click on the plan to record measurements.';
-
-            const hasPlan = state.takeoff.canvas && state.takeoff.canvas.width > 0 && state.takeoff.canvas.height > 0;
-            if (hasPlan) {
-                updateTakeoffStatus(instructions);
-            }
-        }
-
-        function updateTakeoffScale(value) {
-            let numericValue = parseFloat(value);
-            if (!Number.isFinite(numericValue) || numericValue <= 0) {
-                numericValue = 1;
-            }
-            state.takeoff.scale = numericValue;
-            const scaleInput = document.getElementById('planScale');
-            if (scaleInput && scaleInput.value !== String(numericValue)) {
-                scaleInput.value = numericValue;
-            }
-            renderTakeoffTable();
-            drawTakeoff();
-        }
-
-        function clearTakeoffMeasurements(silent = false) {
-            state.takeoff.measurements = [];
-            state.takeoff.points = [];
-            state.takeoff.previewPoint = null;
-            state.takeoff.counters = { length: 1, area: 1, count: 1, diameter: 1 };
-            renderTakeoffTable();
-            drawTakeoff();
-            if (!silent) {
-                updateTakeoffStatus('Measurements cleared.');
-            }
-        }
-
-        function createMeasurementId() {
-            return `takeoff-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            };
+            updateTakeoffStatus(instructions[mode] || 'Select a drawing to begin measuring.');
         }
 
         function handleTakeoffCanvasClick(event) {
             const canvas = state.takeoff.canvas;
-            if (!canvas || canvas.width === 0 || canvas.height === 0) {
-                showToast('Upload a plan to start measuring.', 'warning');
+            const page = getActiveTakeoffPage();
+            if (!canvas || !page || canvas.width === 0 || canvas.height === 0) {
+                showToast('Select a drawing page first.', 'warning');
                 return;
             }
 
@@ -868,33 +1594,87 @@
             const mode = state.takeoff.mode;
 
             if (mode === 'count') {
-                const label = `Count ${state.takeoff.counters.count++}`;
-                const measurement = {
-                    id: createMeasurementId(),
-                    type: 'count',
-                    label,
-                    points: [point],
-                    count: 1
-                };
-                addTakeoffMeasurement(measurement);
-                updateTakeoffStatus(`${label} saved.`);
-                drawTakeoff();
+                finalizeCountMeasurement(point);
                 return;
             }
 
             state.takeoff.points.push(point);
 
-            if (mode === 'length' && state.takeoff.points.length === 2) {
-                finalizeLengthMeasurement('length');
+            if (mode === 'line' && state.takeoff.points.length === 2) {
+                finalizeLinearMeasurement('line');
             } else if (mode === 'diameter' && state.takeoff.points.length === 2) {
-                finalizeLengthMeasurement('diameter');
-            } else if (mode === 'area') {
-                updateTakeoffStatus('Double-click to finish the area measurement.');
+                finalizeLinearMeasurement('diameter');
+            } else if ((mode === 'area' || mode === 'perimeter') && state.takeoff.points.length >= 2) {
+                updateTakeoffStatus('Double-click to complete the measurement.');
                 drawTakeoff();
-            } else if (mode === 'length' || mode === 'diameter') {
-                updateTakeoffStatus('Select an end point to complete the measurement.');
+            } else {
                 drawTakeoff();
             }
+        }
+
+        function finalizeCountMeasurement(point) {
+            const page = getActiveTakeoffPage();
+            if (!page) return;
+            const measurement = {
+                id: createTakeoffId('measurement'),
+                type: 'count',
+                label: `Count ${state.takeoff.counters.count++}`,
+                points: [point],
+                count: 1,
+                pageId: page.id,
+                trade: page.trade,
+                floor: page.floor,
+                method: page.method
+            };
+            addTakeoffMeasurement(measurement);
+            updateTakeoffStatus(`${measurement.label} saved.`);
+        }
+
+        function finalizeLinearMeasurement(type) {
+            const page = getActiveTakeoffPage();
+            if (!page) return;
+            const [start, end] = state.takeoff.points;
+            const pixels = Math.hypot(end.x - start.x, end.y - start.y);
+            const measurement = {
+                id: createTakeoffId('measurement'),
+                type,
+                label: `${type === 'diameter' ? 'Diameter' : 'Line'} ${state.takeoff.counters[type]++}`,
+                points: [start, end],
+                pixels,
+                pageId: page.id,
+                trade: page.trade,
+                floor: page.floor,
+                method: page.method || (type === 'line' ? 'Linear' : 'Diameter')
+            };
+            state.takeoff.points = [];
+            state.takeoff.previewPoint = null;
+            addTakeoffMeasurement(measurement);
+            const value = getTakeoffValue(measurement).toFixed(2);
+            updateTakeoffStatus(`${measurement.label} saved: ${value} ${getTakeoffUnits(measurement)}.`);
+        }
+
+        function finalizeAreaMeasurement() {
+            const page = getActiveTakeoffPage();
+            const mode = state.takeoff.mode;
+            if (!page || state.takeoff.points.length < 3) return;
+            const points = [...state.takeoff.points];
+            const measurement = {
+                id: createTakeoffId('measurement'),
+                type: mode,
+                label: `${mode === 'perimeter' ? 'Perimeter' : 'Area'} ${state.takeoff.counters[mode]++}`,
+                points,
+                pixelArea: calculatePolygonArea(points),
+                pixelPerimeter: calculatePolygonPerimeter(points),
+                pageId: page.id,
+                trade: page.trade,
+                floor: page.floor,
+                method: page.method || (mode === 'area' ? 'Area' : 'Perimeter')
+            };
+            state.takeoff.points = [];
+            state.takeoff.previewPoint = null;
+            addTakeoffMeasurement(measurement);
+            const value = getTakeoffValue(measurement).toFixed(2);
+            updateTakeoffStatus(`${measurement.label} saved: ${value} ${getTakeoffUnits(measurement)}.`);
         }
 
         function handleTakeoffCanvasMove(event) {
@@ -912,102 +1692,19 @@
         }
 
         function handleTakeoffCanvasDoubleClick() {
-            if (state.takeoff.mode !== 'area' || state.takeoff.points.length < 3) return;
-            finalizeAreaMeasurement();
-        }
-
-        function finalizeLengthMeasurement(type) {
-            const [start, end] = state.takeoff.points;
-            const pixels = Math.hypot(end.x - start.x, end.y - start.y);
-            const measurement = {
-                id: createMeasurementId(),
-                type,
-                label: `${type === 'diameter' ? 'Diameter' : 'Length'} ${state.takeoff.counters[type]++}`,
-                points: [start, end],
-                pixels
-            };
-            state.takeoff.points = [];
-            state.takeoff.previewPoint = null;
-            addTakeoffMeasurement(measurement);
-            const value = getTakeoffValue(measurement).toFixed(2);
-            updateTakeoffStatus(`${measurement.label} saved: ${value} ${getTakeoffUnits(measurement)}.`);
-            drawTakeoff();
-        }
-
-        function finalizeAreaMeasurement() {
-            const points = [...state.takeoff.points];
-            const measurement = {
-                id: createMeasurementId(),
-                type: 'area',
-                label: `Area ${state.takeoff.counters.area++}`,
-                points,
-                pixelArea: calculatePolygonArea(points),
-                pixelPerimeter: calculatePolygonPerimeter(points)
-            };
-            state.takeoff.points = [];
-            state.takeoff.previewPoint = null;
-            addTakeoffMeasurement(measurement);
-            const value = getTakeoffValue(measurement).toFixed(2);
-            updateTakeoffStatus(`${measurement.label} saved: ${value} ${getTakeoffUnits(measurement)}.`);
-            drawTakeoff();
+            if (state.takeoff.mode === 'area' || state.takeoff.mode === 'perimeter') {
+                finalizeAreaMeasurement();
+            }
         }
 
         function addTakeoffMeasurement(measurement) {
-            state.takeoff.measurements.push(measurement);
-            renderTakeoffTable();
+            const page = state.takeoff.pages.find(p => p.id === measurement.pageId);
+            if (!page) return;
+            ensureMeasurementFields(measurement);
+            page.measurements.push(measurement);
+            renderTakeoffMeasurements();
+            renderTakeoffFilters();
             drawTakeoff();
-        }
-
-        function renderTakeoffTable() {
-            const tbody = document.getElementById('takeoffTableBody');
-            if (!tbody) return;
-            tbody.innerHTML = '';
-
-            if (!state.takeoff.measurements.length) {
-                const emptyRow = document.createElement('tr');
-                const cell = document.createElement('td');
-                cell.colSpan = 6;
-                cell.style.padding = '0.75rem';
-                cell.style.color = 'var(--gray-500)';
-                cell.textContent = 'No measurements yet.';
-                emptyRow.appendChild(cell);
-                tbody.appendChild(emptyRow);
-                return;
-            }
-
-            state.takeoff.measurements.forEach(measurement => {
-                const row = document.createElement('tr');
-                row.dataset.id = measurement.id;
-
-                const nameCell = document.createElement('td');
-                const nameInput = document.createElement('input');
-                nameInput.type = 'text';
-                nameInput.className = 'takeoff-name-input';
-                nameInput.value = measurement.label;
-                nameCell.appendChild(nameInput);
-
-                const modeCell = document.createElement('td');
-                modeCell.textContent = formatTakeoffModeLabel(measurement.type);
-
-                const quantityCell = document.createElement('td');
-                quantityCell.textContent = getTakeoffValue(measurement).toFixed(2);
-
-                const unitsCell = document.createElement('td');
-                unitsCell.textContent = getTakeoffUnits(measurement);
-
-                const detailCell = document.createElement('td');
-                detailCell.textContent = getTakeoffDetails(measurement);
-
-                const actionCell = document.createElement('td');
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.className = 'takeoff-remove';
-                removeBtn.textContent = '×';
-                actionCell.appendChild(removeBtn);
-
-                row.append(nameCell, modeCell, quantityCell, unitsCell, detailCell, actionCell);
-                tbody.appendChild(row);
-            });
         }
 
         function drawTakeoff() {
@@ -1016,9 +1713,12 @@
             if (!canvas || !ctx) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            state.takeoff.measurements.forEach(measurement => {
-                drawMeasurement(ctx, measurement);
-            });
+            const page = getActiveTakeoffPage();
+            if (page) {
+                page.measurements.forEach((measurement, index) => {
+                    drawMeasurement(ctx, measurement, index);
+                });
+            }
 
             if (state.takeoff.points.length) {
                 ctx.save();
@@ -1043,10 +1743,11 @@
             }
         }
 
-        function drawMeasurement(ctx, measurement) {
+        function drawMeasurement(ctx, measurement, index) {
+            const color = TAKEOFF_COLORS[index % TAKEOFF_COLORS.length];
             ctx.save();
-            if (measurement.type === 'length' || measurement.type === 'diameter') {
-                ctx.strokeStyle = measurement.type === 'diameter' ? '#0ea5e9' : '#6366f1';
+            if (measurement.type === 'line' || measurement.type === 'diameter') {
+                ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(measurement.points[0].x, measurement.points[0].y);
@@ -1056,9 +1757,9 @@
                 const midX = (measurement.points[0].x + measurement.points[1].x) / 2;
                 const midY = (measurement.points[0].y + measurement.points[1].y) / 2;
                 drawMeasurementLabel(ctx, midX, midY, `${getTakeoffValue(measurement).toFixed(2)} ${getTakeoffUnits(measurement)}`);
-            } else if (measurement.type === 'area') {
-                ctx.strokeStyle = '#6366f1';
-                ctx.fillStyle = 'rgba(99, 102, 241, 0.2)';
+            } else if (measurement.type === 'area' || measurement.type === 'perimeter') {
+                ctx.strokeStyle = color;
+                ctx.fillStyle = measurement.type === 'area' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 118, 110, 0.15)';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(measurement.points[0].x, measurement.points[0].y);
@@ -1066,7 +1767,7 @@
                     ctx.lineTo(measurement.points[i].x, measurement.points[i].y);
                 }
                 ctx.closePath();
-                ctx.fill();
+                if (measurement.type === 'area') ctx.fill();
                 ctx.stroke();
                 measurement.points.forEach(point => drawHandle(ctx, point));
                 const centroid = calculateCentroid(measurement.points);
@@ -1098,15 +1799,12 @@
             const metrics = ctx.measureText(text);
             const textWidth = metrics.width;
             const textHeight = (metrics.actualBoundingBoxAscent || 9) + (metrics.actualBoundingBoxDescent || 3);
-            let rectX = x + 8;
-            let rectY = y - textHeight - padding;
-            rectX = Math.min(Math.max(rectX, 0), canvas.width - textWidth - padding * 2);
-            rectY = Math.min(Math.max(rectY, 0), canvas.height - textHeight - padding);
-            rectY = Math.max(rectY, 0);
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-            ctx.fillRect(rectX, rectY, textWidth + padding * 2, textHeight + padding);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(text, rectX + padding, rectY + padding / 2);
+            const bgX = Math.min(Math.max(0, x - textWidth / 2 - padding), canvas.width - textWidth - padding * 2);
+            const bgY = Math.min(Math.max(0, y - textHeight / 2 - padding), canvas.height - textHeight - padding * 2);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+            ctx.fillRect(bgX, bgY, textWidth + padding * 2, textHeight + padding * 2);
+            ctx.fillStyle = 'white';
+            ctx.fillText(text, bgX + padding, bgY + padding);
             ctx.restore();
         }
 
@@ -1149,12 +1847,16 @@
         }
 
         function getTakeoffValue(measurement) {
-            const scale = state.takeoff.scale > 0 ? state.takeoff.scale : 1;
-            if (measurement.type === 'length' || measurement.type === 'diameter') {
+            const page = state.takeoff.pages.find(p => p.id === measurement.pageId);
+            const scale = page?.scale > 0 ? page.scale : 1;
+            if (measurement.type === 'line' || measurement.type === 'diameter') {
                 return measurement.pixels / scale;
             }
             if (measurement.type === 'area') {
                 return measurement.pixelArea / (scale * scale);
+            }
+            if (measurement.type === 'perimeter') {
+                return measurement.pixelPerimeter / scale;
             }
             if (measurement.type === 'count') {
                 return measurement.count || 1;
@@ -1164,69 +1866,85 @@
 
         function getTakeoffUnits(measurement) {
             if (measurement.type === 'area') return 'sq ft';
+            if (measurement.type === 'perimeter') return 'ft';
             if (measurement.type === 'count') return 'ea';
             return 'ft';
         }
 
         function getTakeoffDetails(measurement) {
-            if (measurement.type !== 'area') return '';
-            const scale = state.takeoff.scale > 0 ? state.takeoff.scale : 1;
-            const perimeter = measurement.pixelPerimeter / scale;
-            return `Perimeter: ${perimeter.toFixed(2)} ft`;
+            const page = state.takeoff.pages.find(p => p.id === measurement.pageId);
+            const scale = page?.scale > 0 ? page.scale : 1;
+            if (measurement.type === 'area') {
+                const perimeter = measurement.pixelPerimeter / scale;
+                return `Perimeter: ${perimeter.toFixed(2)} ft`;
+            }
+            if (measurement.type === 'perimeter') {
+                return `Segments: ${measurement.points.length}`;
+            }
+            return '';
         }
 
         function formatTakeoffModeLabel(type) {
             const labels = {
-                length: 'Length',
+                line: 'Line',
                 area: 'Area',
                 count: 'Count',
-                diameter: 'Diameter'
+                diameter: 'Diameter',
+                perimeter: 'Perimeter'
             };
             return labels[type] || type;
         }
 
         function updateTakeoffStatus(message) {
-            const statusEl = document.getElementById('takeoffMeasurement');
+            const statusEl = document.getElementById('takeoffStatus');
             if (!statusEl) return;
             statusEl.textContent = message;
         }
 
-        function handleTakeoffTableInput(event) {
-            if (!event.target.classList.contains('takeoff-name-input')) return;
-            const row = event.target.closest('tr');
-            if (!row?.dataset.id) return;
-            const measurement = state.takeoff.measurements.find(item => item.id === row.dataset.id);
-            if (measurement) {
-                measurement.label = event.target.value;
-            }
-        }
-
-        function handleTakeoffTableClick(event) {
-            const removeBtn = event.target.closest('.takeoff-remove');
-            if (!removeBtn) return;
-            const row = removeBtn.closest('tr');
-            const id = row?.dataset.id;
-            if (!id) return;
-            state.takeoff.measurements = state.takeoff.measurements.filter(item => item.id !== id);
-            renderTakeoffTable();
-            drawTakeoff();
-            updateTakeoffStatus('Measurement removed.');
-        }
-
         function exportTakeoffCsv() {
-            if (!state.takeoff.measurements.length) {
+            const measurements = getAllTakeoffMeasurements();
+            if (!measurements.length) {
                 showToast('No takeoff data available to export.', 'warning');
                 return;
             }
 
-            const rows = [['Item', 'Mode', 'Quantity', 'Units', 'Details']];
-            state.takeoff.measurements.forEach(measurement => {
+            const rows = [['Item', 'Description', 'Notes', 'Page', 'Trade', 'Floor', 'Method', 'Mode', 'Quantity', 'Units', 'Measured Details', 'Sub Items']];
+            measurements.forEach(({ measurement, page }) => {
+                ensureMeasurementFields(measurement);
+                const measuredValue = getTakeoffValue(measurement).toFixed(2);
+                const measuredUnits = getTakeoffUnits(measurement);
+                const measuredDetails = getTakeoffDetails(measurement);
+                const quantity = typeof measurement.itemQuantity === 'number' && !Number.isNaN(measurement.itemQuantity)
+                    ? measurement.itemQuantity
+                    : measuredValue;
+                const description = (measurement.itemDescription && measurement.itemDescription.trim()) || measurement.label;
+                const notes = measurement.itemNotes && measurement.itemNotes.trim() ? measurement.itemNotes.trim() : '';
+                const subItems = measurement.subItems.map(subItem => {
+                    const label = subItem.label && subItem.label.trim() ? subItem.label.trim() : 'Sub-item';
+                    const quantityParts = [];
+                    if (typeof subItem.quantity === 'number' && !Number.isNaN(subItem.quantity)) {
+                        quantityParts.push(subItem.quantity);
+                    }
+                    if (subItem.unit) {
+                        quantityParts.push(subItem.unit);
+                    }
+                    const quantityText = quantityParts.length ? ` (${quantityParts.join(' ')})` : '';
+                    const subNotes = subItem.notes && subItem.notes.trim() ? ` - ${subItem.notes.trim()}` : '';
+                    return `${label}${quantityText}${subNotes}`;
+                }).join('; ');
                 rows.push([
                     measurement.label,
+                    description,
+                    notes,
+                    page.name || 'Untitled Page',
+                    measurement.trade || '',
+                    measurement.floor || '',
+                    measurement.method || '',
                     formatTakeoffModeLabel(measurement.type),
-                    getTakeoffValue(measurement).toFixed(2),
-                    getTakeoffUnits(measurement),
-                    getTakeoffDetails(measurement)
+                    quantity,
+                    measurement.itemUnit || measuredUnits,
+                    measuredDetails ? `${measuredValue} ${measuredUnits} • ${measuredDetails}` : `${measuredValue} ${measuredUnits}`,
+                    subItems
                 ]);
             });
 
@@ -1246,20 +1964,44 @@
         }
 
         function pushTakeoffToEstimate() {
-            if (!state.takeoff.measurements.length) {
+            const measurements = getAllTakeoffMeasurements();
+            if (!measurements.length) {
                 showToast('No takeoff data to send to the estimate.', 'warning');
                 return;
             }
 
             ensureTakeoffCategory();
-            state.takeoff.measurements.forEach(measurement => {
+            measurements.forEach(({ measurement }) => {
+                ensureMeasurementFields(measurement);
+                const measuredValue = parseFloat(getTakeoffValue(measurement).toFixed(2));
+                const quantity = typeof measurement.itemQuantity === 'number' && !Number.isNaN(measurement.itemQuantity)
+                    ? measurement.itemQuantity
+                    : measuredValue;
+                const description = (measurement.itemDescription && measurement.itemDescription.trim()) || measurement.label;
+                const notes = measurement.itemNotes && measurement.itemNotes.trim() ? ` (${measurement.itemNotes.trim()})` : '';
+
                 addLineItem({
                     category: 'Takeoff Measurements',
-                    description: measurement.label,
-                    quantity: parseFloat(getTakeoffValue(measurement).toFixed(2)),
-                    unit: getTakeoffUnits(measurement),
+                    description: `${description}${notes}`,
+                    quantity,
+                    unit: measurement.itemUnit || getTakeoffUnits(measurement),
                     rate: 0,
                     total: 0
+                });
+
+                measurement.subItems.forEach(subItem => {
+                    const subDescription = subItem.label && subItem.label.trim()
+                        ? `${description} - ${subItem.label.trim()}`
+                        : `${description} - Sub-item`;
+                    const subNotes = subItem.notes && subItem.notes.trim() ? ` (${subItem.notes.trim()})` : '';
+                    addLineItem({
+                        category: 'Takeoff Measurements',
+                        description: `${subDescription}${subNotes}`,
+                        quantity: typeof subItem.quantity === 'number' && !Number.isNaN(subItem.quantity) ? subItem.quantity : 0,
+                        unit: subItem.unit || '',
+                        rate: 0,
+                        total: 0
+                    });
                 });
             });
             updateBidTotal();
@@ -1272,34 +2014,48 @@
                 state.lineItemCategories['Takeoff Measurements'] = [];
             }
             const category = state.lineItemCategories['Takeoff Measurements'];
-            state.takeoff.measurements.forEach(measurement => {
-                const existing = category.find(item => item.name === measurement.label);
-                if (!existing) {
-                    category.push({
-                        name: measurement.label,
-                        unit: getTakeoffUnits(measurement),
-                        rate: 0
-                    });
-                } else {
-                    existing.unit = getTakeoffUnits(measurement);
-                }
+            getAllTakeoffMeasurements().forEach(({ measurement }) => {
+                ensureMeasurementFields(measurement);
+                const baseName = (measurement.itemDescription && measurement.itemDescription.trim()) || measurement.label;
+                const baseUnit = measurement.itemUnit || getTakeoffUnits(measurement);
+                const ensureItem = (name, unit) => {
+                    if (!name) return;
+                    const existing = category.find(item => item.name === name);
+                    if (!existing) {
+                        category.push({ name, unit: unit || '', rate: 0 });
+                    } else if (unit) {
+                        existing.unit = unit;
+                    }
+                };
+
+                ensureItem(baseName, baseUnit);
+                measurement.subItems.forEach(subItem => {
+                    const subName = (subItem.label && subItem.label.trim()) || `${baseName} - Sub-item`;
+                    ensureItem(subName, subItem.unit || '');
+                });
             });
+        }
+
+        function createTakeoffId(prefix) {
+            return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
+
+        function createMeasurementId() {
+            return createTakeoffId('measurement');
         }
 
         function prepareTakeoffCanvas(width, height) {
             const canvas = state.takeoff.canvas;
             if (!canvas) return;
-            const resolvedWidth = Math.max(1, Math.round(width));
-            const resolvedHeight = Math.max(1, Math.round(height));
+            const resolvedWidth = Math.max(1, Math.round(width || 0));
+            const resolvedHeight = Math.max(1, Math.round(height || 0));
             canvas.width = resolvedWidth;
             canvas.height = resolvedHeight;
             canvas.style.width = `${resolvedWidth}px`;
             canvas.style.height = `${resolvedHeight}px`;
             state.takeoff.context = canvas.getContext('2d');
-            drawTakeoff();
         }
-
-        function getBidDataForExport() {
+function getBidDataForExport() {
             const projectName = document.getElementById('bidProjectName').value || 'N/A';
             const clientName = document.getElementById('clientName').value || 'N/A';
             const bidDate = new Date(document.getElementById('bidDate').value).toLocaleDateString();
