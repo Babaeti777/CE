@@ -541,6 +541,20 @@
             transform: scale(1.01);
         }
 
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .takeoff-plan {
+            max-height: 70vh;
+            overflow: auto;
+        }
+
+        .takeoff-plan canvas {
+            cursor: crosshair;
+        }
+
         /* Line Items */
         .line-item-row {
             display: grid;

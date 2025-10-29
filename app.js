@@ -1,6 +1,11 @@
     (function() {
         'use strict';
 
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        if (pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js';
+        }
+
         // --- STATE MANAGEMENT ---
         const state = {
             currentTab: 'dashboard',
@@ -18,8 +23,17 @@
                 waitingForSecondOperand: false,
                 operator: null
             },
-            lineItemCategories: {}
+            lineItemCategories: {},
+            takeoff: {
+                mode: 'line',
+                scale: 1,
+                points: [],
+                records: [],
+                counter: 1
+            }
         };
+
+        const TAKEOFF_COLORS = ['#0d6efd', '#ff6b35', '#2ca58d', '#ffc107', '#6f42c1', '#20c997'];
 
         async function loadDatabase() {
             try {
@@ -42,7 +56,10 @@
             updateDashboard();
             initCharts();
             checkForUpdatesOnLoad();
-            
+            setupTakeoffTools();
+            renderTakeoffRecords();
+            updateTakeoffMeasurementDisplay();
+
             const bidDateInput = document.getElementById('bidDate');
             if (bidDateInput) {
                 bidDateInput.value = new Date().toISOString().split('T')[0];
@@ -149,6 +166,14 @@
             document.getElementById("shapeSelect")?.addEventListener("change", updateShapeInputs);
             document.getElementById("calcAreaBtn")?.addEventListener("click", calculateArea);
             document.getElementById("planUpload")?.addEventListener("change", handlePlanUpload);
+            document.getElementById('planScale')?.addEventListener('input', handlePlanScaleChange);
+            document.getElementById('takeoffMode')?.addEventListener('change', (e) => setTakeoffMode(e.target.value));
+            document.getElementById('completeMeasurementBtn')?.addEventListener('click', completeTakeoffMeasurement);
+            document.getElementById('undoTakeoffPointBtn')?.addEventListener('click', undoTakeoffPoint);
+            document.getElementById('clearTakeoffBtn')?.addEventListener('click', clearTakeoffMeasurements);
+            document.getElementById('exportTakeoffCsvBtn')?.addEventListener('click', exportTakeoffCsv);
+            document.getElementById('takeoffRecordsBody')?.addEventListener('input', handleTakeoffRecordInput);
+            document.getElementById('takeoffRecordsBody')?.addEventListener('click', handleTakeoffRecordClick);
             document.getElementById('viewAllProjectsBtn')?.addEventListener('click', () => switchTab('projects'));
             updateCalcMode(state.calcMode);
         }
@@ -670,31 +695,531 @@
             resultEl.textContent = `Area: ${area.toFixed(2)}`;
         }
 
-        function handlePlanUpload(e) {
-            const file = e.target.files[0];
+        async function handlePlanUpload(e) {
+            const file = e.target.files?.[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const img = document.getElementById('planPreview');
-                const container = document.getElementById('planContainer');
-                const canvas = document.getElementById('takeoffCanvas');
-                if (!img || !container || !canvas) return;
+            try {
+                clearTakeoffMeasurements(false);
 
-                img.onload = () => {
-                    container.style.display = 'block';
-                    const width = img.clientWidth;
-                    const height = img.clientHeight;
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx?.clearRect(0, 0, width, height);
-                };
+                if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                    if (!pdfjsLib) {
+                        showToast('PDF viewer is unavailable in this browser.', 'error');
+                        return;
+                    }
 
-                img.src = ev.target.result;
-                img.style.display = 'block';
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const page = await pdf.getPage(1);
+                    const viewport = page.getViewport({ scale: 1 });
+                    const targetWidth = 1100;
+                    const scale = Math.min(2.5, targetWidth / viewport.width);
+                    const scaledViewport = page.getViewport({ scale });
+                    const canvasEl = document.createElement('canvas');
+                    const context = canvasEl.getContext('2d');
+                    canvasEl.width = scaledViewport.width;
+                    canvasEl.height = scaledViewport.height;
+                    await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+                    const dataUrl = canvasEl.toDataURL('image/png');
+                    displayPlanImage(dataUrl, false);
+                } else {
+                    const objectUrl = URL.createObjectURL(file);
+                    displayPlanImage(objectUrl, true);
+                }
+
+                e.target.value = '';
+                showToast('Plan loaded successfully. Start placing measurement points.', 'success');
+            } catch (error) {
+                console.error('Error loading plan:', error);
+                showToast('Failed to load plan. Please try again.', 'error');
+            }
+        }
+
+        function displayPlanImage(src, revokeAfterLoad) {
+            const img = document.getElementById('planPreview');
+            const container = document.getElementById('planContainer');
+            const canvas = document.getElementById('takeoffCanvas');
+            if (!img || !container || !canvas) return;
+
+            img.onload = () => {
+                if (revokeAfterLoad) {
+                    URL.revokeObjectURL(src);
+                }
+                container.style.display = 'block';
+                syncTakeoffCanvasSize();
+                resetTakeoffDrawing();
             };
-            reader.readAsDataURL(file);
+
+            img.onerror = () => {
+                if (revokeAfterLoad) {
+                    URL.revokeObjectURL(src);
+                }
+                container.style.display = 'none';
+                showToast('Unable to display the selected plan.', 'error');
+            };
+
+            img.src = src;
+            img.style.display = 'block';
+        }
+
+        function setupTakeoffTools() {
+            const canvas = document.getElementById('takeoffCanvas');
+            if (!canvas) return;
+            canvas.addEventListener('click', handleTakeoffCanvasClick);
+            window.addEventListener('resize', syncTakeoffCanvasSize);
+
+            const modeSelect = document.getElementById('takeoffMode');
+            if (modeSelect) {
+                modeSelect.value = state.takeoff.mode;
+            }
+
+            const scaleInput = document.getElementById('planScale');
+            if (scaleInput) {
+                scaleInput.value = state.takeoff.scale;
+            }
+        }
+
+        function syncTakeoffCanvasSize() {
+            const img = document.getElementById('planPreview');
+            const canvas = document.getElementById('takeoffCanvas');
+            if (!img || !canvas || img.style.display === 'none') return;
+
+            const rect = img.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            renderTakeoffCanvas();
+        }
+
+        function handlePlanScaleChange(e) {
+            const value = parseFloat(e.target.value);
+            if (!Number.isFinite(value) || value <= 0) {
+                if (e.target.value !== '') {
+                    showToast('Scale must be a positive number.', 'warning');
+                }
+                return;
+            }
+            state.takeoff.scale = value;
+            updateTakeoffMeasurementDisplay();
+        }
+
+        function setTakeoffMode(mode) {
+            state.takeoff.mode = mode;
+            resetTakeoffDrawing();
+            updateTakeoffMeasurementDisplay();
+        }
+
+        function handleTakeoffCanvasClick(event) {
+            const canvas = event.currentTarget;
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            state.takeoff.points.push({ x, y });
+            renderTakeoffCanvas();
+            updateTakeoffMeasurementDisplay();
+        }
+
+        function completeTakeoffMeasurement() {
+            const mode = state.takeoff.mode;
+            const points = state.takeoff.points;
+
+            if (mode === 'count' && points.length === 0) {
+                showToast('Place at least one marker to record a count.', 'warning');
+                return;
+            }
+
+            if ((mode === 'line' || mode === 'perimeter') && points.length < 2) {
+                showToast('Place at least two points to measure a line.', 'warning');
+                return;
+            }
+
+            if (mode === 'area' && points.length < 3) {
+                showToast('Place at least three points to measure an area.', 'warning');
+                return;
+            }
+
+            const value = calculateMeasurementFromPoints(points, mode);
+            if (value === null) {
+                showToast('Set a valid scale before recording measurements.', 'error');
+                return;
+            }
+
+            const record = {
+                id: Date.now(),
+                name: `Measurement ${state.takeoff.counter++}`,
+                type: mode,
+                value,
+                unit: getTakeoffUnit(mode),
+                points: points.map(pt => ({ ...pt })),
+                color: TAKEOFF_COLORS[state.takeoff.records.length % TAKEOFF_COLORS.length]
+            };
+
+            state.takeoff.records.push(record);
+            state.takeoff.points = [];
+            renderTakeoffRecords();
+            renderTakeoffCanvas();
+            updateTakeoffMeasurementDisplay();
+            showToast('Measurement saved to the takeoff log.', 'success');
+        }
+
+        function undoTakeoffPoint() {
+            if (state.takeoff.points.length === 0) {
+                showToast('No points to undo.', 'warning');
+                return;
+            }
+            state.takeoff.points.pop();
+            renderTakeoffCanvas();
+            updateTakeoffMeasurementDisplay();
+        }
+
+        function clearTakeoffMeasurements(notify = true) {
+            state.takeoff.points = [];
+            state.takeoff.records = [];
+            state.takeoff.counter = 1;
+            renderTakeoffCanvas();
+            renderTakeoffRecords();
+            updateTakeoffMeasurementDisplay();
+            if (notify) {
+                showToast('All takeoff measurements cleared.', 'success');
+            }
+        }
+
+        function resetTakeoffDrawing() {
+            state.takeoff.points = [];
+            renderTakeoffCanvas();
+            updateTakeoffMeasurementDisplay();
+        }
+
+        function calculateMeasurementFromPoints(points, mode, preview = false) {
+            if (mode === 'count') {
+                return points.length;
+            }
+
+            const scale = state.takeoff.scale;
+            if (!Number.isFinite(scale) || scale <= 0) {
+                return null;
+            }
+
+            if (points.length < 2) {
+                return preview ? 0 : null;
+            }
+
+            if (mode === 'line') {
+                return roundMeasurement(sumSegmentLengths(points));
+            }
+
+            if (mode === 'perimeter') {
+                if (points.length < 3 && !preview) {
+                    return null;
+                }
+                const total = sumSegmentLengths(points) + (points.length > 2 ? distanceInFeet(points[points.length - 1], points[0]) : 0);
+                return roundMeasurement(total);
+            }
+
+            if (mode === 'area') {
+                if (points.length < 3) {
+                    return preview ? 0 : null;
+                }
+                const area = polygonAreaInFeet(points);
+                return roundMeasurement(area, true);
+            }
+
+            return null;
+        }
+
+        function sumSegmentLengths(points) {
+            let total = 0;
+            for (let i = 1; i < points.length; i++) {
+                total += distanceInFeet(points[i - 1], points[i]);
+            }
+            return total;
+        }
+
+        function distanceInFeet(a, b) {
+            const scale = state.takeoff.scale;
+            const distance = Math.hypot(a.x - b.x, a.y - b.y);
+            return distance / scale;
+        }
+
+        function polygonAreaInFeet(points) {
+            const scale = state.takeoff.scale;
+            let sum = 0;
+            for (let i = 0; i < points.length; i++) {
+                const current = points[i];
+                const next = points[(i + 1) % points.length];
+                sum += current.x * next.y - next.x * current.y;
+            }
+            const areaPixels = Math.abs(sum) / 2;
+            return areaPixels / (scale * scale);
+        }
+
+        function roundMeasurement(value, isArea = false) {
+            const precision = isArea ? 2 : 2;
+            return Number(value.toFixed(precision));
+        }
+
+        function getTakeoffUnit(mode) {
+            if (mode === 'area') return 'sq ft';
+            if (mode === 'count') return 'count';
+            return 'ft';
+        }
+
+        function renderTakeoffCanvas() {
+            const canvas = document.getElementById('takeoffCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            state.takeoff.records.forEach(record => {
+                drawTakeoffShape(ctx, record.points, record.type, record.color, false);
+            });
+
+            drawTakeoffShape(ctx, state.takeoff.points, state.takeoff.mode, '#ff6b35', true);
+        }
+
+        function drawTakeoffShape(ctx, points, mode, color, isCurrent) {
+            if (!points || points.length === 0) return;
+
+            ctx.save();
+            ctx.lineWidth = isCurrent ? 2 : 1.5;
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.globalAlpha = isCurrent ? 0.9 : 0.45;
+
+            if (mode === 'count') {
+                points.forEach(pt => {
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, isCurrent ? 6 : 5, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x, points[i].y);
+                }
+                if ((mode === 'perimeter' || mode === 'area') && points.length > 2) {
+                    ctx.closePath();
+                }
+                ctx.stroke();
+
+                if ((mode === 'area' || mode === 'perimeter') && points.length > 2) {
+                    ctx.globalAlpha = isCurrent ? 0.15 : 0.18;
+                    ctx.fill();
+                }
+            }
+
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            points.forEach(pt => {
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        function renderTakeoffRecords() {
+            const tbody = document.getElementById('takeoffRecordsBody');
+            const section = document.getElementById('takeoffRecordsSection');
+            if (!tbody || !section) return;
+
+            tbody.innerHTML = '';
+
+            state.takeoff.records.forEach(record => {
+                const row = document.createElement('tr');
+                row.dataset.id = String(record.id);
+
+                const nameCell = document.createElement('td');
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'form-input takeoff-name-input';
+                nameInput.value = record.name;
+                nameCell.appendChild(nameInput);
+
+                const typeCell = document.createElement('td');
+                typeCell.textContent = capitalize(record.type);
+
+                const qtyCell = document.createElement('td');
+                qtyCell.textContent = record.unit === 'count'
+                    ? `${formatMeasurement(record.value, record.unit)}`
+                    : `${formatMeasurement(record.value, record.unit)} ${record.unit}`;
+
+                const actionCell = document.createElement('td');
+                actionCell.style.display = 'flex';
+                actionCell.style.gap = '0.5rem';
+                actionCell.style.flexWrap = 'wrap';
+
+                const addBtn = document.createElement('button');
+                addBtn.className = 'btn btn-secondary takeoff-add-btn';
+                addBtn.textContent = 'Add to Estimate';
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-ghost takeoff-delete-btn';
+                deleteBtn.textContent = 'Remove';
+
+                actionCell.appendChild(addBtn);
+                actionCell.appendChild(deleteBtn);
+
+                row.appendChild(nameCell);
+                row.appendChild(typeCell);
+                row.appendChild(qtyCell);
+                row.appendChild(actionCell);
+
+                tbody.appendChild(row);
+            });
+
+            section.style.display = state.takeoff.records.length ? 'block' : 'none';
+        }
+
+        function formatMeasurement(value, unit) {
+            if (unit === 'count') {
+                return String(value);
+            }
+            return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        function updateTakeoffMeasurementDisplay() {
+            const measurementEl = document.getElementById('takeoffMeasurement');
+            if (!measurementEl) return;
+
+            if (state.takeoff.points.length === 0) {
+                measurementEl.textContent = 'Click on the plan to start a measurement.';
+                return;
+            }
+
+            const value = calculateMeasurementFromPoints(state.takeoff.points, state.takeoff.mode, true);
+            if (value === null) {
+                measurementEl.textContent = 'Enter a valid scale to calculate measurements.';
+                return;
+            }
+
+            const unit = getTakeoffUnit(state.takeoff.mode);
+            const label = state.takeoff.mode === 'line'
+                ? 'Current length'
+                : state.takeoff.mode === 'perimeter'
+                    ? 'Current perimeter'
+                    : state.takeoff.mode === 'area'
+                        ? 'Current area'
+                        : 'Current count';
+            const measurementText = unit === 'count'
+                ? `${formatMeasurement(value, unit)}`
+                : `${formatMeasurement(value, unit)} ${unit}`;
+            measurementEl.textContent = `${label}: ${measurementText}`;
+        }
+
+        function handleTakeoffRecordInput(event) {
+            const input = event.target;
+            if (!input.classList.contains('takeoff-name-input')) return;
+
+            const row = input.closest('tr');
+            if (!row) return;
+            const id = Number(row.dataset.id);
+            const record = state.takeoff.records.find(r => r.id === id);
+            if (record) {
+                record.name = input.value;
+            }
+        }
+
+        function handleTakeoffRecordClick(event) {
+            const button = event.target.closest('button');
+            if (!button) return;
+
+            const row = button.closest('tr');
+            if (!row) return;
+            const id = Number(row.dataset.id);
+
+            if (button.classList.contains('takeoff-add-btn')) {
+                applyMeasurementToEstimate(id);
+            } else if (button.classList.contains('takeoff-delete-btn')) {
+                removeTakeoffRecord(id);
+            }
+        }
+
+        function removeTakeoffRecord(id) {
+            const index = state.takeoff.records.findIndex(r => r.id === id);
+            if (index === -1) return;
+            state.takeoff.records.splice(index, 1);
+            renderTakeoffRecords();
+            renderTakeoffCanvas();
+            showToast('Measurement removed.', 'success');
+        }
+
+        function applyMeasurementToEstimate(id) {
+            const record = state.takeoff.records.find(r => r.id === id);
+            if (!record) return;
+
+            const quantity = record.unit === 'count' ? record.value : Number(record.value.toFixed(2));
+
+            if (state.lastFocusedInput && state.lastFocusedInput.closest('.line-item-row')) {
+                const row = state.lastFocusedInput.closest('.line-item-row');
+                const quantityInput = row.querySelector('[data-field="quantity"]');
+                if (quantityInput) {
+                    quantityInput.value = quantity;
+                }
+                const unitInput = row.querySelector('[data-field="unit"]');
+                if (unitInput) {
+                    unitInput.value = record.unit;
+                }
+                updateLineItemTotal(row);
+                showToast(`Applied "${record.name}" to the selected line item.`, 'success');
+                return;
+            }
+
+            addLineItem();
+            const rows = document.querySelectorAll('.line-item-row');
+            const newRow = rows[rows.length - 1];
+            if (newRow) {
+                const quantityInput = newRow.querySelector('[data-field="quantity"]');
+                if (quantityInput) {
+                    quantityInput.value = quantity;
+                }
+                const unitInput = newRow.querySelector('[data-field="unit"]');
+                if (unitInput) {
+                    unitInput.value = record.unit;
+                }
+                updateLineItemTotal(newRow);
+            }
+
+            showToast(`Added "${record.name}" to a new line item. Adjust details as needed.`, 'success');
+        }
+
+        function exportTakeoffCsv() {
+            if (!state.takeoff.records.length) {
+                showToast('No measurements to export.', 'warning');
+                return;
+            }
+
+            let csvContent = 'data:text/csv;charset=utf-8,';
+            csvContent += 'Name,Type,Quantity,Unit\r\n';
+
+            state.takeoff.records.forEach(record => {
+                const quantity = record.unit === 'count' ? record.value : record.value.toFixed(2);
+                csvContent += `"${record.name.replace(/"/g, '""')}","${capitalize(record.type)}",${quantity},"${record.unit}"\r\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', 'takeoff-measurements.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('Takeoff measurements exported as CSV.', 'success');
         }
 
         // --- REPORTING & EXPORTING ---
