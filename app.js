@@ -788,24 +788,37 @@ import { TakeoffManager } from './takeoff.js';
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.addEventListener('click', function() {
                     const tab = this.getAttribute('data-tab');
-                    switchTab(tab);
+                    if (tab) switchTab(tab);
                 });
             });
+
+            switchTab(state.currentTab || 'dashboard');
         }
 
         function switchTab(tabId) {
             state.currentTab = tabId;
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.getElementById(`${tabId}Tab`)?.classList.add('active');
-            
-            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            document.querySelector(`.nav-item[data-tab="${tabId}"]`)?.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                const isActive = tab.id === `${tabId}Tab`;
+                tab.classList.toggle('active', isActive);
+                tab.hidden = !isActive;
+                tab.setAttribute('aria-hidden', String(!isActive));
+            });
 
-            const pageTitle = document.querySelector(`.nav-item[data-tab="${tabId}"]`)?.innerText || 'Dashboard';
-            document.getElementById('pageTitle').textContent = pageTitle;
-            
+            document.querySelectorAll('.nav-item').forEach(item => {
+                const isActive = item.getAttribute('data-tab') === tabId;
+                item.classList.toggle('active', isActive);
+                item.setAttribute('aria-selected', String(isActive));
+            });
+
+            const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+            const navLabel = navItem?.querySelector('.nav-label')?.textContent || navItem?.innerText || 'Dashboard';
+            const pageTitleEl = document.getElementById('pageTitle');
+            if (pageTitleEl) {
+                pageTitleEl.textContent = navLabel.trim() || 'Dashboard';
+            }
+
             if (window.innerWidth <= 1024) {
-                document.getElementById('sidebar').classList.remove('open');
+                document.getElementById('sidebar')?.classList.remove('open');
             }
         }
 

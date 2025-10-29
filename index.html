@@ -18,7 +18,7 @@
     </button>
 
     <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
+    <nav class="sidebar" id="sidebar" role="navigation">
         <div class="logo-container">
             <div class="logo">CE</div>
             <div class="logo-text">
@@ -27,37 +27,33 @@
             </div>
         </div>
 
-        <button class="nav-item active" data-tab="dashboard">
+        <button type="button" class="nav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-            Dashboard
+            <span class="nav-label">Dashboard</span>
         </button>
-        <button class="nav-item" data-tab="estimator">
+        <button type="button" class="nav-item" data-tab="estimator" aria-controls="estimatorTab" aria-selected="false">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-            Quick Estimator
+            <span class="nav-label">Quick Estimator</span>
         </button>
-        <button class="nav-item" data-tab="detailed">
+        <button type="button" class="nav-item" data-tab="detailed" aria-controls="detailedTab" aria-selected="false">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-            Detailed Bidding
+            <span class="nav-label">Detailed Bidding</span>
         </button>
-        <button class="nav-item" data-tab="takeoff">
-            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            Takeoff
-        </button>
-        <button class="nav-item" data-tab="projects">
-            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-            Projects
-        </button>
-        <button class="nav-item" data-tab="materials">
-            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
-            Materials Database
-        </button>
-        <button class="nav-item" data-tab="takeoff">
+        <button type="button" class="nav-item" data-tab="takeoff" aria-controls="takeoffTab" aria-selected="false">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
-            Takeoff Manager
+            <span class="nav-label">Takeoff Manager</span>
         </button>
-        <button class="nav-item" data-tab="settings">
+        <button type="button" class="nav-item" data-tab="projects" aria-controls="projectsTab" aria-selected="false">
+            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+            <span class="nav-label">Projects</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="materials" aria-controls="materialsTab" aria-selected="false">
+            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
+            <span class="nav-label">Materials Database</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false">
             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            Settings
+            <span class="nav-label">Settings</span>
         </button>
     </nav>
 
@@ -195,98 +191,6 @@
                 </div>
             </div>
 
-            <!-- Takeoff Tab -->
-            <div id="takeoffTab" class="tab-content">
-                <div class="takeoff-grid">
-                    <div class="card takeoff-sidebar">
-                        <div class="card-header">
-                            <h3 class="card-title">Drawing Pages</h3>
-                            <label class="btn btn-secondary takeoff-upload-btn">
-                                <input type="file" id="takeoffUpload" multiple accept="application/pdf,image/*" hidden>
-                                Upload
-                            </label>
-                        </div>
-                        <div id="takeoffPages" class="takeoff-pages"></div>
-                    </div>
-                    <div class="card takeoff-workspace">
-                        <div class="card-header takeoff-header">
-                            <h3 class="card-title">Active Drawing</h3>
-                            <div class="takeoff-controls">
-                                <label class="takeoff-control">
-                                    <span>Scale (px / ft)</span>
-                                    <input type="number" id="takeoffScale" class="form-input" value="1" min="0.0001" step="0.01">
-                                </label>
-                                <label class="takeoff-control">
-                                    <span>Mode</span>
-                                    <select id="takeoffMode" class="form-select">
-                                        <option value="line">Line</option>
-                                        <option value="perimeter">Perimeter</option>
-                                        <option value="area">Area</option>
-                                        <option value="count">Count</option>
-                                        <option value="diameter">Diameter</option>
-                                    </select>
-                                </label>
-                                <button class="btn btn-secondary" id="clearTakeoffBtn" type="button">Clear</button>
-                                <button class="btn btn-secondary" id="exportTakeoffCsvBtn" type="button">Export CSV</button>
-                                <button class="btn btn-primary" id="pushTakeoffToBidBtn" type="button">Send to Estimate</button>
-                            </div>
-                        </div>
-                        <div id="takeoffPlanContainer" class="takeoff-plan">
-                            <img id="takeoffPreview" alt="Drawing preview" />
-                            <canvas id="takeoffCanvas"></canvas>
-                        </div>
-                        <p id="takeoffStatus" class="takeoff-status"></p>
-                    </div>
-                </div>
-                <div class="card" style="margin-top: 2rem;">
-                    <div class="card-header takeoff-filter-header">
-                        <h3 class="card-title">Measurements</h3>
-                        <div class="takeoff-filter-bar">
-                            <select id="takeoffFilterPage" class="form-select">
-                                <option value="all">All Pages</option>
-                            </select>
-                            <select id="takeoffFilterTrade" class="form-select">
-                                <option value="all">All Trades</option>
-                            </select>
-                            <select id="takeoffFilterFloor" class="form-select">
-                                <option value="all">All Floors</option>
-                            </select>
-                            <select id="takeoffFilterMethod" class="form-select">
-                                <option value="all">All Methods</option>
-                            </select>
-                            <select id="takeoffSort" class="form-select">
-                                <option value="page">Sort by Page</option>
-                                <option value="trade">Sort by Trade</option>
-                                <option value="floor">Sort by Floor</option>
-                                <option value="method">Sort by Method</option>
-                                <option value="label">Sort by Name</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="takeoff-table-wrapper">
-                        <table class="takeoff-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col"></th>
-                                    <th scope="col">Item</th>
-                                    <th scope="col">Description</th>
-                                    <th scope="col">Page</th>
-                                    <th scope="col">Trade</th>
-                                    <th scope="col">Floor</th>
-                                    <th scope="col">Method</th>
-                                    <th scope="col">Mode</th>
-                                    <th scope="col">Quantity</th>
-                                    <th scope="col">Units</th>
-                                    <th scope="col">Notes</th>
-                                    <th scope="col"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="takeoffTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
             <!-- Projects Tab -->
             <div id="projectsTab" class="tab-content">
                 <div class="card">
@@ -301,7 +205,7 @@
                 </div>
             </div>
 
-            <!-- Takeoff Tab -->
+            <!-- Takeoff Manager Tab -->
             <div id="takeoffTab" class="tab-content">
                 <div class="takeoff-layout">
                     <div class="card takeoff-drawings">
