@@ -20,20 +20,215 @@ import { TakeoffManager } from './takeoff.js';
                 waitingForSecondOperand: false,
                 operator: null
             },
-            lineItemCategories: {}
+            lineItemCategories: {},
+            laborRates: {},
+            equipmentRates: {},
+            regionalAdjustments: {},
+            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
+            pendingUpdate: null,
         };
 
         let takeoffManager = null;
 
         async function loadDatabase() {
             try {
-                const res = await fetch('database.json');
+                const cached = loadCachedDatabase();
+                if (cached) {
+                    applyDatabase(cached, { persist: false });
+                }
+
+                const res = await fetch('database.json', { cache: 'no-store' });
+                if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
                 const data = await res.json();
-                state.materialPrices = data.materialPrices || {};
-                state.lineItemCategories = data.lineItemCategories || {};
+                applyDatabase(data);
             } catch (err) {
                 console.error('Error loading database:', err);
+                showToast('Unable to load material database. Offline data will be used if available.', 'error');
             }
+        }
+
+        function loadCachedDatabase() {
+            try {
+                const cached = localStorage.getItem('materialDatabase');
+                return cached ? JSON.parse(cached) : null;
+            } catch (error) {
+                console.warn('Unable to parse cached database payload.', error);
+                return null;
+            }
+        }
+
+        function applyDatabase(data, options = {}) {
+            if (!data) return;
+            const { persist = true, announce = false } = options;
+
+            const normalizedMaterials = {};
+            const materialSource = data.sources?.[0]?.name || '';
+            Object.entries(data.materialPrices || {}).forEach(([category, materials]) => {
+                normalizedMaterials[category] = {};
+                Object.entries(materials || {}).forEach(([key, entry]) => {
+                    normalizedMaterials[category][key] = normalizeMaterialEntry(category, key, entry, data.lastUpdated, materialSource);
+                });
+            });
+
+            state.materialPrices = normalizedMaterials;
+            state.lineItemCategories = data.lineItemCategories || {};
+            state.laborRates = data.laborRates || {};
+            state.equipmentRates = data.equipmentRates || {};
+            state.regionalAdjustments = data.regionalAdjustments || {};
+            state.databaseMeta = {
+                version: data.version || '0.0.0',
+                lastUpdated: data.lastUpdated || null,
+                releaseNotes: data.releaseNotes || [],
+                sources: data.sources || [],
+            };
+
+            if (persist) {
+                const payload = {
+                    ...data,
+                    materialPrices: normalizedMaterials,
+                };
+                localStorage.setItem('materialDatabase', JSON.stringify(payload));
+            }
+
+            updateQuickEstimatorCards();
+            populateMaterialsTable();
+            updateDatabaseBadge();
+
+            if (announce) {
+                showToast(`Material database updated to v${state.databaseMeta.version}`, 'success');
+            }
+        }
+
+        const DEFAULT_MATERIAL_UNITS = {
+            foundation: 'sq ft',
+            framing: 'sq ft',
+            exterior: 'sq ft',
+            roofing: 'sq ft',
+            flooring: 'sq ft',
+            insulation: 'sq ft',
+            interiorFinishes: 'sq ft',
+            openings: 'each',
+            mechanical: 'ton',
+            plumbing: 'fixture',
+            electrical: 'sq ft',
+            sitework: 'sq ft',
+            fireProtection: 'sq ft',
+            specialties: 'allowance',
+        };
+
+        function normalizeMaterialEntry(category, key, entry, fallbackUpdated, fallbackSource) {
+            const normalized = {};
+            if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+                normalized.label = entry.label || entry.name || toTitleCase(key);
+                normalized.cost = typeof entry.cost === 'number' ? entry.cost : parseFloat(entry.cost) || 0;
+                normalized.unit = entry.unit || DEFAULT_MATERIAL_UNITS[category] || 'unit';
+                normalized.source = entry.source || fallbackSource || '';
+                normalized.lastUpdated = entry.lastUpdated || fallbackUpdated || null;
+                normalized.notes = entry.notes || '';
+                if (entry.sku) normalized.sku = entry.sku;
+            } else {
+                normalized.label = toTitleCase(key);
+                normalized.cost = typeof entry === 'number' ? entry : parseFloat(entry) || 0;
+                normalized.unit = DEFAULT_MATERIAL_UNITS[category] || 'unit';
+                normalized.source = fallbackSource || '';
+                normalized.lastUpdated = fallbackUpdated || null;
+                normalized.notes = '';
+            }
+            return normalized;
+        }
+
+        function getMaterialData(category, key) {
+            return state.materialPrices?.[category]?.[key] || normalizeMaterialEntry(category, key, 0, state.databaseMeta.lastUpdated, state.databaseMeta.sources?.[0]?.name);
+        }
+
+        function updateQuickEstimatorCards() {
+            const foundationCards = document.querySelectorAll('[data-foundation]');
+            foundationCards.forEach(card => {
+                const key = card.dataset.foundation;
+                const material = getMaterialData('foundation', key);
+                const priceEl = card.querySelector('.material-price');
+                if (priceEl) priceEl.textContent = `${formatCurrency(material.cost)}/${material.unit}`;
+            });
+
+            const framingCards = document.querySelectorAll('[data-framing]');
+            framingCards.forEach(card => {
+                const key = card.dataset.framing;
+                const material = getMaterialData('framing', key);
+                const priceEl = card.querySelector('.material-price');
+                if (priceEl) priceEl.textContent = `${formatCurrency(material.cost)}/${material.unit}`;
+            });
+
+            const exteriorCards = document.querySelectorAll('[data-exterior]');
+            exteriorCards.forEach(card => {
+                const key = card.dataset.exterior;
+                const material = getMaterialData('exterior', key);
+                const priceEl = card.querySelector('.material-price');
+                if (priceEl) priceEl.textContent = `${formatCurrency(material.cost)}/${material.unit}`;
+            });
+        }
+
+        function toTitleCase(value = '') {
+            return value
+                .replace(/[_-]/g, ' ')
+                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                .split(' ')
+                .filter(Boolean)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+        }
+
+        function updateDatabaseBadge(message) {
+            const badge = document.getElementById('syncStatus');
+            if (!badge) return;
+            const textEl = badge.querySelector('span');
+            if (!textEl) return;
+
+            if (message) {
+                textEl.textContent = message;
+                return;
+            }
+
+            const versionInfo = state.databaseMeta.version ? `v${state.databaseMeta.version}` : 'synced';
+            const updatedOn = state.databaseMeta.lastUpdated ? ` • Updated ${formatDateForDisplay(state.databaseMeta.lastUpdated)}` : '';
+            textEl.textContent = `Database ${versionInfo}${updatedOn}`;
+        }
+
+        function setSyncState(status, message) {
+            const badge = document.getElementById('syncStatus');
+            if (!badge) return;
+
+            badge.classList.remove('syncing', 'success', 'warning', 'error');
+            if (status) badge.classList.add(status);
+            updateDatabaseBadge(message);
+        }
+
+        function formatDateForDisplay(dateString) {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                if (Number.isNaN(date.getTime())) return dateString;
+                return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            } catch (error) {
+                return dateString;
+            }
+        }
+
+        function compareVersions(a, b) {
+            const toSegments = (value) => String(value ?? '0').split('.').map(segment => parseInt(segment, 10) || 0);
+            const aSeg = toSegments(a);
+            const bSeg = toSegments(b);
+            const length = Math.max(aSeg.length, bSeg.length);
+            for (let i = 0; i < length; i += 1) {
+                const aVal = aSeg[i] ?? 0;
+                const bVal = bSeg[i] ?? 0;
+                if (aVal > bVal) return 1;
+                if (aVal < bVal) return -1;
+            }
+            return 0;
+        }
+
+        function isNewerVersion(candidate, baseline) {
+            return compareVersions(candidate, baseline) === 1;
         }
 
         // --- INITIALIZATION ---
@@ -245,10 +440,14 @@ import { TakeoffManager } from './takeoff.js';
                 return;
             }
 
+            const foundationData = getMaterialData('foundation', selected.foundation);
+            const framingData = getMaterialData('framing', selected.framing);
+            const exteriorData = getMaterialData('exterior', selected.exterior);
+
             const costs = {
-                foundation: state.materialPrices.foundation[selected.foundation] * sqft,
-                framing: state.materialPrices.framing[selected.framing] * sqft * floors,
-                exterior: state.materialPrices.exterior[selected.exterior] * sqft * floors * 0.8,
+                foundation: foundationData.cost * sqft,
+                framing: framingData.cost * sqft * floors,
+                exterior: exteriorData.cost * sqft * floors * 0.8,
             };
 
             const materialTotal = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
@@ -1033,17 +1232,18 @@ import { TakeoffManager } from './takeoff.js';
 
         function populateMaterialsTable() {
             const tableBody = document.getElementById('materialsTable');
+            if (!tableBody) return;
             tableBody.innerHTML = '';
             Object.entries(state.materialPrices).forEach(([category, materials]) => {
-                Object.entries(materials).forEach(([name, price]) => {
+                Object.entries(materials).forEach(([key, material]) => {
                     const row = tableBody.insertRow();
                     const trend = Math.random() > 0.5 ? '▲' : '▼';
                     const trendColor = trend === '▲' ? 'var(--danger)' : 'var(--success)';
                     row.innerHTML = `
-                        <td>${name.charAt(0).toUpperCase() + name.slice(1)}</td>
-                        <td>${category.charAt(0).toUpperCase() + category.slice(1)}</td>
-                        <td>${formatCurrency(price)}</td>
-                        <td>sqft</td>
+                        <td>${material.label || toTitleCase(key)}</td>
+                        <td>${toTitleCase(category)}</td>
+                        <td>${formatCurrency(material.cost)}</td>
+                        <td>${material.unit || 'unit'}</td>
                         <td style="color: ${trendColor}; font-weight: bold;">${trend} ${(Math.random() * 5).toFixed(1)}%</td>
                     `;
                 });
@@ -1068,43 +1268,101 @@ import { TakeoffManager } from './takeoff.js';
         }
 
         // --- SETTINGS & UPDATES ---
-        function checkForUpdatesOnLoad() {
-            setTimeout(() => {
+        async function checkForUpdatesOnLoad() {
+            const result = await checkForUpdates({ silent: true });
+            if (result.updateAvailable) {
                 openModal('updateModal');
-            }, 3000);
-        }
-        
-        function checkForUpdates() {
-            const syncBadge = document.getElementById('syncStatus');
-            syncBadge.classList.add('syncing');
-            syncBadge.querySelector('span').textContent = 'Checking...';
-            
-            setTimeout(() => {
-                syncBadge.classList.remove('syncing');
-                openModal('updateModal');
-            }, 2000);
+            }
         }
 
-        function applyUpdate() {
-            const syncBadge = document.getElementById('syncStatus');
-            syncBadge.classList.add('syncing');
-            syncBadge.querySelector('span').textContent = 'Updating...';
-            
-            setTimeout(() => {
-                state.materialPrices.framing.wood *= 0.95;
-                state.materialPrices.framing.steel *= 1.03;
-                
+        async function checkForUpdates(options = {}) {
+            if (options instanceof Event) {
+                options.preventDefault?.();
+                options = {};
+            }
+            const { silent = false } = options;
+            setSyncState('syncing', 'Checking for updates...');
+            try {
+                const manifest = await fetchUpdateManifest();
+                if (manifest && isNewerVersion(manifest.latestVersion, state.databaseMeta.version)) {
+                    state.pendingUpdate = manifest;
+                    populateUpdateModal(manifest);
+                    setSyncState('warning', `Update v${manifest.latestVersion} available`);
+                    if (!silent) openModal('updateModal');
+                    return { updateAvailable: true, manifest };
+                }
+
+                state.pendingUpdate = null;
+                setSyncState('success');
+                if (!silent) showToast('Your material database is already up to date.', 'success');
+                return { updateAvailable: false };
+            } catch (error) {
+                console.error('Error checking for updates:', error);
+                setSyncState('error', 'Update check failed');
+                if (!silent) showToast('Unable to check for updates. Please try again later.', 'error');
+                return { updateAvailable: false, error };
+            }
+        }
+
+        async function fetchUpdateManifest() {
+            const res = await fetch('data/update-manifest.json', { cache: 'no-store' });
+            if (!res.ok) throw new Error(`Manifest request failed: ${res.status}`);
+            return res.json();
+        }
+
+        function populateUpdateModal(manifest) {
+            const titleEl = document.getElementById('updateTitle');
+            const metaEl = document.getElementById('updateMeta');
+            const summaryEl = document.getElementById('updateSummary');
+            const highlightsEl = document.getElementById('updateHighlights');
+
+            if (titleEl) titleEl.textContent = manifest.title || 'Material Cost Update Available';
+            if (metaEl) {
+                const metaParts = [];
+                if (manifest.lastUpdated) metaParts.push(`Published ${formatDateForDisplay(manifest.lastUpdated)}`);
+                if (state.databaseMeta.version) metaParts.push(`Current: v${state.databaseMeta.version}`);
+                if (manifest.latestVersion) metaParts.push(`New: v${manifest.latestVersion}`);
+                metaEl.textContent = metaParts.join(' • ');
+            }
+            if (summaryEl) summaryEl.textContent = manifest.summary || 'Apply the update to synchronize with the latest regional pricing feed.';
+            if (highlightsEl) {
+                highlightsEl.innerHTML = '';
+                const highlights = manifest.highlights && manifest.highlights.length ? manifest.highlights : ['Pricing aligned with latest market releases.'];
+                highlights.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'update-item';
+                    li.innerHTML = `<span class="update-icon">✓</span><span>${item}</span>`;
+                    highlightsEl.appendChild(li);
+                });
+            }
+        }
+
+        async function applyUpdate() {
+            if (!state.pendingUpdate) {
+                showToast('No updates are available right now.', 'error');
+                return;
+            }
+
+            setSyncState('syncing', 'Downloading update...');
+
+            try {
+                const res = await fetch(state.pendingUpdate.dataUrl, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`Update download failed: ${res.status}`);
+                const data = await res.json();
+
+                if (data.version && !isNewerVersion(data.version, state.databaseMeta.version)) {
+                    throw new Error('Downloaded database is not newer than the installed version.');
+                }
+
+                applyDatabase(data, { announce: true });
+                state.pendingUpdate = null;
                 closeModal('updateModal');
-                populateMaterialsTable();
-                
-                syncBadge.classList.remove('syncing');
-                syncBadge.classList.add('success');
-                syncBadge.querySelector('span').textContent = 'Database Synced';
-                
-                showToast('Material database updated!', 'success');
-                
-                setTimeout(() => syncBadge.classList.remove('success'), 3000);
-            }, 2500);
+                setSyncState('success');
+            } catch (error) {
+                console.error('Failed to apply update:', error);
+                setSyncState('error', 'Update failed');
+                showToast('Update failed. Please try again later.', 'error');
+            }
         }
         
         // --- RUN APP ---
