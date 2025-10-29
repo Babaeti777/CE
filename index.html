@@ -6,6 +6,7 @@
     <title>Construction Estimator Pro - Modern Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -324,7 +325,7 @@
                 <p id="takeoffResult" style="margin-top:0.5rem;"></p>
                 <div class="form-group" style="margin-top:1rem;">
                     <label class="form-label">Upload Plan</label>
-                    <input type="file" id="planUpload" class="form-input">
+                    <input type="file" id="planUpload" class="form-input" accept="application/pdf,image/*">
                 </div>
                 <div id="planContainer" style="position:relative; margin-top:1rem; display:none;">
                     <img id="planPreview" style="width:100%; display:block; border:1px solid #ccc;"/>
@@ -343,8 +344,28 @@
                         <option value="diameter">Diameter</option>
                     </select>
                 </div>
-                <button class="btn btn-secondary" id="clearTakeoffBtn">Clear Measurements</button>
-                <p id="takeoffMeasurement" style="margin-top:0.5rem;"></p>
+                <div class="takeoff-actions">
+                    <button class="btn btn-secondary" id="clearTakeoffBtn">Clear</button>
+                    <button class="btn btn-secondary" id="exportTakeoffCsvBtn">Export CSV</button>
+                    <button class="btn btn-primary" id="pushTakeoffToBidBtn">Send to Estimate</button>
+                </div>
+                <p id="takeoffMeasurement" class="takeoff-status"></p>
+                <div class="takeoff-table-wrapper">
+                    <table class="takeoff-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Mode</th>
+                                <th scope="col">Quantity</th>
+                                <th scope="col">Units</th>
+                                <th scope="col">Details</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="takeoffTableBody"></tbody>
+                    </table>
+                </div>
+                <p class="takeoff-hint">Tip: For area measurements, double-click to close the shape.</p>
             </div>
             <button class="btn btn-success" id="useValueBtn" style="width: 100%; margin-top: 1.5rem;">Use Value</button>
         </div>
