@@ -328,6 +328,48 @@
                 </div>
                 <img id="planPreview" style="max-width:100%; margin-top:1rem; display:none;"/>
             </div>
+            <div id="basicTools" style="margin-top:1rem; display:none;">
+                <h3>Simple Takeoff</h3>
+                <div class="form-group">
+                    <label class="form-label">Shape</label>
+                    <select id="shapeSelect" class="form-select">
+                        <option value="rectangle">Rectangle</option>
+                        <option value="circle">Circle</option>
+                        <option value="triangle">Triangle</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <input type="number" id="dim1" class="form-input" placeholder="Length">
+                </div>
+                <div class="form-group" id="dim2Group">
+                    <input type="number" id="dim2" class="form-input" placeholder="Width">
+                </div>
+                <button class="btn btn-primary" id="calcAreaBtn">Calculate Area</button>
+                <p id="takeoffResult" style="margin-top:0.5rem;"></p>
+                <div class="form-group" style="margin-top:1rem;">
+                    <label class="form-label">Upload Plan</label>
+                    <input type="file" id="planUpload" class="form-input">
+                </div>
+                <div id="planContainer" style="position:relative; margin-top:1rem; display:none;">
+                    <img id="planPreview" style="width:100%; display:block; border:1px solid #ccc;"/>
+                    <canvas id="takeoffCanvas" style="position:absolute; top:0; left:0;"></canvas>
+                </div>
+                <div class="form-group" style="margin-top:1rem;">
+                    <label class="form-label">Scale (pixels per foot)</label>
+                    <input type="number" id="planScale" class="form-input" value="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Takeoff Mode</label>
+                    <select id="takeoffMode" class="form-select">
+                        <option value="length">Length</option>
+                        <option value="area">Area</option>
+                        <option value="count">Count</option>
+                        <option value="diameter">Diameter</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" id="clearTakeoffBtn">Clear Measurements</button>
+                <p id="takeoffMeasurement" style="margin-top:0.5rem;"></p>
+            </div>
             <button class="btn btn-success" id="useValueBtn" style="width: 100%; margin-top: 1.5rem;">Use Value</button>
         </div>
     </div>
