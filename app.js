@@ -192,16 +192,10 @@
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-
-            const iconSpan = document.createElement('span');
-            iconSpan.className = 'toast-icon';
-            iconSpan.textContent = type === 'success' ? '✓' : type === 'error' ? '!' : '?';
-
-            const messageSpan = document.createElement('span');
-            messageSpan.textContent = message;
-
-            toast.appendChild(iconSpan);
-            toast.appendChild(messageSpan);
+            
+            const icon = type === 'success' ? '✓' : type === 'error' ? '!' : '?';
+            
+            toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
             container.appendChild(toast);
 
             setTimeout(() => toast.remove(), 3000);
@@ -276,32 +270,11 @@
             document.getElementById('totalCost').textContent = formatCurrency(estimate.total);
 
             const breakdownContent = document.getElementById('breakdownContent');
-            breakdownContent.textContent = '';
-            const items = [
-                { label: 'Foundation:', value: formatCurrency(estimate.costs.foundation) },
-                { label: 'Framing:', value: formatCurrency(estimate.costs.framing) },
-                { label: 'Exterior:', value: formatCurrency(estimate.costs.exterior) }
-            ];
-
-            items.forEach((item, idx) => {
-                const row = document.createElement('div');
-                row.style.display = 'flex';
-                row.style.justifyContent = 'space-between';
-                if (idx < items.length - 1) {
-                    row.style.marginBottom = '0.5rem';
-                    row.style.paddingBottom = '0.5rem';
-                    row.style.borderBottom = '1px solid var(--gray-200)';
-                }
-
-                const label = document.createElement('span');
-                label.textContent = item.label;
-                const val = document.createElement('strong');
-                val.textContent = item.value;
-
-                row.appendChild(label);
-                row.appendChild(val);
-                breakdownContent.appendChild(row);
-            });
+            breakdownContent.innerHTML = `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--gray-200);"><span>Foundation:</span> <strong>${formatCurrency(estimate.costs.foundation)}</strong></div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--gray-200);"><span>Framing:</span> <strong>${formatCurrency(estimate.costs.framing)}</strong></div>
+                <div style="display: flex; justify-content: space-between;"><span>Exterior:</span> <strong>${formatCurrency(estimate.costs.exterior)}</strong></div>
+            `;
 
             document.getElementById('breakdownCard').style.display = 'block';
             document.getElementById('estimateSummary').style.display = 'block';
@@ -368,7 +341,7 @@
             document.getElementById('overhead').value = bid.overheadPercent || 10;
             document.getElementById('profit').value = bid.profitPercent || 15;
             document.getElementById('contingency').value = bid.contingencyPercent || 5;
-            document.getElementById('lineItems').textContent = '';
+            document.getElementById('lineItems').innerHTML = '';
             bid.lineItems.forEach(item => addLineItem(item));
             updateBidTotal();
             switchTab('detailed');
@@ -391,62 +364,18 @@
             const div = document.createElement('div');
             div.className = 'line-item-row';
             div.dataset.id = state.lineItemId;
-
-            const categorySelect = document.createElement('select');
-            categorySelect.className = 'form-select';
-            categorySelect.dataset.field = 'category';
-            Object.keys(state.lineItemCategories).forEach(cat => {
-                const opt = document.createElement('option');
-                opt.value = cat;
-                opt.textContent = cat;
-                categorySelect.appendChild(opt);
-            });
-
-            const descriptionSelect = document.createElement('select');
-            descriptionSelect.className = 'form-select';
-            descriptionSelect.dataset.field = 'description';
-
-            const qtyInput = document.createElement('input');
-            qtyInput.type = 'number';
-            qtyInput.className = 'form-input';
-            qtyInput.dataset.field = 'quantity';
-            qtyInput.placeholder = 'Qty';
-            qtyInput.value = item ? item.quantity : 1;
-            qtyInput.min = '0';
-
-            const unitInput = document.createElement('input');
-            unitInput.type = 'text';
-            unitInput.className = 'form-input';
-            unitInput.dataset.field = 'unit';
-            unitInput.placeholder = 'Unit';
-            unitInput.value = item ? item.unit : '';
-
-            const rateInput = document.createElement('input');
-            rateInput.type = 'number';
-            rateInput.className = 'form-input';
-            rateInput.dataset.field = 'rate';
-            rateInput.placeholder = 'Rate';
-            rateInput.value = item ? item.rate : 0;
-            rateInput.step = '0.01';
-            rateInput.min = '0';
-
-            const totalDiv = document.createElement('div');
-            totalDiv.className = 'line-item-total';
-            totalDiv.style.fontWeight = '600';
-            totalDiv.style.textAlign = 'right';
-            totalDiv.textContent = formatCurrency(item ? item.total : 0);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'btn btn-ghost remove-line-item';
-            removeBtn.textContent = '\u00d7';
-
-            div.appendChild(categorySelect);
-            div.appendChild(descriptionSelect);
-            div.appendChild(qtyInput);
-            div.appendChild(unitInput);
-            div.appendChild(rateInput);
-            div.appendChild(totalDiv);
-            div.appendChild(removeBtn);
+            
+            const categoryOptions = Object.keys(state.lineItemCategories).map(cat => `<option value="${cat}">${cat}</option>`).join('');
+            
+            div.innerHTML = `
+                <select class="form-select" data-field="category">${categoryOptions}</select>
+                <select class="form-select" data-field="description"></select>
+                <input type="number" class="form-input" data-field="quantity" placeholder="Qty" value="${item ? item.quantity : 1}" min="0">
+                <input type="text" class="form-input" data-field="unit" placeholder="Unit" value="${item ? item.unit : ''}">
+                <input type="number" class="form-input" data-field="rate" placeholder="Rate" value="${item ? item.rate : 0}" step="0.01" min="0">
+                <div class="line-item-total" style="font-weight: 600; text-align: right;">${formatCurrency(item ? item.total : 0)}</div>
+                <button class="btn btn-ghost remove-line-item">&times;</button>
+            `;
             
             document.getElementById('lineItems').appendChild(div);
             updateItemSelectionOptions(div);
@@ -458,13 +387,7 @@
             const selectedCategory = categorySelect.value;
             
             const items = state.lineItemCategories[selectedCategory] || [];
-            descriptionSelect.textContent = '';
-            items.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item.name;
-                option.textContent = item.name;
-                descriptionSelect.appendChild(option);
-            });
+            descriptionSelect.innerHTML = items.map(item => `<option value="${item.name}">${item.name}</option>`).join('');
             updateLineItemFromSelection(descriptionSelect);
         }
 
@@ -911,105 +834,63 @@ function handlePlanUpload(e) {
             `;
 
             const reportWindow = window.open('', '_blank');
-            const parser = new DOMParser();
-            const reportDoc = parser.parseFromString(reportHtml, 'text/html');
-            const imported = reportWindow.document.importNode(reportDoc.documentElement, true);
-            reportWindow.document.replaceChild(imported, reportWindow.document.documentElement);
+            reportWindow.document.write(reportHtml);
+            reportWindow.document.close();
             showToast('PDF report generated in new tab.', 'success');
         }
 
         // --- PROJECTS & MATERIALS ---
         function loadProjects(searchTerm = '') {
             const list = document.getElementById('projectsList');
-            list.textContent = '';
+            list.innerHTML = '';
             
             const filteredProjects = state.savedProjects.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
             if (filteredProjects.length === 0) {
-                const msg = document.createElement("p");
-                msg.style.color = "var(--gray-600)";
-                msg.textContent = "No saved projects found.";
-                list.appendChild(msg);
+                list.innerHTML = `<p style="color: var(--gray-600);">No saved projects found.</p>`;
                 return;
             }
 
             filteredProjects.forEach(p => {
                 const div = document.createElement('div');
-                div.style = 'padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem;';
-
-                const containerDiv = document.createElement('div');
-                containerDiv.style.display = 'flex';
-                containerDiv.style.justifyContent = 'space-between';
-                containerDiv.style.alignItems = 'center';
-
-                const left = document.createElement('div');
-                const title = document.createElement('h4');
-                title.style.fontWeight = '600';
-                title.textContent = p.name;
-                const info = document.createElement('p');
-                info.style.color = 'var(--gray-600)';
-                info.style.fontSize = '0.875rem';
+                div.style = "padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem;";
                 const typeLabel = p.estimateType === 'detailed' ? 'Detailed' : 'Quick';
-                info.textContent = `${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}`;
-                left.appendChild(title);
-                left.appendChild(info);
-
-                const right = document.createElement('div');
-                right.style.textAlign = 'right';
-                const totalP = document.createElement('p');
-                totalP.style.fontWeight = '700';
-                totalP.style.color = 'var(--primary)';
-                totalP.textContent = formatCurrency(p.total);
-                const dateP = document.createElement('p');
-                dateP.style.color = 'var(--gray-600)';
-                dateP.style.fontSize = '0.75rem';
-                dateP.textContent = new Date(p.date).toLocaleDateString();
-
-                const statusSelect = document.createElement('select');
-                statusSelect.className = 'form-select project-status';
-                statusSelect.dataset.id = p.id;
-                statusSelect.style.marginTop = '0.25rem';
-                const opts = [
-                    { value: 'review', label: 'Under Review' },
-                    { value: 'won', label: 'Won' },
-                    { value: 'lost', label: 'Lost' }
-                ];
-                opts.forEach(optData => {
-                    const opt = document.createElement('option');
-                    opt.value = optData.value;
-                    opt.textContent = optData.label;
-                    if (p.status === optData.value) opt.selected = true;
-                    statusSelect.appendChild(opt);
-                });
-
-                const editBtn = document.createElement('button');
-                editBtn.className = `btn btn-secondary ${p.estimateType == 'quick' ? 'edit-project' : 'edit-bid'}`;
-                editBtn.dataset.id = p.id;
-                editBtn.style.marginTop = '0.25rem';
-                editBtn.textContent = 'Edit';
-
-                right.appendChild(totalP);
-                right.appendChild(dateP);
-                right.appendChild(statusSelect);
-                right.appendChild(editBtn);
-
-                containerDiv.appendChild(left);
-                containerDiv.appendChild(right);
-                div.appendChild(containerDiv);
-
-                statusSelect.addEventListener('change', e => updateProjectStatus(p.id, e.target.value));
-                editBtn.addEventListener('click', () => {
-                    if (p.estimateType === 'quick') {
-                        editProject(p.id);
-                    } else {
-                        editBid(p.id);
-                    }
-                });
-
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="font-weight: 600;">${p.name}</h4>
+                            <p style="color: var(--gray-600); font-size: 0.875rem;">${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <p style="font-weight: 700; color: var(--primary);">${formatCurrency(p.total)}</p>
+                            <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
+                            <select class="form-select project-status" data-id="${p.id}" style="margin-top:0.25rem;">
+                                <option value="review" ${p.status === 'review' ? 'selected' : ''}>Under Review</option>
+                                <option value="won" ${p.status === 'won' ? 'selected' : ''}>Won</option>
+                                <option value="lost" ${p.status === 'lost' ? 'selected' : ''}>Lost</option>
+                            </select>
+                            <button class="btn btn-secondary ${p.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${p.id}" style="margin-top:0.25rem;">Edit</button>
+                        </div>
+                    </div>
+                `;
+                const statusSelect = div.querySelector('.project-status');
+                statusSelect.addEventListener('change', (e) => updateProjectStatus(p.id, e.target.value));
+                div.querySelector('.edit-project')?.addEventListener('click', () => editProject(p.id));
+                div.querySelector('.edit-bid')?.addEventListener('click', () => editBid(p.id));
                 list.appendChild(div);
             });
+        }
+
+        function updateProjectStatus(id, status) {
+            const proj = state.savedProjects.find(p => p.id === id);
+            if (!proj) return;
+            proj.status = status;
+            localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+            updateDashboard();
+        }
+
         function exportProjects() {
             const data = JSON.stringify(state.savedProjects);
             const blob = new Blob([data], { type: 'application/json' });
@@ -1060,51 +941,28 @@ function handlePlanUpload(e) {
             if (winRateEl) winRateEl.textContent = winRate + '%';
 
             if (!recentList) return;
-            recentList.textContent = '';
+            recentList.innerHTML = '';
             const recent = state.savedProjects.slice().sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0,3);
             if (recent.length === 0) {
-                const msg = document.createElement("p");
-                msg.style.color = "var(--gray-600)";
-                msg.textContent = "No saved projects.";
-                recentList.appendChild(msg);
+                recentList.innerHTML = `<p style="color: var(--gray-600);">No saved projects.</p>`;
                 return;
             }
             recent.forEach(p => {
                 const div = document.createElement('div');
-                div.style = 'padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem; cursor:pointer;';
-                const containerDiv = document.createElement('div');
-                containerDiv.style.display = 'flex';
-                containerDiv.style.justifyContent = 'space-between';
-                containerDiv.style.alignItems = 'center';
-
-                const left = document.createElement('div');
-                const h4 = document.createElement('h4');
-                h4.style.fontWeight = '600';
-                h4.textContent = p.name;
-                const infoP = document.createElement('p');
-                infoP.style.color = 'var(--gray-600)';
-                infoP.style.fontSize = '0.875rem';
+                div.style = "padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem; cursor:pointer;";
                 const typeLabel = p.estimateType === 'detailed' ? 'Detailed' : 'Quick';
-                infoP.textContent = `${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}`;
-                left.appendChild(h4);
-                left.appendChild(infoP);
-
-                const right = document.createElement('div');
-                right.style.textAlign = 'right';
-                const totalP = document.createElement('p');
-                totalP.style.fontWeight = '700';
-                totalP.style.color = 'var(--primary)';
-                totalP.textContent = formatCurrency(p.total);
-                const dateP = document.createElement('p');
-                dateP.style.color = 'var(--gray-600)';
-                dateP.style.fontSize = '0.75rem';
-                dateP.textContent = new Date(p.date).toLocaleDateString();
-                right.appendChild(totalP);
-                right.appendChild(dateP);
-
-                containerDiv.appendChild(left);
-                containerDiv.appendChild(right);
-                div.appendChild(containerDiv);
+                div.innerHTML = `
+                    <div style="display:flex; justify-content: space-between; align-items:center;">
+                        <div>
+                            <h4 style="font-weight:600;">${p.name}</h4>
+                            <p style="color: var(--gray-600); font-size:0.875rem;">${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <p style="font-weight:700; color: var(--primary);">${formatCurrency(p.total)}</p>
+                            <p style="color: var(--gray-600); font-size:0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                `;
                 div.addEventListener('click', () => {
                     if (p.estimateType === 'quick') {
                         editProject(p.id);
@@ -1118,27 +976,23 @@ function handlePlanUpload(e) {
 
         function populateMaterialsTable() {
             const tableBody = document.getElementById('materialsTable');
-            tableBody.textContent = '';
+            tableBody.innerHTML = '';
             Object.entries(state.materialPrices).forEach(([category, materials]) => {
                 Object.entries(materials).forEach(([name, price]) => {
                     const row = tableBody.insertRow();
                     const trend = Math.random() > 0.5 ? '▲' : '▼';
                     const trendColor = trend === '▲' ? 'var(--danger)' : 'var(--success)';
-
-                    const nameCell = row.insertCell();
-                    nameCell.textContent = name.charAt(0).toUpperCase() + name.slice(1);
-                    const categoryCell = row.insertCell();
-                    categoryCell.textContent = category.charAt(0).toUpperCase() + category.slice(1);
-                    const priceCell = row.insertCell();
-                    priceCell.textContent = formatCurrency(price);
-                    const unitCell = row.insertCell();
-                    unitCell.textContent = 'sqft';
-                    const trendCell = row.insertCell();
-                    trendCell.style.color = trendColor;
-                    trendCell.style.fontWeight = 'bold';
-                    trendCell.textContent = `${trend} ${(Math.random() * 5).toFixed(1)}%`;
+                    row.innerHTML = `
+                        <td>${name.charAt(0).toUpperCase() + name.slice(1)}</td>
+                        <td>${category.charAt(0).toUpperCase() + category.slice(1)}</td>
+                        <td>${formatCurrency(price)}</td>
+                        <td>sqft</td>
+                        <td style="color: ${trendColor}; font-weight: bold;">${trend} ${(Math.random() * 5).toFixed(1)}%</td>
+                    `;
                 });
             });
+        }
+
         // --- CHARTS ---
         function initCharts() {
             const ctxPrice = document.getElementById('priceChart')?.getContext('2d');
