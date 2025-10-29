@@ -617,17 +617,33 @@
 
         .takeoff-plan {
             position: relative;
+            display: flex;
+            flex-direction: column;
             border-radius: 16px;
             border: 1px solid var(--gray-200);
             overflow: hidden;
             background: var(--gray-0);
-            min-height: 280px;
+            min-height: 320px;
+        }
+
+        .takeoff-plan-stage {
+            position: relative;
+            flex: 1;
+            overflow: auto;
+            background: repeating-conic-gradient(var(--gray-100) 0% 25%, transparent 0% 50%) 0 / 32px 32px;
+        }
+
+        .takeoff-plan-inner {
+            position: relative;
+            transform-origin: top left;
         }
 
         .takeoff-plan img {
             display: block;
             width: 100%;
             height: auto;
+            user-select: none;
+            pointer-events: none;
         }
 
         .takeoff-plan canvas {
@@ -636,10 +652,115 @@
             cursor: crosshair;
         }
 
-        .takeoff-mode-controls {
+        .takeoff-plan-toolbar {
             display: flex;
+            flex-wrap: wrap;
             gap: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--gray-200);
+            border-radius: 16px;
+            margin-bottom: 1rem;
+            background: var(--gray-0);
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .takeoff-toolbar-group {
+            display: flex;
             align-items: flex-end;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .takeoff-toolbar-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--gray-500);
+            letter-spacing: 0.04em;
+        }
+
+        .takeoff-view-controls {
+            align-items: center;
+        }
+
+        .takeoff-zoom-btn {
+            min-width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 999px;
+            font-size: 1rem;
+            padding: 0;
+        }
+
+        .takeoff-zoom-indicator {
+            font-weight: 600;
+            color: var(--gray-700);
+            min-width: 3rem;
+            text-align: center;
+        }
+
+        .takeoff-fullscreen-btn {
+            white-space: nowrap;
+        }
+
+        .takeoff-count-toolbar {
+            border-left: 1px solid var(--gray-200);
+            padding-left: 1rem;
+        }
+
+        .takeoff-count-toolbar.is-hidden {
+            display: none;
+        }
+
+        .takeoff-count-setting {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--gray-600);
+        }
+
+        .takeoff-count-setting input[type="color"] {
+            width: 2.5rem;
+            height: 2.5rem;
+            padding: 0;
+            border: 1px solid var(--gray-200);
+            border-radius: 999px;
+            background: transparent;
+        }
+
+        .takeoff-count-label .form-input {
+            width: 180px;
+        }
+
+        .takeoff-plan.takeoff-plan-fullscreen {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+            border: none;
+            z-index: 1200;
+            background: var(--gray-50);
+            padding: 0 0 1.5rem 0;
+        }
+
+        .takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-toolbar {
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+            border-top: none;
+            border-bottom: 1px solid var(--gray-200);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-stage {
+            flex: 1;
+        }
+
+        body.takeoff-fullscreen-active {
+            overflow: hidden;
         }
 
         .takeoff-empty {
@@ -1062,6 +1183,41 @@
             border-color: var(--gray-700);
         }
 
+        body.dark-mode .takeoff-plan-stage {
+            background: repeating-conic-gradient(var(--gray-800) 0% 25%, transparent 0% 50%) 0 / 32px 32px;
+        }
+
+        body.dark-mode .takeoff-plan-toolbar {
+            background: var(--gray-900);
+            border-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-plan.takeoff-plan-fullscreen {
+            background: var(--gray-900);
+        }
+
+        body.dark-mode .takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-toolbar {
+            border-bottom-color: var(--gray-700);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        body.dark-mode .takeoff-toolbar-label,
+        body.dark-mode .takeoff-count-setting {
+            color: var(--gray-300);
+        }
+
+        body.dark-mode .takeoff-zoom-indicator {
+            color: var(--gray-200);
+        }
+
+        body.dark-mode .takeoff-count-toolbar {
+            border-left-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-count-setting input[type="color"] {
+            border-color: var(--gray-600);
+        }
+
         body.dark-mode .takeoff-drawing-table {
             background: var(--gray-900);
             border-color: var(--gray-700);
@@ -1296,12 +1452,6 @@
 
             .takeoff-workspace {
                 order: 1;
-            }
-
-            .takeoff-mode-controls {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 0.75rem;
             }
         }
 

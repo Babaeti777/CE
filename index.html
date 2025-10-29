@@ -251,25 +251,59 @@
                                     <h3 class="card-title">Active Drawing</h3>
                                     <p id="takeoffActiveMeta" class="takeoff-meta"></p>
                                 </div>
-                                <div class="takeoff-mode-controls">
-                                    <div class="form-group">
-                                        <label class="form-label" for="takeoffModeSelect">Mode</label>
-                                        <select id="takeoffModeSelect" class="form-select">
-                                            <option value="length">Length</option>
-                                            <option value="area">Area</option>
-                                            <option value="count">Count</option>
-                                            <option value="diameter">Diameter</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label" for="takeoffScaleInput">Scale (px per ft)</label>
-                                        <input type="number" id="takeoffScaleInput" class="form-input" value="1" step="0.01" min="0.0001">
-                                    </div>
-                                </div>
                             </div>
                             <div id="takeoffPlanContainer" class="takeoff-plan" style="display:none;">
-                                <img id="takeoffPlanPreview" alt="Plan preview">
-                                <canvas id="takeoffCanvas"></canvas>
+                                <div class="takeoff-plan-toolbar" id="takeoffToolbar">
+                                    <div class="takeoff-toolbar-group">
+                                        <div class="form-group">
+                                            <label class="form-label" for="takeoffModeSelect">Mode</label>
+                                            <select id="takeoffModeSelect" class="form-select">
+                                                <option value="length">Length</option>
+                                                <option value="area">Area</option>
+                                                <option value="count">Count</option>
+                                                <option value="diameter">Diameter</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="takeoffScaleInput">Scale (px per ft)</label>
+                                            <input type="number" id="takeoffScaleInput" class="form-input" value="1" step="0.01" min="0.0001">
+                                        </div>
+                                    </div>
+                                    <div class="takeoff-toolbar-group takeoff-view-controls">
+                                        <span class="takeoff-toolbar-label">View</span>
+                                        <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomOutBtn" aria-label="Zoom out">−</button>
+                                        <span id="takeoffZoomIndicator" class="takeoff-zoom-indicator">100%</span>
+                                        <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomInBtn" aria-label="Zoom in">+</button>
+                                        <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
+                                        <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
+                                    </div>
+                                    <div class="takeoff-toolbar-group takeoff-count-toolbar is-hidden" id="takeoffCountToolbar">
+                                        <span class="takeoff-toolbar-label">Count marker</span>
+                                        <label class="takeoff-count-setting">
+                                            <span>Color</span>
+                                            <input type="color" id="takeoffCountColor" value="#ef4444" aria-label="Count marker color">
+                                        </label>
+                                        <label class="takeoff-count-setting">
+                                            <span>Shape</span>
+                                            <select id="takeoffCountShape" class="form-select">
+                                                <option value="circle">Circle</option>
+                                                <option value="square">Square</option>
+                                                <option value="diamond">Diamond</option>
+                                                <option value="triangle">Triangle</option>
+                                            </select>
+                                        </label>
+                                        <label class="takeoff-count-setting takeoff-count-label">
+                                            <span>Item name</span>
+                                            <input type="text" id="takeoffCountLabel" class="form-input" placeholder="Custom label">
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="takeoff-plan-stage" id="takeoffPlanStage" tabindex="0">
+                                    <div class="takeoff-plan-inner" id="takeoffPlanInner">
+                                        <img id="takeoffPlanPreview" alt="Plan preview">
+                                        <canvas id="takeoffCanvas"></canvas>
+                                    </div>
+                                </div>
                             </div>
                             <p id="takeoffStatus" class="takeoff-status"></p>
                             <div class="takeoff-actions">
