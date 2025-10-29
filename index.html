@@ -6,8 +6,7 @@
     <title>Construction Estimator Pro - Modern Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -325,7 +324,7 @@
                 <button class="btn btn-primary" id="calcAreaBtn">Calculate Area</button>
                 <p id="takeoffResult" style="margin-top:0.5rem;"></p>
                 <div class="form-group" style="margin-top:1rem;">
-                    <label class="form-label">Upload Plan (PDF or image)</label>
+                    <label class="form-label">Upload Plan</label>
                     <input type="file" id="planUpload" class="form-input" accept="application/pdf,image/*">
                 </div>
                 <div id="planContainer" class="takeoff-plan" style="position:relative; margin-top:1rem; display:none;">
@@ -345,31 +344,28 @@
                         <option value="count">Count</option>
                     </select>
                 </div>
-                <div class="takeoff-actions" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
-                    <button class="btn btn-secondary" id="completeMeasurementBtn">Complete Measurement</button>
-                    <button class="btn btn-secondary" id="undoTakeoffPointBtn">Undo Point</button>
-                    <button class="btn btn-ghost" id="clearTakeoffBtn">Clear All</button>
+                <div class="takeoff-actions">
+                    <button class="btn btn-secondary" id="clearTakeoffBtn">Clear</button>
+                    <button class="btn btn-secondary" id="exportTakeoffCsvBtn">Export CSV</button>
+                    <button class="btn btn-primary" id="pushTakeoffToBidBtn">Send to Estimate</button>
                 </div>
-                <p id="takeoffMeasurement" style="margin-top:0.5rem;"></p>
-                <div id="takeoffRecordsSection" style="margin-top:1.5rem; display:none;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <h4 style="margin:0;">Measurements</h4>
-                        <button class="btn btn-secondary" id="exportTakeoffCsvBtn">Export CSV</button>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="modern-table" id="takeoffRecordsTable">
-                            <thead>
-                                <tr>
-                                    <th style="width:35%;">Name</th>
-                                    <th style="width:20%;">Type</th>
-                                    <th style="width:25%;">Quantity</th>
-                                    <th style="width:20%;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="takeoffRecordsBody"></tbody>
-                        </table>
-                    </div>
+                <p id="takeoffMeasurement" class="takeoff-status"></p>
+                <div class="takeoff-table-wrapper">
+                    <table class="takeoff-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Mode</th>
+                                <th scope="col">Quantity</th>
+                                <th scope="col">Units</th>
+                                <th scope="col">Details</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="takeoffTableBody"></tbody>
+                    </table>
                 </div>
+                <p class="takeoff-hint">Tip: For area measurements, double-click to close the shape.</p>
             </div>
             <button class="btn btn-success" id="useValueBtn" style="width: 100%; margin-top: 1.5rem;">Use Value</button>
         </div>
