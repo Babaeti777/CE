@@ -198,6 +198,11 @@
             color: #065f46;
         }
 
+        .sync-badge.warning {
+            background: #fef9c3;
+            color: #92400e;
+        }
+
         .sync-badge.error {
             background: #fee2e2;
             color: #991b1b;
@@ -886,13 +891,18 @@
             padding: 1.5rem;
             margin-bottom: 1.5rem;
         }
-        
+
+        .update-meta {
+            color: var(--gray-600);
+            margin-bottom: 0.75rem;
+        }
+
         .update-list {
             list-style: none;
             margin-top: 1rem;
             padding: 0;
         }
-        
+
         .update-item {
             display: flex;
             align-items: center;
@@ -900,35 +910,20 @@
             padding: 0.5rem 0;
             color: var(--gray-700);
         }
-        
+
         .update-icon {
             color: var(--success);
             font-size: 1.25rem;
         }
 
-        .update-meta {
-            color: var(--gray-700);
-            font-size: 0.9rem;
-        }
-
-        .source-footer {
-            margin-top: 1.5rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--gray-200);
-        }
-
-        .source-footer h4 {
-            font-size: 1rem;
-            color: var(--gray-700);
-            margin-bottom: 0.5rem;
-        }
-
-        .source-list {
-            list-style: disc;
-            margin-left: 1.25rem;
+        .update-summary {
             color: var(--gray-600);
-            font-size: 0.9rem;
-            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+
+        .update-actions {
+            display: flex;
+            gap: 1rem;
         }
 
         /* Calculator */

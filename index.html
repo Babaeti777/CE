@@ -501,14 +501,13 @@
     <!-- Modals -->
     <div class="modal" id="updateModal">
         <div class="modal-dialog">
-            <div class="modal-header"><h2 class="modal-title">Database Update Available</h2><button class="modal-close" id="closeUpdateModal">&times;</button></div>
+            <div class="modal-header"><h2 class="modal-title" id="updateTitle">Material Cost Update Available</h2><button class="modal-close" id="closeUpdateModal">&times;</button></div>
+            <p class="update-meta" id="updateMeta"></p>
             <div class="update-badge">
-                <h3 id="updateModalTitle" style="margin-bottom: 0.5rem;">Cost Database Update</h3>
-                <p id="updateModalMeta" class="update-meta"></p>
-                <ul class="update-list" id="updateChangeList"></ul>
+                <ul class="update-list" id="updateHighlights"></ul>
             </div>
-            <p id="updateModalDescription" style="color: var(--gray-600); margin-bottom: 1.5rem;"></p>
-            <div style="display: flex; gap: 1rem;">
+            <p class="update-summary" id="updateSummary">Keep your estimates accurate with the latest market pricing feed.</p>
+            <div class="update-actions">
                 <button class="btn btn-primary" id="applyUpdateBtn">Apply Update</button>
                 <button class="btn btn-secondary" id="laterBtn">Remind Me Later</button>
             </div>
