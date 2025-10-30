@@ -129,47 +129,50 @@
                                 <div class="form-group"><label class="form-label" for="floors">Number of Floors</label><input type="number" class="form-input" id="floors" value="1" min="1" required></div>
                                 <div class="form-group"><label class="form-label" for="laborCost">Labor Multiplier</label><input type="number" class="form-input" id="laborCost" value="1.5" step="0.1" min="1"></div>
                             </div>
-                            <div class="form-note">Labor multiplier applies to the material subtotal to approximate crew and equipment burden.</div>
-                        </div>
-                        <div class="card estimator-card">
-                            <div class="card-header">
-                                <h3 class="card-title">Assemblies &amp; Allowances</h3>
-                                <div class="card-actions"><button type="button" class="btn btn-secondary" id="addEstimatorItemBtn">+ Custom Item</button></div>
+                            <div class="form-group"><label class="form-label">Foundation Type</label><div class="material-grid"><div class="material-card" data-category="foundation" data-material="slab"><div class="material-name">Slab</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="crawl"><div class="material-name">Crawl Space</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="basement"><div class="material-name">Basement</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="pier"><div class="material-name">Pier & Grade Beam</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="mat"><div class="material-name">Mat Foundation</div><div class="material-price">--</div></div></div></div>
+                            <div class="form-group"><label class="form-label">Framing Material</label><div class="material-grid"><div class="material-card" data-category="framing" data-material="wood"><div class="material-name">Wood Stud</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="steel"><div class="material-name">Structural Steel</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="concrete"><div class="material-name">Cast-in-Place Concrete</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="massTimber"><div class="material-name">Mass Timber</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="coldFormed"><div class="material-name">Cold-Formed Steel</div><div class="material-price">--</div></div></div></div>
+                            <div class="form-group"><label class="form-label">Exterior Finish</label><div class="material-grid"><div class="material-card" data-category="exterior" data-material="vinyl"><div class="material-name">Vinyl</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="brick"><div class="material-name">Brick Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stucco"><div class="material-name">Stucco</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stone"><div class="material-name">Stone Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="fiberCement"><div class="material-name">Fiber Cement</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="curtainWall"><div class="material-name">Curtain Wall</div><div class="material-price">--</div></div></div></div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>Generate Pricing</button>
+                        </form>
+                    </div>
+                    <div>
+                        <div class="card" id="estimateWorkspace" style="display: none;">
+                            <div class="card-header" style="align-items: flex-start;">
+                                <div>
+                                    <h3 class="card-title">Estimate Worksheet</h3>
+                                    <p class="card-subtitle">Fine-tune quantities and pricing before finalizing.</p>
+                                </div>
+                                <div class="worksheet-actions">
+                                    <button type="button" class="btn btn-secondary" id="resetWorksheetBtn">Reset</button>
+                                    <button type="button" class="btn btn-primary" id="generatePricingBtn">Update Totals</button>
+                                </div>
                             </div>
-                            <p class="card-subtitle">Fine-tune each major system, override quantities, or insert custom allowances to dial in the pricing.</p>
-                            <div class="estimator-table-wrapper">
-                                <table class="estimator-table">
+                            <div class="worksheet-table-wrapper">
+                                <table class="worksheet-table">
                                     <thead>
                                         <tr>
                                             <th scope="col">Scope</th>
-                                            <th scope="col">Assembly</th>
                                             <th scope="col">Quantity</th>
                                             <th scope="col">Unit Cost</th>
-                                            <th scope="col">Line Total</th>
+                                            <th scope="col">Factor</th>
+                                            <th scope="col" class="text-right">Subtotal</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="estimatorItemsBody"></tbody>
+                                    <tbody id="estimateWorksheetBody"></tbody>
                                 </table>
-                                <p id="estimatorEmptyState" class="estimator-empty">Quantities update automatically as you complete the project inputs.</p>
+                                <p class="worksheet-empty" id="worksheetEmptyMessage">Select materials and generate pricing to build your worksheet.</p>
                             </div>
-                            <div class="estimator-actions">
-                                <div class="estimator-total-chip">Materials Subtotal: <strong id="estimatorMaterialsSubtotal">$0</strong></div>
-                                <button type="submit" class="btn btn-primary" id="generateEstimateBtn">Generate Estimate</button>
-                            </div>
-                        </div>
-                    </form>
-                    <div class="estimator-summary">
-                        <div class="card" id="breakdownCard" style="display: none;">
-                            <h3 class="card-title">Cost Breakdown</h3>
-                            <div id="breakdownContent"></div>
                         </div>
                         <div class="summary-card" id="estimateSummary" style="display: none;">
                             <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">Estimate Summary</h2>
                             <div class="summary-grid">
                                 <div class="summary-item"><div class="summary-label">Materials</div><div class="summary-value" id="materialCost">$0</div></div>
                                 <div class="summary-item"><div class="summary-label">Labor</div><div class="summary-value" id="laborCostDisplay">$0</div></div>
-                                <div class="summary-item"><div class="summary-label">Total</div><div class="summary-value" id="totalCost">$0</div></div>
+                                <div class="summary-item"><div class="summary-label">Labor Multiplier</div><div class="summary-value" id="laborMultiplierDisplay">1.0×</div></div>
+                                <div class="summary-item"><div class="summary-label">Cost / Sq Ft</div><div class="summary-value" id="costPerSqFt">$0</div></div>
+                                <div class="summary-item summary-item-total"><div class="summary-label">Total</div><div class="summary-value" id="totalCost">$0</div></div>
                             </div>
+                            <p class="summary-meta" id="estimateMeta"></p>
                             <button class="btn btn-secondary" id="saveProjectBtn" style="margin-top: 2rem;">Save Project</button>
                         </div>
                     </div>
@@ -194,21 +197,25 @@
                     <div class="card-header line-item-header">
                         <div>
                             <h3 class="card-title">Line Items</h3>
-                            <p class="card-subtitle">Pull from the database, drop in custom entries, and see extended totals update instantly.</p>
+                            <p class="card-subtitle">Build your bid with curated assemblies and custom entries.</p>
                         </div>
-                        <button class="btn btn-secondary" id="addLineItemBtn">+ Add Item</button>
+                        <div class="line-item-tools">
+                            <input type="search" class="form-input" id="lineItemSearch" placeholder="Filter items..." aria-label="Filter line items">
+                            <button class="btn btn-secondary" id="addLineItemBtn">+ Add Item</button>
+                        </div>
                     </div>
                     <div class="line-item-table-wrapper">
-                        <div class="line-item-table-head">
+                        <div class="line-item-header-row">
                             <span>Category</span>
                             <span>Description</span>
                             <span>Quantity</span>
                             <span>Unit</span>
                             <span>Rate</span>
-                            <span>Total</span>
-                            <span></span>
+                            <span class="text-right">Subtotal</span>
+                            <span class="sr-only">Actions</span>
                         </div>
-                        <div id="lineItems" class="line-item-table-body"></div>
+                        <div id="lineItems" class="line-item-body"></div>
+                        <p class="line-item-empty" id="lineItemEmptyMessage">Add your first item to start building the bid.</p>
                     </div>
                 </div>
                 <div class="grid-3" style="margin-top: 2rem;">

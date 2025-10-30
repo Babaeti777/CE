@@ -283,245 +283,98 @@
         .card-subtitle {
             color: var(--gray-600);
             font-size: 0.95rem;
-            margin-top: 0.35rem;
-        }
-
-        .form-note {
-            font-size: 0.85rem;
-            color: var(--gray-600);
-            background: var(--gray-100);
-            padding: 0.75rem 1rem;
-            border-radius: 10px;
-            border: 1px solid var(--gray-200);
-        }
-
-        .compact-grid {
-            gap: 1rem;
-        }
-
-        .estimator-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr);
-            gap: 2rem;
-            align-items: flex-start;
-        }
-
-        .estimator-form {
-            display: grid;
-            gap: 2rem;
-        }
-
-        .estimator-card {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .estimator-table-wrapper {
-            position: relative;
-            border: 1px solid var(--gray-200);
-            border-radius: 16px;
-            overflow: hidden;
-            background: var(--gray-100);
-        }
-
-        .estimator-table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 640px;
-        }
-
-        .estimator-table thead {
-            background: white;
-            border-bottom: 1px solid var(--gray-200);
-        }
-
-        .estimator-table th {
-            text-align: left;
-            padding: 1rem 1.25rem;
-            font-size: 0.8rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--gray-600);
-        }
-
-        .estimator-table tbody tr {
-            background: white;
-        }
-
-        .estimator-table tbody tr:nth-child(even) {
-            background: var(--gray-100);
-        }
-
-        .estimator-row {
-            border-bottom: 1px solid var(--gray-200);
-        }
-
-        .estimator-row:last-child {
-            border-bottom: none;
-        }
-
-        .estimator-row td {
-            padding: 1.25rem;
-            vertical-align: top;
-        }
-
-        .estimator-scope-title {
-            font-weight: 700;
-            margin-bottom: 0.25rem;
-        }
-
-        .estimator-scope-meta {
-            font-size: 0.85rem;
-            color: var(--gray-600);
-        }
-
-        .estimator-scope-input {
-            font-weight: 600;
-        }
-
-        .estimator-assembly-meta {
-            margin-top: 0.4rem;
-            font-size: 0.8rem;
-            color: var(--gray-600);
-        }
-
-        .estimator-quantity-cell {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-        }
-
-        .estimator-unit-input {
-            max-width: 120px;
-        }
-
-        .unit-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            background: var(--gray-100);
-            border: 1px solid var(--gray-200);
-            padding: 0.35rem 0.75rem;
-            border-radius: 999px;
-            font-size: 0.8rem;
-            color: var(--gray-600);
-        }
-
-        .unit-hint {
-            display: block;
-            margin-top: 0.5rem;
-            font-size: 0.75rem;
-            color: var(--gray-500);
-        }
-
-        .estimator-total {
-            font-weight: 700;
-            font-size: 1rem;
-            color: var(--dark);
-        }
-
-        .estimator-actions {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        .estimator-total-chip {
-            background: rgba(99, 102, 241, 0.08);
-            color: var(--primary);
-            padding: 0.75rem 1.25rem;
-            border-radius: 100px;
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
-
-        .estimator-summary {
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-        }
-
-        .estimator-empty {
-            margin: 1.5rem;
-            font-size: 0.9rem;
-            color: var(--gray-600);
-            text-align: center;
-        }
-
-        .estimator-breakdown-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 1rem;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--gray-200);
-        }
-
-        .estimator-breakdown-row:last-child {
-            border-bottom: none;
-        }
-
-        .estimator-breakdown-meta {
-            font-size: 0.8rem;
-            color: var(--gray-600);
             margin-top: 0.25rem;
         }
 
-        .link-btn {
-            border: none;
-            background: none;
-            color: var(--primary);
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
+        .text-right {
+            text-align: right;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
             padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
-        .estimator-quantity-action {
-            display: inline-block;
-            margin-top: 0.5rem;
+        .worksheet-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
-        .link-btn:hover,
-        .link-btn:focus {
-            text-decoration: underline;
-        }
-
-        .link-btn.danger {
-            color: var(--danger);
-        }
-
-        .line-item-table-wrapper {
-            margin-top: 1.5rem;
+        .worksheet-table-wrapper {
             border: 1px solid var(--gray-200);
             border-radius: 16px;
             overflow: hidden;
             background: white;
         }
 
-        .line-item-header {
-            gap: 1rem;
+        .worksheet-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 100%;
         }
 
-        .line-item-table-head {
-            display: grid;
-            grid-template-columns: 2fr 2fr 1fr 1fr 1fr 1fr auto;
-            gap: 1rem;
-            padding: 1rem 1.5rem;
-            background: var(--gray-100);
-            font-size: 0.8rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+        .worksheet-table th,
+        .worksheet-table td {
+            padding: 1rem;
+            font-size: 0.95rem;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .worksheet-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .worksheet-scope {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .worksheet-scope span {
             color: var(--gray-600);
+            font-size: 0.85rem;
         }
 
-        .line-item-table-body {
-            padding: 1.5rem;
-            background: var(--gray-100);
+        .worksheet-table input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border-radius: 10px;
+            border: 1px solid var(--gray-300);
+            font-size: 0.95rem;
+            background: white;
+        }
+
+        .worksheet-table input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .worksheet-empty {
+            padding: 1.25rem;
+            text-align: center;
+            color: var(--gray-500);
+            font-size: 0.95rem;
+            margin: 0;
+            display: none;
+        }
+
+        .worksheet-table-wrapper.empty .worksheet-table {
+            display: none;
+        }
+
+        .worksheet-table-wrapper.empty .worksheet-empty {
+            display: block;
         }
 
         /* Grid Layouts */
@@ -754,6 +607,11 @@
             z-index: 1;
         }
 
+        .summary-item-total .summary-value {
+            font-size: 2.25rem;
+            font-weight: 800;
+        }
+
         .summary-label {
             font-size: 0.875rem;
             opacity: 0.9;
@@ -763,9 +621,17 @@
         }
 
         .summary-value {
-            font-size: 2.5rem;
-            font-weight: 800;
-            line-height: 1;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .summary-meta {
+            position: relative;
+            z-index: 1;
+            margin-top: 1.5rem;
+            font-size: 0.95rem;
+            opacity: 0.9;
         }
         
         /* Tables */
@@ -1134,15 +1000,74 @@
         }
 
         /* Line Items */
+        .line-item-header {
+            align-items: flex-start;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .line-item-tools {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .line-item-table-wrapper {
+            margin-top: 1.5rem;
+            background: var(--gray-100);
+            border-radius: 18px;
+            padding: 1.5rem;
+            border: 1px solid var(--gray-200);
+        }
+
+        .line-item-table-wrapper.empty .line-item-header-row,
+        .line-item-table-wrapper.empty .line-item-body {
+            display: none;
+        }
+
+        .line-item-table-wrapper.empty .line-item-empty {
+            display: block;
+        }
+
+        .line-item-header-row {
+            display: grid;
+            grid-template-columns: 2fr 2fr 1fr 1fr 1fr 1fr auto;
+            gap: 1rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--gray-600);
+            margin-bottom: 1rem;
+        }
+
+        .line-item-body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .line-item-empty {
+            margin-top: 1rem;
+            color: var(--gray-500);
+            font-style: italic;
+            display: none;
+        }
+
         .line-item-row {
             display: grid;
             grid-template-columns: 2fr 2fr 1fr 1fr 1fr 1fr auto;
             gap: 1rem;
             padding: 1rem;
-            background: var(--gray-100);
+            background: white;
             border-radius: 12px;
             margin-bottom: 0.75rem;
             align-items: center;
+            border: 1px solid var(--gray-200);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .line-item-row.is-hidden {
+            display: none;
         }
 
         .line-item-new {

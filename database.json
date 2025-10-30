@@ -62,6 +62,29 @@
                 "lastUpdated": "2024-05-21"
             }
         },
+        "demolition": {
+            "interiorSelective": {
+                "label": "Selective Interior Demolition",
+                "cost": 2.85,
+                "unit": "sq ft",
+                "lastUpdated": "2024-05-29",
+                "notes": "Remove partitions, ceilings, and MEP trim outs."
+            },
+            "structuralConcrete": {
+                "label": "Structural Concrete Demolition",
+                "cost": 65.0,
+                "unit": "cu yd",
+                "lastUpdated": "2024-05-26",
+                "notes": "Saw cutting, breaking, loading, and haul-off included."
+            },
+            "roofTearOff": {
+                "label": "Roof Tear-Off",
+                "cost": 4.75,
+                "unit": "sq ft",
+                "lastUpdated": "2024-06-03",
+                "notes": "Complete removal of roofing assemblies down to deck."
+            }
+        },
         "framing": {
             "wood": {
                 "label": "Dimensional Lumber Framing",
@@ -660,6 +683,32 @@
                 "unit": "month",
                 "rate": 890,
                 "description": "Night watch and cameras"
+            }
+        ],
+        "Demolition": [
+            {
+                "name": "Selective Interior Demolition",
+                "unit": "sq ft",
+                "rate": 2.85,
+                "description": "Remove partitions, ceilings, and fixtures"
+            },
+            {
+                "name": "Structural Slab Demo",
+                "unit": "cu yd",
+                "rate": 68.5,
+                "description": "Break, load, and haul concrete slabs"
+            },
+            {
+                "name": "Roof Tear-Off",
+                "unit": "sq ft",
+                "rate": 4.95,
+                "description": "Remove roofing assemblies and dispose"
+            },
+            {
+                "name": "Debris Hauling",
+                "unit": "ton",
+                "rate": 155,
+                "description": "Containers, hauling, and landfill fees"
             }
         ],
         "Site Work": [
