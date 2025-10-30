@@ -36,7 +36,6 @@ export class TakeoffManager {
         this.cacheDom();
         this.bindEvents();
         this.updateQuickShapeInputs();
-        this.updateCountControlsVisibility();
         this.syncZoomControls();
         this.updateZoomButtonState();
         this.updateSortDirectionIcon();
@@ -66,13 +65,11 @@ export class TakeoffManager {
             canvas: byId('takeoffCanvas'),
             modeSelect: byId('takeoffModeSelect'),
             scaleInput: byId('takeoffScaleInput'),
-            zoomInput: byId('takeoffZoomInput'),
-            zoomValue: byId('takeoffZoomValue'),
-            zoomInBtn: byId('takeoffZoomIn'),
-            zoomOutBtn: byId('takeoffZoomOut'),
-            countControls: byId('takeoffCountControls'),
-            countShapeSelect: byId('takeoffCountShape'),
-            countColorInput: byId('takeoffCountColor'),
+            zoomInBtn: byId('takeoffZoomInBtn'),
+            zoomOutBtn: byId('takeoffZoomOutBtn'),
+            zoomResetBtn: byId('takeoffZoomResetBtn'),
+            zoomIndicator: byId('takeoffZoomIndicator'),
+            fullscreenBtn: byId('takeoffFullscreenBtn'),
             fullScreenToggle: byId('takeoffFullScreenToggle'),
             status: byId('takeoffStatus'),
             clearBtn: byId('takeoffClearBtn'),
@@ -87,11 +84,6 @@ export class TakeoffManager {
             quickDim2Group: byId('takeoffDim2Group'),
             quickBtn: byId('takeoffQuickCalcBtn'),
             quickResult: byId('takeoffQuickResult'),
-            zoomInBtn: byId('takeoffZoomInBtn'),
-            zoomOutBtn: byId('takeoffZoomOutBtn'),
-            zoomResetBtn: byId('takeoffZoomResetBtn'),
-            zoomIndicator: byId('takeoffZoomIndicator'),
-            fullscreenBtn: byId('takeoffFullscreenBtn'),
             countColorInput: byId('takeoffCountColor'),
             countShapeSelect: byId('takeoffCountShape'),
             countLabelInput: byId('takeoffCountLabel'),
@@ -122,14 +114,20 @@ export class TakeoffManager {
 
         this.elements.modeSelect?.addEventListener('change', (event) => this.updateMode(event.target.value));
         this.elements.scaleInput?.addEventListener('input', (event) => this.updateScale(event.target.value));
-        this.elements.zoomInput?.addEventListener('input', (event) => this.handleZoomInput(event.target.value));
+
         this.elements.zoomInBtn?.addEventListener('click', () => this.stepZoom(0.1));
         this.elements.zoomOutBtn?.addEventListener('click', () => this.stepZoom(-0.1));
-        this.elements.countShapeSelect?.addEventListener('change', (event) => this.updateCountShape(event.target.value));
+        this.elements.zoomResetBtn?.addEventListener('click', () => this.resetZoom());
+
         const handleColorChange = (event) => this.updateCountColor(event.target.value);
         this.elements.countColorInput?.addEventListener('input', handleColorChange);
         this.elements.countColorInput?.addEventListener('change', handleColorChange);
-        this.elements.fullScreenToggle?.addEventListener('click', () => this.toggleFullScreen());
+        this.elements.countShapeSelect?.addEventListener('change', (event) => this.updateCountShape(event.target.value));
+        this.elements.countLabelInput?.addEventListener('input', (event) => this.updateCountLabel(event.target.value));
+
+        this.elements.fullscreenBtn?.addEventListener('click', () => this.toggleFullscreen());
+        this.elements.fullScreenToggle?.addEventListener('click', () => this.toggleFullscreen());
+
         if (typeof document !== 'undefined') {
             document.addEventListener('keydown', (event) => this.handleDocumentKeydown(event));
         }
@@ -147,46 +145,6 @@ export class TakeoffManager {
 
         this.elements.quickShapeSelect?.addEventListener('change', () => this.updateQuickShapeInputs());
         this.elements.quickBtn?.addEventListener('click', () => this.calculateQuickArea());
-
-        this.elements.zoomInBtn?.addEventListener('click', () => this.adjustZoom(0.1));
-        this.elements.zoomOutBtn?.addEventListener('click', () => this.adjustZoom(-0.1));
-        this.elements.zoomResetBtn?.addEventListener('click', () => this.resetZoom());
-        this.elements.fullscreenBtn?.addEventListener('click', () => this.toggleFullscreen());
-
-        this.elements.countColorInput?.addEventListener('input', (event) => this.updateCountColor(event.target.value));
-        this.elements.countShapeSelect?.addEventListener('change', (event) => this.updateCountShape(event.target.value));
-        this.elements.countLabelInput?.addEventListener('input', (event) => this.updateCountLabel(event.target.value));
-
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && this.state.isFullscreen) {
-                this.setFullscreen(false);
-            }
-        });
-    }
-
-    adjustZoom(delta) {
-        const increment = Math.round((this.state.zoom + delta) * 100) / 100;
-        this.setZoom(increment);
-    }
-
-    setZoom(value) {
-        const clamped = Math.min(Math.max(value, 0.25), 6);
-        this.state.zoom = clamped;
-        this.applyZoom();
-    }
-
-    resetZoom() {
-        this.setZoom(1);
-    }
-
-    applyZoom() {
-        if (this.elements.planInner) {
-            this.elements.planInner.style.transform = `scale(${this.state.zoom})`;
-        }
-        if (this.elements.zoomIndicator) {
-            const percent = Math.round(this.state.zoom * 100);
-            this.elements.zoomIndicator.textContent = `${percent}%`;
-        }
     }
 
     setFullscreen(enabled) {
@@ -197,6 +155,10 @@ export class TakeoffManager {
             document.body.classList.add('takeoff-fullscreen-active');
         } else {
             document.body.classList.remove('takeoff-fullscreen-active');
+        }
+        if (this.elements.fullScreenToggle) {
+            this.elements.fullScreenToggle.textContent = this.state.isFullscreen ? 'Exit Full View' : 'Full View';
+            this.elements.fullScreenToggle.setAttribute('aria-pressed', this.state.isFullscreen ? 'true' : 'false');
         }
         this.updateFullscreenButton();
     }
@@ -1183,6 +1145,10 @@ export class TakeoffManager {
         this.setZoom(next);
     }
 
+    resetZoom() {
+        this.setZoom(1);
+    }
+
     setZoom(value) {
         const zoom = this.clampZoom(value);
         if (Math.abs(zoom - this.state.zoom) < 0.0001) {
@@ -1222,12 +1188,8 @@ export class TakeoffManager {
     }
 
     syncZoomControls() {
-        if (this.elements.zoomInput) {
-            const sliderValue = Number(this.state.zoom.toFixed(2));
-            this.elements.zoomInput.value = String(sliderValue);
-        }
-        if (this.elements.zoomValue) {
-            this.elements.zoomValue.textContent = `${Math.round(this.state.zoom * 100)}%`;
+        if (this.elements.zoomIndicator) {
+            this.elements.zoomIndicator.textContent = `${Math.round(this.state.zoom * 100)}%`;
         }
     }
 
@@ -1236,62 +1198,18 @@ export class TakeoffManager {
         if (this.elements.zoomInBtn) {
             const disabled = this.state.zoom >= this.zoomLimits.max - epsilon;
             this.elements.zoomInBtn.disabled = disabled;
+            this.elements.zoomInBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
         }
         if (this.elements.zoomOutBtn) {
             const disabled = this.state.zoom <= this.zoomLimits.min + epsilon;
             this.elements.zoomOutBtn.disabled = disabled;
-        }
-    }
-
-    toggleFullScreen() {
-        if (!this.elements.planContainer || this.elements.planContainer.style.display === 'none') {
-            this.options.showToast('Load a drawing before entering full view.', 'warning');
-            return;
-        }
-        this.setFullScreen(!this.state.isFullScreen);
-    }
-
-    setFullScreen(enabled) {
-        if (!this.elements.planShell) return;
-        this.state.isFullScreen = Boolean(enabled);
-        this.elements.planShell.classList.toggle('is-fullscreen', this.state.isFullScreen);
-        if (typeof document !== 'undefined' && document.body) {
-            document.body.classList.toggle('takeoff-fullscreen', this.state.isFullScreen);
-        }
-        if (this.elements.fullScreenToggle) {
-            this.elements.fullScreenToggle.textContent = this.state.isFullScreen ? 'Exit Full View' : 'Full View';
-            this.elements.fullScreenToggle.setAttribute('aria-pressed', String(this.state.isFullScreen));
+            this.elements.zoomOutBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
         }
     }
 
     handleDocumentKeydown(event) {
-        if (event.key === 'Escape' && this.state.isFullScreen) {
-            this.setFullScreen(false);
-        }
-    }
-
-    updateCountControlsVisibility() {
-        const isCount = this.state.mode === 'count';
-        if (this.elements.countControls) {
-            this.elements.countControls.classList.toggle('is-hidden', !isCount);
-            this.elements.countControls.setAttribute('aria-hidden', String(!isCount));
-        }
-    }
-
-    updateCountShape(value) {
-        if (typeof value !== 'string') return;
-        const trimmed = value.trim();
-        if (!trimmed) return;
-        this.state.countOptions = { ...this.state.countOptions, shape: trimmed };
-    }
-
-    updateCountColor(value) {
-        if (typeof value !== 'string') return;
-        const trimmed = value.trim();
-        if (!trimmed) return;
-        this.state.countOptions = { ...this.state.countOptions, color: trimmed };
-        if (this.elements.countColorInput && this.elements.countColorInput.value !== trimmed) {
-            this.elements.countColorInput.value = trimmed;
+        if (event.key === 'Escape' && this.state.isFullscreen) {
+            this.setFullscreen(false);
         }
     }
 
