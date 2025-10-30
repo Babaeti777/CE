@@ -1,6 +1,6 @@
 {
-    "version": "2024.07.1",
-    "lastUpdated": "2024-07-18",
+    "version": "2024.07.2",
+    "lastUpdated": "2024-07-25",
     "sources": [
         {
             "name": "North American Construction Cost Index",
@@ -21,7 +21,8 @@
     "releaseNotes": [
         "Updated lumber, steel, and mechanical equipment pricing for July 2024.",
         "Added rainscreen facade, geothermal HVAC, and EV charging assemblies.",
-        "Expanded regional adjustment factors with Northeast Corridor composite."
+        "Expanded regional adjustment factors with Northeast Corridor composite.",
+        "New demolition line items with current market rates."
     ],
     "materialPrices": {
         "foundation": {
@@ -750,6 +751,35 @@
                 "name": "Concrete Walks",
                 "unit": "sq ft",
                 "rate": 6.45
+            }
+        ],
+        "Demolition": [
+            {
+                "name": "Selective Interior Demo",
+                "unit": "sq ft",
+                "rate": 5.1,
+                "description": "Includes protection, separation walls, and dumpster service"
+            },
+            {
+                "name": "Structural Slab Removal",
+                "unit": "sq ft",
+                "rate": 9.1
+            },
+            {
+                "name": "Roof Tear-Off",
+                "unit": "sq ft",
+                "rate": 3.45
+            },
+            {
+                "name": "Exterior Facade Demo",
+                "unit": "sq ft",
+                "rate": 6.85,
+                "description": "Crew, lifts, and disposal"
+            },
+            {
+                "name": "Construction Debris Hauling",
+                "unit": "cu yd",
+                "rate": 102
             }
         ],
         "Concrete": [

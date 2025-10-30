@@ -1,6 +1,6 @@
 {
-    "version": "2024.06.0",
-    "lastUpdated": "2024-06-15",
+    "version": "2024.06.1",
+    "lastUpdated": "2024-06-20",
     "sources": [
         {
             "name": "North American Construction Cost Index",
@@ -16,7 +16,8 @@
     "releaseNotes": [
         "Expanded core material catalog with 68 commodity items across 13 CSI divisions.",
         "Refreshed labor and equipment rates to June 2024 medians.",
-        "Added baseline regional cost multipliers for 10 major U.S. metros."
+        "Added baseline regional cost multipliers for 10 major U.S. metros.",
+        "Introduced demolition assemblies to the detailed bidding database."
     ],
     "materialPrices": {
         "foundation": {
@@ -735,6 +736,35 @@
                 "name": "Concrete Walks",
                 "unit": "sq ft",
                 "rate": 6.25
+            }
+        ],
+        "Demolition": [
+            {
+                "name": "Selective Interior Demo",
+                "unit": "sq ft",
+                "rate": 4.75,
+                "description": "Includes protection, separation, and haul off"
+            },
+            {
+                "name": "Structural Slab Removal",
+                "unit": "sq ft",
+                "rate": 8.5
+            },
+            {
+                "name": "Roof Tear-Off",
+                "unit": "sq ft",
+                "rate": 3.25
+            },
+            {
+                "name": "Exterior Facade Demo",
+                "unit": "sq ft",
+                "rate": 6.4,
+                "description": "Includes mast climber or swing stage access"
+            },
+            {
+                "name": "Construction Debris Hauling",
+                "unit": "cu yd",
+                "rate": 95
             }
         ],
         "Concrete": [

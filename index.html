@@ -115,18 +115,19 @@
 
             <!-- Quick Estimator Tab -->
             <div id="estimatorTab" class="tab-content">
-                <div class="grid-2">
-                    <div class="card">
-                        <h3 class="card-title" style="margin-bottom: 2rem;">Project Information</h3>
-                        <form id="estimatorForm">
-                            <div class="form-group"><label class="form-label">Project Name</label><input type="text" class="form-input" id="projectName" placeholder="Enter project name" required></div>
-                            <div class="grid-2" style="gap: 1rem;">
-                                <div class="form-group"><label class="form-label">Project Type</label><select class="form-select" id="projectType" required><option value="">Select type</option><option value="residential">Residential</option><option value="commercial">Commercial</option><option value="industrial">Industrial</option><option value="renovation">Renovation</option></select></div>
-                                <div class="form-group"><label class="form-label">Square Footage</label><input type="number" class="form-input" id="sqft" placeholder="Enter sqft" required></div>
+                <div class="estimator-grid">
+                    <form id="estimatorForm" class="estimator-form">
+                        <div class="card estimator-card">
+                            <h3 class="card-title">Project Information</h3>
+                            <p class="card-subtitle">Capture the essentials and we'll build the first pass of your pricing automatically.</p>
+                            <div class="form-group"><label class="form-label" for="projectName">Project Name</label><input type="text" class="form-input" id="projectName" placeholder="Enter project name" required></div>
+                            <div class="grid-2 compact-grid">
+                                <div class="form-group"><label class="form-label" for="projectType">Project Type</label><select class="form-select" id="projectType" required><option value="">Select type</option><option value="residential">Residential</option><option value="commercial">Commercial</option><option value="industrial">Industrial</option><option value="renovation">Renovation</option></select></div>
+                                <div class="form-group"><label class="form-label" for="sqft">Square Footage</label><input type="number" class="form-input" id="sqft" placeholder="Enter sqft" min="0" required></div>
                             </div>
-                            <div class="grid-2" style="gap: 1rem;">
-                                <div class="form-group"><label class="form-label">Number of Floors</label><input type="number" class="form-input" id="floors" value="1" min="1" required></div>
-                                <div class="form-group"><label class="form-label">Labor Multiplier</label><input type="number" class="form-input" id="laborCost" value="1.5" step="0.1" min="1"></div>
+                            <div class="grid-2 compact-grid">
+                                <div class="form-group"><label class="form-label" for="floors">Number of Floors</label><input type="number" class="form-input" id="floors" value="1" min="1" required></div>
+                                <div class="form-group"><label class="form-label" for="laborCost">Labor Multiplier</label><input type="number" class="form-input" id="laborCost" value="1.5" step="0.1" min="1"></div>
                             </div>
                             <div class="form-group"><label class="form-label">Foundation Type</label><div class="material-grid"><div class="material-card" data-category="foundation" data-material="slab"><div class="material-name">Slab</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="crawl"><div class="material-name">Crawl Space</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="basement"><div class="material-name">Basement</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="pier"><div class="material-name">Pier & Grade Beam</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="mat"><div class="material-name">Mat Foundation</div><div class="material-price">--</div></div></div></div>
                             <div class="form-group"><label class="form-label">Framing Material</label><div class="material-grid"><div class="material-card" data-category="framing" data-material="wood"><div class="material-name">Wood Stud</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="steel"><div class="material-name">Structural Steel</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="concrete"><div class="material-name">Cast-in-Place Concrete</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="massTimber"><div class="material-name">Mass Timber</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="coldFormed"><div class="material-name">Cold-Formed Steel</div><div class="material-price">--</div></div></div></div>
@@ -162,7 +163,7 @@
                                 <p class="worksheet-empty" id="worksheetEmptyMessage">Select materials and generate pricing to build your worksheet.</p>
                             </div>
                         </div>
-                        <div class="summary-card" id="estimateSummary" style="display: none; margin-top: 2rem;">
+                        <div class="summary-card" id="estimateSummary" style="display: none;">
                             <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">Estimate Summary</h2>
                             <div class="summary-grid">
                                 <div class="summary-item"><div class="summary-label">Materials</div><div class="summary-value" id="materialCost">$0</div></div>
@@ -181,7 +182,8 @@
             <!-- Detailed Bidding Tab -->
             <div id="detailedTab" class="tab-content">
                  <div class="card">
-                    <h3 class="card-title" style="margin-bottom: 2rem;">Bid Information</h3>
+                    <h3 class="card-title" style="margin-bottom: 1rem;">Bid Information</h3>
+                    <p class="card-subtitle" style="margin-bottom: 2rem;">Capture client info and key dates so they're always part of the exported package.</p>
                     <form id="detailedBidForm">
                         <div class="grid-2" style="gap: 1rem;">
                             <div class="form-group"><label class="form-label">Project Name</label><input type="text" class="form-input" id="bidProjectName" placeholder="Enter project name" required></div>

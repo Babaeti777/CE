@@ -1,13 +1,14 @@
 {
-    "latestVersion": "2024.07.1",
-    "lastUpdated": "2024-07-18",
+    "latestVersion": "2024.07.2",
+    "lastUpdated": "2024-07-25",
     "dataUrl": "data/database-latest.json",
-    "checksum": "af39c2b4e3d4470f9f4f0a74cf44b0c0",
+    "checksum": "b17fbc4a3a7f4c1286d5f3e08d42b91d",
     "title": "July 2024 Cost Index Refresh",
-    "summary": "Synchronize with July 2024 commodity pricing, labor rates, and regional multipliers.",
+    "summary": "Synchronize with July 2024 commodity pricing plus new demolition assemblies.",
     "highlights": [
         "120+ commodity prices refreshed with July index data",
         "New rainscreen facade, geothermal HVAC, and EV charging assemblies",
-        "Regional multipliers updated for 13 major U.S. markets"
+        "Regional multipliers updated for 13 major U.S. markets",
+        "Demolition scope templates now available in detailed bidding"
     ]
 }
