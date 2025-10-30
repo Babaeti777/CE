@@ -12,6 +12,35 @@ import { TakeoffManager } from './takeoff.js';
             monthly: 30 * 24 * 60 * 60 * 1000
         };
 
+        const QUICK_SCOPE_CONFIG = [
+            {
+                id: 'foundation',
+                scopeLabel: 'Foundation System',
+                category: 'foundation',
+                fallbackMaterial: 'slab',
+                quantity: ({ sqft }) => sqft,
+                hint: 'Uses footprint square footage to price concrete work.',
+            },
+            {
+                id: 'framing',
+                scopeLabel: 'Structural Framing',
+                category: 'framing',
+                fallbackMaterial: 'wood',
+                quantity: ({ sqft, floors }) => sqft * floors,
+                hint: 'Multiplies footprint by the floor count for framing volume.',
+            },
+            {
+                id: 'exterior',
+                scopeLabel: 'Building Envelope',
+                category: 'exterior',
+                fallbackMaterial: 'vinyl',
+                quantity: ({ sqft, floors }) => sqft * floors * 0.8,
+                hint: 'Approx. 80% of exterior wall area for skin systems.',
+            }
+        ];
+
+        const QUICK_SCOPE_ORDER = QUICK_SCOPE_CONFIG.map(cfg => cfg.id);
+
         // --- STATE MANAGEMENT ---
         const state = {
             currentTab: 'dashboard',
@@ -26,6 +55,7 @@ import { TakeoffManager } from './takeoff.js';
             savedProjects: [],
             companyInfo: { name: '', address: '', phone: '', email: '' },
             currentEstimate: null,
+            quickEstimatorItems: [],
             editingProjectId: null,
             lineItemId: 0,
             lastFocusedInput: null,
@@ -108,7 +138,7 @@ import { TakeoffManager } from './takeoff.js';
                 localStorage.setItem('materialDatabase', JSON.stringify(payload));
             }
 
-            updateQuickEstimatorCards();
+            refreshQuickEstimatorFromDatabase();
             populateMaterialsTable();
             updateDatabaseBadge();
 
@@ -159,30 +189,483 @@ import { TakeoffManager } from './takeoff.js';
             return state.materialPrices?.[category]?.[key] || normalizeMaterialEntry(category, key, 0, state.databaseMeta.lastUpdated, state.databaseMeta.sources?.[0]?.name);
         }
 
-        function updateQuickEstimatorCards() {
-            const foundationCards = document.querySelectorAll('[data-foundation]');
-            foundationCards.forEach(card => {
-                const key = card.dataset.foundation;
-                const material = getMaterialData('foundation', key);
-                const priceEl = card.querySelector('.material-price');
-                if (priceEl) priceEl.textContent = `${formatCurrency(material.cost)}/${material.unit}`;
+        function getScopeConfig(identifier) {
+            return QUICK_SCOPE_CONFIG.find(cfg => cfg.id === identifier || cfg.category === identifier) || null;
+        }
+
+        function findFallbackMaterialKey(category, fallback) {
+            const materials = state.materialPrices?.[category] || {};
+            if (fallback && Object.prototype.hasOwnProperty.call(materials, fallback)) {
+                return fallback;
+            }
+            const keys = Object.keys(materials);
+            return keys.length ? keys[0] : fallback || '';
+        }
+
+        function getMaterialOptions(category) {
+            const materials = state.materialPrices?.[category] || {};
+            return Object.keys(materials).map(key => {
+                const data = getMaterialData(category, key);
+                return {
+                    key,
+                    label: data.label,
+                    unit: data.unit,
+                    cost: data.cost,
+                    lastUpdated: data.lastUpdated,
+                };
+            });
+        }
+
+        function ensureQuickEstimatorBaseline() {
+            if (!Array.isArray(state.quickEstimatorItems)) {
+                state.quickEstimatorItems = [];
+            }
+
+            QUICK_SCOPE_CONFIG.forEach(config => {
+                const existing = state.quickEstimatorItems.find(item => item.scopeId === config.id);
+                if (!existing) {
+                    const materialKey = findFallbackMaterialKey(config.category, config.fallbackMaterial);
+                    const material = getMaterialData(config.category, materialKey);
+                    state.quickEstimatorItems.push({
+                        id: `qe-${config.id}`,
+                        scopeId: config.id,
+                        scopeLabel: config.scopeLabel,
+                        category: config.category,
+                        materialKey,
+                        materialLabel: material.label,
+                        unit: material.unit,
+                        lastUpdated: material.lastUpdated,
+                        quantity: 0,
+                        manualQuantity: false,
+                        unitCost: material.cost,
+                        manualUnitCost: false,
+                        createdAt: Date.now(),
+                    });
+                } else {
+                    existing.scopeLabel = existing.scopeLabel || config.scopeLabel;
+                    existing.scopeId = config.id;
+                    existing.category = config.category;
+                    if (existing.createdAt == null) existing.createdAt = Date.now();
+                }
+            });
+        }
+
+        function syncQuickEstimatorMaterials({ reRender = false } = {}) {
+            if (!Array.isArray(state.quickEstimatorItems)) return;
+
+            state.quickEstimatorItems.forEach(item => {
+                if (item.category === 'custom') return;
+
+                const options = getMaterialOptions(item.category);
+                if (!options.length) {
+                    item.materialLabel = 'N/A';
+                    item.unit = item.unit || 'unit';
+                    return;
+                }
+
+                if (!item.materialKey || !options.some(opt => opt.key === item.materialKey)) {
+                    item.materialKey = options[0].key;
+                    item.manualUnitCost = false;
+                }
+
+                const material = getMaterialData(item.category, item.materialKey);
+                item.materialLabel = material.label;
+                item.unit = material.unit;
+                item.lastUpdated = material.lastUpdated;
+                if (!item.manualUnitCost) {
+                    item.unitCost = material.cost;
+                }
             });
 
-            const framingCards = document.querySelectorAll('[data-framing]');
-            framingCards.forEach(card => {
-                const key = card.dataset.framing;
-                const material = getMaterialData('framing', key);
-                const priceEl = card.querySelector('.material-price');
-                if (priceEl) priceEl.textContent = `${formatCurrency(material.cost)}/${material.unit}`;
+            if (reRender) renderEstimatorItems();
+        }
+
+        function getEstimatorInputs() {
+            const sqftInput = document.getElementById('sqft');
+            const floorsInput = document.getElementById('floors');
+            const sqft = sqftInput ? parseFloat(sqftInput.value) || 0 : 0;
+            const floors = floorsInput ? Math.max(parseFloat(floorsInput.value) || 0, 1) : 1;
+            return { sqft, floors };
+        }
+
+        function updateAutoQuantities({ reRender = false } = {}) {
+            if (!Array.isArray(state.quickEstimatorItems)) return;
+            const { sqft, floors } = getEstimatorInputs();
+
+            state.quickEstimatorItems.forEach(item => {
+                if (item.category === 'custom' || item.manualQuantity) return;
+                const config = getScopeConfig(item.scopeId || item.category);
+                if (!config || typeof config.quantity !== 'function') return;
+                const calculated = config.quantity({ sqft, floors });
+                item.quantity = Number.isFinite(calculated) && calculated > 0 ? calculated : 0;
             });
 
-            const exteriorCards = document.querySelectorAll('[data-exterior]');
-            exteriorCards.forEach(card => {
-                const key = card.dataset.exterior;
-                const material = getMaterialData('exterior', key);
-                const priceEl = card.querySelector('.material-price');
-                if (priceEl) priceEl.textContent = `${formatCurrency(material.cost)}/${material.unit}`;
+            if (reRender) renderEstimatorItems();
+        }
+
+        function getOrderedEstimatorItems() {
+            if (!Array.isArray(state.quickEstimatorItems)) return [];
+            const items = state.quickEstimatorItems.slice();
+            return items.sort((a, b) => {
+                const orderA = QUICK_SCOPE_ORDER.indexOf(a.scopeId);
+                const orderB = QUICK_SCOPE_ORDER.indexOf(b.scopeId);
+                if (orderA !== -1 && orderB !== -1) return orderA - orderB;
+                if (orderA !== -1) return -1;
+                if (orderB !== -1) return 1;
+                return (a.createdAt || 0) - (b.createdAt || 0);
             });
+        }
+
+        function renderEstimatorItems() {
+            const tbody = document.getElementById('estimatorItemsBody');
+            const emptyState = document.getElementById('estimatorEmptyState');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+            const items = getOrderedEstimatorItems();
+
+            if (!items.length) {
+                if (emptyState) emptyState.style.display = 'block';
+                updateEstimatorSummaryTotals();
+                return;
+            }
+
+            if (emptyState) emptyState.style.display = 'none';
+            items.forEach(item => {
+                tbody.appendChild(buildEstimatorRow(item));
+            });
+            updateEstimatorSummaryTotals();
+        }
+
+        function buildEstimatorRow(item) {
+            const row = document.createElement('tr');
+            row.className = 'estimator-row';
+            row.dataset.estimatorId = String(item.id);
+            if (item.scopeId) row.dataset.scope = item.scopeId;
+            row.dataset.category = item.category;
+
+            const scopeCell = document.createElement('td');
+            if (item.category === 'custom') {
+                const scopeInput = document.createElement('input');
+                scopeInput.type = 'text';
+                scopeInput.className = 'form-input estimator-scope-input';
+                scopeInput.placeholder = 'Scope name';
+                scopeInput.dataset.field = 'scopeName';
+                scopeInput.value = item.scopeLabel || item.customScopeName || '';
+                scopeCell.appendChild(scopeInput);
+            } else {
+                const title = document.createElement('div');
+                title.className = 'estimator-scope-title';
+                title.textContent = item.scopeLabel || getScopeConfig(item.scopeId)?.scopeLabel || toTitleCase(item.category);
+                scopeCell.appendChild(title);
+
+                const meta = document.createElement('div');
+                meta.className = 'estimator-scope-meta';
+                meta.dataset.role = 'quantityHint';
+                meta.textContent = item.manualQuantity ? 'Manual quantity override' : (getScopeConfig(item.scopeId || item.category)?.hint || '');
+                scopeCell.appendChild(meta);
+            }
+            row.appendChild(scopeCell);
+
+            const assemblyCell = document.createElement('td');
+            if (item.category === 'custom') {
+                const descriptionInput = document.createElement('input');
+                descriptionInput.type = 'text';
+                descriptionInput.className = 'form-input';
+                descriptionInput.placeholder = 'Describe allowance or material';
+                descriptionInput.dataset.field = 'customDescription';
+                descriptionInput.value = item.materialLabel || item.customDescription || '';
+                assemblyCell.appendChild(descriptionInput);
+            } else {
+                const select = document.createElement('select');
+                select.className = 'form-select estimator-assembly-select';
+                select.dataset.field = 'material';
+
+                getMaterialOptions(item.category).forEach(optionData => {
+                    const option = document.createElement('option');
+                    option.value = optionData.key;
+                    option.textContent = optionData.label;
+                    if (optionData.key === item.materialKey) option.selected = true;
+                    select.appendChild(option);
+                });
+
+                assemblyCell.appendChild(select);
+
+                const meta = document.createElement('div');
+                meta.className = 'estimator-assembly-meta';
+                meta.dataset.role = 'materialMeta';
+                meta.textContent = item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : (item.unit ? `Unit: ${item.unit}` : '');
+                assemblyCell.appendChild(meta);
+            }
+            row.appendChild(assemblyCell);
+
+            const quantityCell = document.createElement('td');
+            const quantityWrap = document.createElement('div');
+            quantityWrap.className = 'estimator-quantity-cell';
+
+            const quantityInput = document.createElement('input');
+            quantityInput.type = 'number';
+            quantityInput.className = 'form-input';
+            quantityInput.dataset.field = 'quantity';
+            quantityInput.step = '0.01';
+            quantityInput.min = '0';
+            quantityInput.value = Number.isFinite(item.quantity) ? item.quantity : 0;
+            quantityWrap.appendChild(quantityInput);
+
+            if (item.category === 'custom') {
+                const unitInput = document.createElement('input');
+                unitInput.type = 'text';
+                unitInput.className = 'form-input estimator-unit-input';
+                unitInput.dataset.field = 'unit';
+                unitInput.placeholder = 'Unit';
+                unitInput.value = item.unit || '';
+                quantityWrap.appendChild(unitInput);
+            } else {
+                const unitChip = document.createElement('span');
+                unitChip.className = 'unit-chip';
+                unitChip.dataset.role = 'unitLabel';
+                unitChip.textContent = item.unit || 'unit';
+                quantityWrap.appendChild(unitChip);
+            }
+
+            quantityCell.appendChild(quantityWrap);
+
+            if (item.category !== 'custom') {
+                const toggleButton = document.createElement('button');
+                toggleButton.type = 'button';
+                toggleButton.className = 'link-btn estimator-quantity-action';
+                toggleButton.dataset.action = item.manualQuantity ? 'reset-auto' : 'toggle-manual';
+                toggleButton.textContent = item.manualQuantity ? 'Use auto quantity' : 'Manual override';
+                quantityCell.appendChild(toggleButton);
+            }
+
+            row.appendChild(quantityCell);
+
+            const costCell = document.createElement('td');
+            const costInput = document.createElement('input');
+            costInput.type = 'number';
+            costInput.className = 'form-input';
+            costInput.dataset.field = 'unitCost';
+            costInput.step = '0.01';
+            costInput.min = '0';
+            costInput.value = Number.isFinite(item.unitCost) ? item.unitCost : 0;
+            costCell.appendChild(costInput);
+
+            const unitHint = document.createElement('span');
+            unitHint.className = 'unit-hint';
+            unitHint.dataset.role = 'unitHint';
+            unitHint.textContent = item.unit ? `per ${item.unit}` : '';
+            costCell.appendChild(unitHint);
+
+            row.appendChild(costCell);
+
+            const totalCell = document.createElement('td');
+            const totalValue = document.createElement('div');
+            totalValue.className = 'estimator-total';
+            totalValue.dataset.role = 'lineTotal';
+            totalValue.textContent = formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0));
+            totalCell.appendChild(totalValue);
+
+            if (item.category === 'custom') {
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'link-btn danger estimator-quantity-action';
+                removeBtn.dataset.action = 'remove-item';
+                removeBtn.textContent = 'Remove';
+                totalCell.appendChild(removeBtn);
+            }
+
+            row.appendChild(totalCell);
+
+            return row;
+        }
+
+        function updateEstimatorRowDisplay(row, item) {
+            if (!row) return;
+
+            const quantityInput = row.querySelector('[data-field="quantity"]');
+            if (quantityInput && document.activeElement !== quantityInput) {
+                quantityInput.value = Number.isFinite(item.quantity) ? item.quantity : 0;
+            }
+
+            const unitInput = row.querySelector('[data-field="unit"]');
+            if (unitInput && document.activeElement !== unitInput) {
+                unitInput.value = item.unit || '';
+            }
+
+            const unitLabel = row.querySelector('[data-role="unitLabel"]');
+            if (unitLabel) {
+                unitLabel.textContent = item.unit || 'unit';
+            }
+
+            const unitHint = row.querySelector('[data-role="unitHint"]');
+            if (unitHint) {
+                unitHint.textContent = item.unit ? `per ${item.unit}` : '';
+            }
+
+            const materialSelect = row.querySelector('[data-field="material"]');
+            if (materialSelect && materialSelect.value !== item.materialKey) {
+                materialSelect.value = item.materialKey || '';
+            }
+
+            const materialMeta = row.querySelector('[data-role="materialMeta"]');
+            if (materialMeta) {
+                materialMeta.textContent = item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : (item.unit ? `Unit: ${item.unit}` : '');
+            }
+
+            const quantityHint = row.querySelector('[data-role="quantityHint"]');
+            if (quantityHint) {
+                quantityHint.textContent = item.manualQuantity ? 'Manual quantity override' : (getScopeConfig(item.scopeId || item.category)?.hint || '');
+            }
+
+            const toggleButton = row.querySelector('.estimator-quantity-action[data-action]');
+            if (toggleButton && item.category !== 'custom') {
+                if (item.manualQuantity) {
+                    toggleButton.dataset.action = 'reset-auto';
+                    toggleButton.textContent = 'Use auto quantity';
+                } else {
+                    toggleButton.dataset.action = 'toggle-manual';
+                    toggleButton.textContent = 'Manual override';
+                }
+            }
+
+            const totalValue = row.querySelector('[data-role="lineTotal"]');
+            if (totalValue) {
+                totalValue.textContent = formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0));
+            }
+        }
+
+        function updateEstimatorSummaryTotals() {
+            let subtotal = 0;
+            (state.quickEstimatorItems || []).forEach(item => {
+                const quantity = parseFloat(item.quantity) || 0;
+                const rate = parseFloat(item.unitCost) || 0;
+                item.total = quantity * rate;
+                subtotal += item.total;
+            });
+
+            const subtotalEl = document.getElementById('estimatorMaterialsSubtotal');
+            if (subtotalEl) {
+                subtotalEl.textContent = formatCurrency(subtotal);
+            }
+            return subtotal;
+        }
+
+        function refreshQuickEstimatorFromDatabase() {
+            ensureQuickEstimatorBaseline();
+            syncQuickEstimatorMaterials({ reRender: false });
+            updateAutoQuantities({ reRender: false });
+            renderEstimatorItems();
+        }
+
+        function findEstimatorItemByRow(row) {
+            if (!row) return null;
+            const id = row.dataset.estimatorId;
+            return (state.quickEstimatorItems || []).find(item => String(item.id) === id) || null;
+        }
+
+        function addCustomEstimatorItem() {
+            const newItem = {
+                id: `custom-${Date.now()}`,
+                scopeId: null,
+                scopeLabel: 'Custom Item',
+                customScopeName: 'Custom Item',
+                category: 'custom',
+                materialKey: null,
+                materialLabel: '',
+                customDescription: '',
+                unit: '',
+                lastUpdated: null,
+                quantity: 0,
+                manualQuantity: true,
+                unitCost: 0,
+                manualUnitCost: true,
+                createdAt: Date.now(),
+            };
+
+            if (!Array.isArray(state.quickEstimatorItems)) {
+                state.quickEstimatorItems = [];
+            }
+
+            state.quickEstimatorItems.push(newItem);
+            renderEstimatorItems();
+
+            requestAnimationFrame(() => {
+                document.querySelector(`[data-estimator-id="${newItem.id}"] input[data-field="scopeName"]`)?.focus();
+            });
+        }
+
+        function handleEstimatorItemInput(event) {
+            const field = event.target?.dataset?.field;
+            if (!field) return;
+            const row = event.target.closest('.estimator-row');
+            const item = findEstimatorItemByRow(row);
+            if (!item) return;
+
+            if (field === 'quantity') {
+                const value = parseFloat(event.target.value);
+                item.quantity = Number.isFinite(value) ? value : 0;
+                item.manualQuantity = true;
+            } else if (field === 'unitCost') {
+                const value = parseFloat(event.target.value);
+                item.unitCost = Number.isFinite(value) ? value : 0;
+                item.manualUnitCost = true;
+            } else if (field === 'scopeName') {
+                item.scopeLabel = event.target.value;
+                item.customScopeName = event.target.value;
+            } else if (field === 'customDescription') {
+                item.materialLabel = event.target.value;
+                item.customDescription = event.target.value;
+            } else if (field === 'unit') {
+                item.unit = event.target.value;
+            }
+
+            updateEstimatorRowDisplay(row, item);
+            updateEstimatorSummaryTotals();
+        }
+
+        function handleEstimatorItemChange(event) {
+            const field = event.target?.dataset?.field;
+            if (!field) return;
+            const row = event.target.closest('.estimator-row');
+            const item = findEstimatorItemByRow(row);
+            if (!item) return;
+
+            if (field === 'material') {
+                item.materialKey = event.target.value;
+                item.manualUnitCost = false;
+                const material = getMaterialData(item.category, item.materialKey);
+                item.materialLabel = material.label;
+                item.unit = material.unit;
+                item.lastUpdated = material.lastUpdated;
+                item.unitCost = material.cost;
+                updateEstimatorRowDisplay(row, item);
+                updateEstimatorSummaryTotals();
+            }
+        }
+
+        function handleEstimatorItemClick(event) {
+            const actionButton = event.target?.closest('[data-action]');
+            if (!actionButton) return;
+            const action = actionButton.dataset.action;
+            const row = actionButton.closest('.estimator-row');
+            const item = findEstimatorItemByRow(row);
+            if (!item) return;
+
+            if (action === 'toggle-manual') {
+                item.manualQuantity = true;
+                updateEstimatorRowDisplay(row, item);
+                updateEstimatorSummaryTotals();
+            } else if (action === 'reset-auto') {
+                item.manualQuantity = false;
+                updateAutoQuantities({ reRender: false });
+                updateEstimatorRowDisplay(row, item);
+                updateEstimatorSummaryTotals();
+            } else if (action === 'remove-item') {
+                state.quickEstimatorItems = (state.quickEstimatorItems || []).filter(existing => existing !== item);
+                renderEstimatorItems();
+                return;
+            }
         }
 
         function toTitleCase(value = '') {
@@ -363,7 +846,7 @@ import { TakeoffManager } from './takeoff.js';
         }
 
         function refreshMaterialDependentViews() {
-            updateQuickEstimatorCards();
+            refreshQuickEstimatorFromDatabase();
             populateMaterialsTable();
             populateLaborTable();
             populateEquipmentTable();
@@ -486,38 +969,6 @@ import { TakeoffManager } from './takeoff.js';
                     });
                 }
             }
-        }
-
-        function getMaterialEntry(category, key) {
-            return state.materialPrices?.[category]?.[key] ?? null;
-        }
-
-        function getMaterialPrice(category, key) {
-            const entry = getMaterialEntry(category, key);
-            if (entry == null) return 0;
-            if (typeof entry === 'number') return entry;
-            if (typeof entry === 'object' && entry.price != null) return Number(entry.price);
-            return 0;
-        }
-
-        function getMaterialUnit(category, key) {
-            const entry = getMaterialEntry(category, key);
-            if (typeof entry === 'object' && entry.unit) return entry.unit;
-            return 'unit';
-        }
-
-        function updateQuickEstimatorCards() {
-            document.querySelectorAll('.material-card').forEach(card => {
-                const category = card.dataset.category;
-                const key = card.dataset.material || card.dataset.foundation || card.dataset.framing || card.dataset.exterior;
-                if (!category || !key) return;
-                const price = getMaterialPrice(category, key);
-                const unit = getMaterialUnit(category, key);
-                const priceElement = card.querySelector('.material-price');
-                if (priceElement) {
-                    priceElement.textContent = price ? `${formatCurrency(price)}/${unit}` : 'N/A';
-                }
-            });
         }
 
         function populateMaterialsTable() {
@@ -703,9 +1154,29 @@ import { TakeoffManager } from './takeoff.js';
         function setupEventListeners() {
             document.getElementById('menuToggle')?.addEventListener('click', toggleSidebar);
             document.getElementById('estimatorForm')?.addEventListener('submit', handleEstimatorSubmit);
-            document.querySelectorAll('.material-card').forEach(card => card.addEventListener('click', handleMaterialSelection));
             document.getElementById('saveProjectBtn')?.addEventListener('click', saveProject);
             document.getElementById('addLineItemBtn')?.addEventListener('click', () => addLineItem());
+
+            document.getElementById('addEstimatorItemBtn')?.addEventListener('click', addCustomEstimatorItem);
+
+            const estimatorItemsBody = document.getElementById('estimatorItemsBody');
+            if (estimatorItemsBody) {
+                estimatorItemsBody.addEventListener('input', handleEstimatorItemInput);
+                estimatorItemsBody.addEventListener('change', handleEstimatorItemChange);
+                estimatorItemsBody.addEventListener('click', handleEstimatorItemClick);
+                estimatorItemsBody.addEventListener('focusin', (e) => {
+                    if (e.target.matches('input, select')) {
+                        state.lastFocusedInput = e.target;
+                    }
+                });
+            }
+
+            ['sqft', 'floors'].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.addEventListener('input', () => updateAutoQuantities({ reRender: true }));
+                }
+            });
             
             // Export Buttons
             document.getElementById('exportPdfBtn')?.addEventListener('click', exportAsPdf);
@@ -741,7 +1212,7 @@ import { TakeoffManager } from './takeoff.js';
             });
             
             const lineItemsContainer = document.getElementById('lineItems');
-            lineItemsContainer.addEventListener('change', (e) => {
+            lineItemsContainer?.addEventListener('change', (e) => {
                 const target = e.target;
                 const row = target.closest('.line-item-row');
                 if (!row) return;
@@ -752,7 +1223,7 @@ import { TakeoffManager } from './takeoff.js';
                     updateLineItemFromSelection(target);
                 }
             });
-            lineItemsContainer.addEventListener('input', (e) => {
+            lineItemsContainer?.addEventListener('input', (e) => {
                 const target = e.target;
                 const row = target.closest('.line-item-row');
                 if (!row) return;
@@ -761,13 +1232,13 @@ import { TakeoffManager } from './takeoff.js';
                     updateLineItemTotal(row);
                 }
             });
-            lineItemsContainer.addEventListener('click', (e) => {
+            lineItemsContainer?.addEventListener('click', (e) => {
                 const removeButton = e.target.closest('.remove-line-item');
                 if (removeButton) {
                     removeLineItem(removeButton.closest('.line-item-row'));
                 }
             });
-            lineItemsContainer.addEventListener('focusin', (e) => {
+            lineItemsContainer?.addEventListener('focusin', (e) => {
                 if (e.target.matches('[data-field="quantity"], [data-field="rate"]')) {
                     state.lastFocusedInput = e.target;
                 }
@@ -780,6 +1251,7 @@ import { TakeoffManager } from './takeoff.js';
             document.getElementById('modeBasic')?.addEventListener('click', () => updateCalcMode('basic'));
             document.getElementById('modeEngineering')?.addEventListener('click', () => updateCalcMode('engineering'));
             document.getElementById('viewAllProjectsBtn')?.addEventListener('click', () => switchTab('projects'));
+            document.addEventListener('keydown', handleCalculatorKeydown);
             updateCalcMode(state.calcMode);
         }
 
@@ -866,7 +1338,16 @@ import { TakeoffManager } from './takeoff.js';
         function formatCurrency(amount) {
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
         }
-        
+
+        function formatNumberForDisplay(value) {
+            const numeric = Number.parseFloat(value);
+            if (!Number.isFinite(numeric)) return '0';
+            const formatter = new Intl.NumberFormat(undefined, {
+                maximumFractionDigits: numeric % 1 === 0 ? 0 : 2,
+            });
+            return formatter.format(numeric);
+        }
+
         function openModal(modalId) {
             document.getElementById(modalId)?.classList.add('active');
         }
@@ -876,53 +1357,46 @@ import { TakeoffManager } from './takeoff.js';
         }
 
         // --- QUICK ESTIMATOR ---
-        function handleMaterialSelection(e) {
-            const card = e.currentTarget;
-            card.parentElement.querySelectorAll('.material-card').forEach(c => c.classList.remove('selected'));
-            card.classList.add('selected');
-        }
-
         function handleEstimatorSubmit(e) {
             e.preventDefault();
             const form = e.target;
-            const sqft = parseFloat(form.querySelector('#sqft').value);
-            const floors = parseFloat(form.querySelector('#floors').value);
-            const laborMultiplier = parseFloat(form.querySelector('#laborCost').value);
+            const laborMultiplier = parseFloat(form.querySelector('#laborCost').value) || 0;
 
-            const selected = {
-                foundation: document.querySelector('.material-card[data-category="foundation"].selected')?.dataset.material,
-                framing: document.querySelector('.material-card[data-category="framing"].selected')?.dataset.material,
-                exterior: document.querySelector('.material-card[data-category="exterior"].selected')?.dataset.material,
-            };
+            refreshQuickEstimatorFromDatabase();
+            updateEstimatorSummaryTotals();
 
-            if (!selected.foundation || !selected.framing || !selected.exterior) {
-                showToast('Please select all material types.', 'error');
+            const items = getOrderedEstimatorItems().map(item => ({
+                ...item,
+                quantity: parseFloat(item.quantity) || 0,
+                unitCost: parseFloat(item.unitCost) || 0,
+                total: parseFloat(item.total) || ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitCost) || 0)),
+            }));
+
+            state.quickEstimatorItems = items.map(item => ({ ...item }));
+
+            if (!items.length) {
+                showToast('Add at least one assembly or allowance before generating an estimate.', 'error');
                 return;
             }
 
-            const foundationData = getMaterialData('foundation', selected.foundation);
-            const framingData = getMaterialData('framing', selected.framing);
-            const exteriorData = getMaterialData('exterior', selected.exterior);
-
-            const costs = {
-                foundation: foundationData.cost * sqft,
-                framing: framingData.cost * sqft * floors,
-                exterior: exteriorData.cost * sqft * floors * 0.8,
-            };
-
-            const materialTotal = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
+            const materialTotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
             const laborTotal = materialTotal * laborMultiplier;
             const total = materialTotal + laborTotal;
+
+            const { sqft, floors } = getEstimatorInputs();
 
             state.currentEstimate = {
                 id: state.editingProjectId || state.currentEstimate?.id || Date.now(),
                 estimateType: 'quick',
                 name: form.querySelector('#projectName').value,
                 type: form.querySelector('#projectType').value,
-                sqft, floors, laborMultiplier,
-                selected,
-                costs,
-                materialTotal, laborTotal, total,
+                sqft,
+                floors,
+                laborMultiplier,
+                items,
+                materialTotal,
+                laborTotal,
+                total,
                 date: new Date().toISOString(),
                 status: state.currentEstimate?.status || 'review'
             };
@@ -936,11 +1410,25 @@ import { TakeoffManager } from './takeoff.js';
             document.getElementById('totalCost').textContent = formatCurrency(estimate.total);
 
             const breakdownContent = document.getElementById('breakdownContent');
-            breakdownContent.innerHTML = `
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--gray-200);"><span>Foundation:</span> <strong>${formatCurrency(estimate.costs.foundation)}</strong></div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--gray-200);"><span>Framing:</span> <strong>${formatCurrency(estimate.costs.framing)}</strong></div>
-                <div style="display: flex; justify-content: space-between;"><span>Exterior:</span> <strong>${formatCurrency(estimate.costs.exterior)}</strong></div>
-            `;
+            if (breakdownContent) {
+                if (!Array.isArray(estimate.items) || !estimate.items.length) {
+                    breakdownContent.innerHTML = '<p>No assemblies calculated yet.</p>';
+                } else {
+                    breakdownContent.innerHTML = estimate.items.map(item => {
+                        const label = item.scopeLabel || item.customScopeName || item.materialLabel || 'Line Item';
+                        const unitDetail = item.unit ? ` • ${item.unit}` : '';
+                        return `
+                            <div class="estimator-breakdown-row">
+                                <div>
+                                    <strong>${label}</strong>
+                                    <div class="estimator-breakdown-meta">${formatNumberForDisplay(item.quantity)}${unitDetail}</div>
+                                </div>
+                                <div>${formatCurrency(item.total || 0)}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
 
             document.getElementById('breakdownCard').style.display = 'block';
             document.getElementById('estimateSummary').style.display = 'block';
@@ -951,7 +1439,14 @@ import { TakeoffManager } from './takeoff.js';
                 showToast('No estimate to save.', 'warning');
                 return;
             }
-            const estimate = { ...state.currentEstimate, estimateType: 'quick', status: state.currentEstimate.status || 'review' };
+            const estimate = {
+                ...state.currentEstimate,
+                estimateType: 'quick',
+                status: state.currentEstimate.status || 'review',
+                items: Array.isArray(state.currentEstimate.items)
+                    ? state.currentEstimate.items.map(item => ({ ...item }))
+                    : [],
+            };
             if (state.editingProjectId) {
                 const idx = state.savedProjects.findIndex(p => p.id === state.editingProjectId);
                 if (idx !== -1) {
@@ -971,26 +1466,53 @@ import { TakeoffManager } from './takeoff.js';
         function populateEstimatorForm(data) {
             document.getElementById('projectName').value = data.name || '';
             document.getElementById('projectType').value = data.type || '';
-            document.getElementById('sqft').value = data.sqft || '';
-            document.getElementById('floors').value = data.floors || '';
-            document.getElementById('laborCost').value = data.laborMultiplier || '';
+            document.getElementById('sqft').value = data.sqft ?? '';
+            document.getElementById('floors').value = data.floors ?? '';
+            document.getElementById('laborCost').value = data.laborMultiplier ?? '';
 
-            document.querySelectorAll('.material-card[data-category="foundation"]').forEach(c => {
-                c.classList.toggle('selected', c.dataset.material === data.selected?.foundation);
-            });
-            document.querySelectorAll('.material-card[data-category="framing"]').forEach(c => {
-                c.classList.toggle('selected', c.dataset.material === data.selected?.framing);
-            });
-            document.querySelectorAll('.material-card[data-category="exterior"]').forEach(c => {
-                c.classList.toggle('selected', c.dataset.material === data.selected?.exterior);
-            });
+            if (Array.isArray(data.items) && data.items.length) {
+                state.quickEstimatorItems = data.items.map(item => ({
+                    ...item,
+                    manualQuantity: item.manualQuantity ?? false,
+                    manualUnitCost: item.manualUnitCost ?? false,
+                    createdAt: item.createdAt ?? Date.now(),
+                }));
+            } else if (data.selected) {
+                state.quickEstimatorItems = QUICK_SCOPE_CONFIG.map(config => {
+                    const legacyKey = data.selected?.[config.id] || data.selected?.[config.category];
+                    const materialKey = legacyKey || findFallbackMaterialKey(config.category, config.fallbackMaterial);
+                    const material = getMaterialData(config.category, materialKey);
+                    return {
+                        id: `qe-${config.id}`,
+                        scopeId: config.id,
+                        scopeLabel: config.scopeLabel,
+                        category: config.category,
+                        materialKey,
+                        materialLabel: material.label,
+                        unit: material.unit,
+                        lastUpdated: material.lastUpdated,
+                        quantity: 0,
+                        manualQuantity: false,
+                        unitCost: material.cost,
+                        manualUnitCost: false,
+                        createdAt: Date.now(),
+                    };
+                });
+            } else {
+                state.quickEstimatorItems = [];
+            }
+
+            refreshQuickEstimatorFromDatabase();
         }
 
         function editProject(id) {
             const project = state.savedProjects.find(p => p.id === id && p.estimateType === 'quick');
             if (!project) return;
             state.editingProjectId = id;
-            state.currentEstimate = { ...project };
+            state.currentEstimate = {
+                ...project,
+                items: Array.isArray(project.items) ? project.items.map(item => ({ ...item })) : [],
+            };
             populateEstimatorForm(project);
             displayEstimate(project);
             switchTab('estimator');
@@ -1071,7 +1593,9 @@ import { TakeoffManager } from './takeoff.js';
             `;
 
             const container = document.getElementById('lineItems');
-            container.appendChild(div);
+            container.prepend(div);
+            div.classList.add('line-item-new');
+            setTimeout(() => div.classList.remove('line-item-new'), 400);
 
             const categorySelect = div.querySelector('[data-field="category"]');
             if (item?.category && state.lineItemCategories[item.category]) {
@@ -1265,6 +1789,32 @@ import { TakeoffManager } from './takeoff.js';
                 state.calculator.displayValue = String(Math.sqrt(parseFloat(state.calculator.displayValue)));
             }
             updateCalculatorDisplay();
+        }
+
+        function handleCalculatorKeydown(event) {
+            const modal = document.getElementById('calculatorModal');
+            if (!modal || !modal.classList.contains('active')) return;
+
+            const key = event.key;
+            if (/^[0-9]$/.test(key) || key === '.') {
+                inputDigit(key);
+                updateCalculatorDisplay();
+                event.preventDefault();
+            } else if (['+', '-', '*', '/'].includes(key)) {
+                handleOperator(key);
+                event.preventDefault();
+            } else if (key === 'Enter' || key === '=') {
+                handleOperator('=');
+                updateCalculatorDisplay();
+                event.preventDefault();
+            } else if (key === 'Backspace') {
+                state.calculator.displayValue = state.calculator.displayValue.slice(0, -1) || '0';
+                updateCalculatorDisplay();
+                event.preventDefault();
+            } else if (key === 'Escape') {
+                closeModal('calculatorModal');
+                event.preventDefault();
+            }
         }
 
         function inputDigit(digit) {

@@ -280,6 +280,250 @@
             color: var(--dark);
         }
 
+        .card-subtitle {
+            color: var(--gray-600);
+            font-size: 0.95rem;
+            margin-top: 0.35rem;
+        }
+
+        .form-note {
+            font-size: 0.85rem;
+            color: var(--gray-600);
+            background: var(--gray-100);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            border: 1px solid var(--gray-200);
+        }
+
+        .compact-grid {
+            gap: 1rem;
+        }
+
+        .estimator-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr);
+            gap: 2rem;
+            align-items: flex-start;
+        }
+
+        .estimator-form {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .estimator-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .estimator-table-wrapper {
+            position: relative;
+            border: 1px solid var(--gray-200);
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--gray-100);
+        }
+
+        .estimator-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 640px;
+        }
+
+        .estimator-table thead {
+            background: white;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .estimator-table th {
+            text-align: left;
+            padding: 1rem 1.25rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--gray-600);
+        }
+
+        .estimator-table tbody tr {
+            background: white;
+        }
+
+        .estimator-table tbody tr:nth-child(even) {
+            background: var(--gray-100);
+        }
+
+        .estimator-row {
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .estimator-row:last-child {
+            border-bottom: none;
+        }
+
+        .estimator-row td {
+            padding: 1.25rem;
+            vertical-align: top;
+        }
+
+        .estimator-scope-title {
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .estimator-scope-meta {
+            font-size: 0.85rem;
+            color: var(--gray-600);
+        }
+
+        .estimator-scope-input {
+            font-weight: 600;
+        }
+
+        .estimator-assembly-meta {
+            margin-top: 0.4rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .estimator-quantity-cell {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .estimator-unit-input {
+            max-width: 120px;
+        }
+
+        .unit-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: var(--gray-100);
+            border: 1px solid var(--gray-200);
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .unit-hint {
+            display: block;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--gray-500);
+        }
+
+        .estimator-total {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--dark);
+        }
+
+        .estimator-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .estimator-total-chip {
+            background: rgba(99, 102, 241, 0.08);
+            color: var(--primary);
+            padding: 0.75rem 1.25rem;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .estimator-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .estimator-empty {
+            margin: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--gray-600);
+            text-align: center;
+        }
+
+        .estimator-breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .estimator-breakdown-row:last-child {
+            border-bottom: none;
+        }
+
+        .estimator-breakdown-meta {
+            font-size: 0.8rem;
+            color: var(--gray-600);
+            margin-top: 0.25rem;
+        }
+
+        .link-btn {
+            border: none;
+            background: none;
+            color: var(--primary);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .estimator-quantity-action {
+            display: inline-block;
+            margin-top: 0.5rem;
+        }
+
+        .link-btn:hover,
+        .link-btn:focus {
+            text-decoration: underline;
+        }
+
+        .link-btn.danger {
+            color: var(--danger);
+        }
+
+        .line-item-table-wrapper {
+            margin-top: 1.5rem;
+            border: 1px solid var(--gray-200);
+            border-radius: 16px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .line-item-header {
+            gap: 1rem;
+        }
+
+        .line-item-table-head {
+            display: grid;
+            grid-template-columns: 2fr 2fr 1fr 1fr 1fr 1fr auto;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--gray-100);
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--gray-600);
+        }
+
+        .line-item-table-body {
+            padding: 1.5rem;
+            background: var(--gray-100);
+        }
+
         /* Grid Layouts */
         .grid-2 {
             display: grid;
@@ -899,6 +1143,21 @@
             border-radius: 12px;
             margin-bottom: 0.75rem;
             align-items: center;
+        }
+
+        .line-item-new {
+            animation: lineItemDrop 0.35s ease;
+        }
+
+        @keyframes lineItemDrop {
+            from {
+                transform: translateY(-8px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
         
         .line-item-row input, .line-item-row select {
@@ -1562,6 +1821,23 @@
             .header {
                 padding-left: 5rem;
             }
+
+            .estimator-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .estimator-summary {
+                flex-direction: column;
+            }
+
+            .line-item-table-head,
+            .line-item-table-body {
+                min-width: 720px;
+            }
+
+            .line-item-table-wrapper {
+                overflow-x: auto;
+            }
         }
 
         @media (max-width: 768px) {
@@ -1583,6 +1859,16 @@
             .line-item-row {
                 grid-template-columns: 1fr;
                 gap: 0.5rem;
+            }
+            .estimator-table-wrapper {
+                overflow-x: auto;
+            }
+            .estimator-table {
+                min-width: 520px;
+            }
+            .estimator-actions {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
 
