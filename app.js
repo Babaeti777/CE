@@ -1132,6 +1132,7 @@ import {
             loadSavedData();
             setupEventListeners();
             setupNavigation();
+            updateAuthUI();
             populateMaterialsTable();
             loadProjects();
             updateDashboard();

@@ -1855,6 +1855,16 @@
                 flex-direction: column;
                 align-items: flex-start;
             }
+            .cloud-auth {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .cloud-auth-profile {
+                width: 100%;
+            }
+            .cloud-auth .btn {
+                width: 100%;
+            }
         }
 
         @media (max-width: 640px) {
