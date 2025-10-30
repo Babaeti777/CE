@@ -7,11 +7,7 @@ import {
     saveCompanyInfo as saveCompanyInfoToCloud,
     loadCompanyInfo as loadCompanyInfoFromCloud,
     fetchProjects as fetchProjectsFromCloud,
-    replaceAllProjects as replaceAllProjectsInCloud,
-    signInWithGoogle as firebaseSignInWithGoogle,
-    signOutFirebase as firebaseSignOut,
-    onAuthStateChanged as onFirebaseAuthStateChanged,
-    getCurrentUser as getFirebaseCurrentUser
+    replaceAllProjects as replaceAllProjectsInCloud
 } from './firebase.js';
 
 (function() {
@@ -97,14 +93,12 @@ import {
             syncProfileId: null,
             remoteSyncEnabled: false,
             remoteSyncStatus: 'disabled',
-            firebaseUser: null,
         };
 
         let takeoffManager = null;
         let autoSyncTimeoutId = null;
         let autoSyncInFlight = false;
         let unsubscribeCloud = null;
-        let unsubscribeAuth = null;
         let applyingRemoteProjects = false;
         let firebaseReady = false;
 
@@ -1155,7 +1149,6 @@ import {
                 bidDateInput.value = new Date().toISOString().split('T')[0];
             }
 
-            updateCloudAuthUi({ configured: isFirebaseConfigured() });
             await initCloudSync();
         }
 
@@ -1253,87 +1246,6 @@ import {
             }
         }
 
-        function updateCloudAuthUi({ configured = true } = {}) {
-            const statusEl = document.getElementById('cloudAuthStatus');
-            const signInBtn = document.getElementById('googleSignInBtn');
-            const signOutBtn = document.getElementById('googleSignOutBtn');
-            const userContainer = document.getElementById('cloudAuthUser');
-            const nameEl = document.getElementById('cloudAuthName');
-            const emailEl = document.getElementById('cloudAuthEmail');
-            const avatarEl = document.getElementById('cloudAuthAvatar');
-
-            const disableAll = () => {
-                if (signInBtn) {
-                    signInBtn.disabled = true;
-                    signInBtn.hidden = false;
-                }
-                if (signOutBtn) {
-                    signOutBtn.disabled = true;
-                    signOutBtn.hidden = true;
-                }
-                if (userContainer) userContainer.hidden = true;
-            };
-
-            if (!configured) {
-                if (statusEl) statusEl.textContent = 'Add your Firebase configuration to enable Google sign-in.';
-                disableAll();
-                return;
-            }
-
-            if (!firebaseReady) {
-                if (statusEl) statusEl.textContent = 'Firebase is initialising...';
-                if (signInBtn) {
-                    signInBtn.disabled = true;
-                    signInBtn.hidden = false;
-                }
-                if (signOutBtn) {
-                    signOutBtn.disabled = true;
-                    signOutBtn.hidden = true;
-                }
-                if (userContainer) userContainer.hidden = true;
-                return;
-            }
-
-            const user = state.firebaseUser;
-            if (user) {
-                if (statusEl) statusEl.textContent = 'Signed in with Google';
-                if (signInBtn) {
-                    signInBtn.hidden = true;
-                    signInBtn.disabled = false;
-                }
-                if (signOutBtn) {
-                    signOutBtn.hidden = false;
-                    signOutBtn.disabled = false;
-                }
-                if (userContainer) {
-                    userContainer.hidden = false;
-                    if (avatarEl) {
-                        const photo = user.photoURL || '';
-                        if (photo) {
-                            avatarEl.src = photo;
-                            avatarEl.alt = user.displayName ? `${user.displayName} avatar` : 'User avatar';
-                            avatarEl.hidden = false;
-                        } else {
-                            avatarEl.hidden = true;
-                        }
-                    }
-                    if (nameEl) nameEl.textContent = user.displayName || 'Google account';
-                    if (emailEl) emailEl.textContent = user.email || '';
-                }
-            } else {
-                if (statusEl) statusEl.textContent = 'Sign in with Google to enable cloud sync.';
-                if (signInBtn) {
-                    signInBtn.hidden = false;
-                    signInBtn.disabled = false;
-                }
-                if (signOutBtn) {
-                    signOutBtn.hidden = true;
-                    signOutBtn.disabled = true;
-                }
-                if (userContainer) userContainer.hidden = true;
-            }
-        }
-
         function persistLocalProjects() {
             try {
                 localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
@@ -1412,7 +1324,7 @@ import {
         }
 
         async function hydrateCloudState({ allowUpload = true } = {}) {
-            if (!state.remoteSyncEnabled || !state.syncProfileId || !state.firebaseUser) return;
+            if (!state.remoteSyncEnabled || !state.syncProfileId) return;
 
             updateCloudStatus('connecting', CLOUD_STATUS_MESSAGES.connecting);
             try {
@@ -1444,7 +1356,7 @@ import {
         }
 
         function startCloudSubscription() {
-            if (!state.remoteSyncEnabled || !firebaseReady || !state.syncProfileId || !state.firebaseUser) return;
+            if (!state.remoteSyncEnabled || !firebaseReady || !state.syncProfileId) return;
             stopCloudSubscription();
             unsubscribeCloud = subscribeToCloudProjects(state.syncProfileId, (projects) => {
                 applyRemoteProjects(projects);
@@ -1455,46 +1367,11 @@ import {
             });
         }
 
-        async function handleGoogleSignIn(event) {
-            event?.preventDefault?.();
-            if (!firebaseReady) {
-                showToast('Firebase is not ready yet. Please try again in a moment.', 'warning');
-                return;
-            }
-            try {
-                updateCloudStatus('connecting', 'Signing in...');
-                await firebaseSignInWithGoogle();
-            } catch (error) {
-                console.error('Google sign-in failed:', error);
-                updateCloudStatus('error', 'Sign-in failed');
-                showToast('Google sign-in failed. Please try again.', 'error');
-            }
-        }
-
-        async function handleGoogleSignOut(event) {
-            event?.preventDefault?.();
-            if (!firebaseReady) return;
-            try {
-                await firebaseSignOut();
-                showToast('Signed out of Google.', 'success');
-            } catch (error) {
-                console.error('Failed to sign out of Google:', error);
-                showToast('Unable to sign out. Please try again later.', 'error');
-            }
-        }
-
         async function initCloudSync() {
             ensureSyncProfileId();
             if (!isFirebaseConfigured()) {
-                if (typeof unsubscribeAuth === 'function') {
-                    unsubscribeAuth();
-                    unsubscribeAuth = null;
-                }
                 updateCloudStatus('disabled', CLOUD_STATUS_MESSAGES.disabled);
                 state.remoteSyncEnabled = false;
-                state.firebaseUser = null;
-                firebaseReady = false;
-                updateCloudAuthUi({ configured: false });
                 return;
             }
 
@@ -1502,50 +1379,14 @@ import {
             try {
                 await initializeFirebase();
                 firebaseReady = true;
-                updateCloudAuthUi();
-
-                if (typeof unsubscribeAuth === 'function') {
-                    unsubscribeAuth();
-                }
-
-                unsubscribeAuth = onFirebaseAuthStateChanged((user) => {
-                    state.firebaseUser = user || null;
-                    const signedIn = Boolean(state.firebaseUser);
-                    if (signedIn) {
-                        state.remoteSyncEnabled = true;
-                        updateCloudAuthUi();
-                        hydrateCloudState({ allowUpload: true });
-                        startCloudSubscription();
-                    } else {
-                        stopCloudSubscription();
-                        state.remoteSyncEnabled = false;
-                        updateCloudStatus('offline', 'Sign in to enable cloud sync.');
-                        updateCloudAuthUi();
-                    }
-                });
-
-                const initialUser = getFirebaseCurrentUser?.() || null;
-                if (initialUser) {
-                    state.firebaseUser = initialUser;
-                    state.remoteSyncEnabled = true;
-                    updateCloudAuthUi();
-                    await hydrateCloudState({ allowUpload: true });
-                    startCloudSubscription();
-                } else {
-                    state.remoteSyncEnabled = false;
-                    updateCloudStatus('offline', 'Sign in to enable cloud sync.');
-                    updateCloudAuthUi();
-                }
+                state.remoteSyncEnabled = true;
+                await hydrateCloudState({ allowUpload: true });
+                startCloudSubscription();
             } catch (error) {
                 console.error('Firebase initialization failed:', error);
                 state.remoteSyncEnabled = false;
                 firebaseReady = false;
                 updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
-                updateCloudAuthUi();
-                const authStatusEl = document.getElementById('cloudAuthStatus');
-                if (authStatusEl) {
-                    authStatusEl.textContent = 'Unable to reach Firebase. Check your configuration.';
-                }
             }
         }
 
@@ -1567,7 +1408,7 @@ import {
             state.syncProfileId = value;
             updateSyncIdDisplay();
             input.value = '';
-            if (state.remoteSyncEnabled && state.firebaseUser) {
+            if (state.remoteSyncEnabled) {
                 stopCloudSubscription();
                 await hydrateCloudState({ allowUpload: true });
                 startCloudSubscription();
@@ -1593,7 +1434,7 @@ import {
         }
 
         async function syncProjectToCloud(project) {
-            if (!state.remoteSyncEnabled || !firebaseReady || applyingRemoteProjects || !state.firebaseUser) return;
+            if (!state.remoteSyncEnabled || !firebaseReady || applyingRemoteProjects) return;
             try {
                 await saveProjectToCloud(state.syncProfileId, project);
                 updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
@@ -1605,7 +1446,7 @@ import {
         }
 
         async function syncAllProjectsToCloud(projects) {
-            if (!state.remoteSyncEnabled || !firebaseReady || applyingRemoteProjects || !state.firebaseUser) return;
+            if (!state.remoteSyncEnabled || !firebaseReady || applyingRemoteProjects) return;
             try {
                 await replaceAllProjectsInCloud(state.syncProfileId, projects);
                 updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
@@ -1617,7 +1458,7 @@ import {
         }
 
         async function syncCompanyInfoToCloud() {
-            if (!state.remoteSyncEnabled || !firebaseReady || !state.firebaseUser) return;
+            if (!state.remoteSyncEnabled || !firebaseReady) return;
             try {
                 await saveCompanyInfoToCloud(state.syncProfileId, state.companyInfo);
                 updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
@@ -1664,8 +1505,6 @@ import {
             document.getElementById('updateFrequency')?.addEventListener('change', handleUpdateFrequencyChange);
             document.getElementById('copySyncIdBtn')?.addEventListener('click', () => { handleCopySyncId(); });
             document.getElementById('applySyncIdBtn')?.addEventListener('click', handleApplySyncId);
-            document.getElementById('googleSignInBtn')?.addEventListener('click', handleGoogleSignIn);
-            document.getElementById('googleSignOutBtn')?.addEventListener('click', handleGoogleSignOut);
 
             // Modals
             document.getElementById('closeUpdateModal')?.addEventListener('click', () => closeModal('updateModal'));

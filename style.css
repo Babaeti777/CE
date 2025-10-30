@@ -448,45 +448,6 @@
             color: var(--gray-600);
         }
 
-        .cloud-auth-block {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .cloud-auth-user {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .cloud-auth-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--gray-200);
-        }
-
-        .cloud-auth-name {
-            margin: 0;
-            font-weight: 600;
-            color: var(--gray-800);
-        }
-
-        .cloud-auth-email {
-            margin: 0;
-            font-size: 0.85rem;
-            color: var(--gray-600);
-        }
-
-        .cloud-auth-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-        }
-
         .cloud-status {
             margin-top: 1.5rem;
             font-weight: 600;
