@@ -1230,6 +1230,28 @@ import {
             }
         }
 
+        function updateAuthUI() {
+            const status = state.remoteSyncStatus || 'disabled';
+            updateCloudStatus(status);
+
+            updateSyncIdDisplay();
+
+            const copyBtn = document.getElementById('copySyncIdBtn');
+            if (copyBtn) {
+                const disabled = !state.syncProfileId;
+                copyBtn.disabled = disabled;
+                copyBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+            }
+
+            const applyBtn = document.getElementById('applySyncIdBtn');
+            if (applyBtn) {
+                const input = document.getElementById('syncIdInput');
+                const hasValue = Boolean(input && input.value.trim());
+                applyBtn.disabled = !hasValue;
+                applyBtn.setAttribute('aria-disabled', applyBtn.disabled ? 'true' : 'false');
+            }
+        }
+
         function updateCloudStatus(status, message) {
             state.remoteSyncStatus = status;
             const statusEl = document.getElementById('cloudSyncStatus');
@@ -1506,6 +1528,7 @@ import {
             document.getElementById('updateFrequency')?.addEventListener('change', handleUpdateFrequencyChange);
             document.getElementById('copySyncIdBtn')?.addEventListener('click', () => { handleCopySyncId(); });
             document.getElementById('applySyncIdBtn')?.addEventListener('click', handleApplySyncId);
+            document.getElementById('syncIdInput')?.addEventListener('input', () => updateAuthUI());
 
             // Modals
             document.getElementById('closeUpdateModal')?.addEventListener('click', () => closeModal('updateModal'));
