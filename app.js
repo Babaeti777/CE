@@ -1,4 +1,17 @@
 import { TakeoffManager } from './takeoff.js';
+import {
+    initializeFirebase,
+    isFirebaseConfigured,
+    subscribeToProjects as subscribeToCloudProjects,
+    saveProject as saveProjectToCloud,
+    saveCompanyInfo as saveCompanyInfoToCloud,
+    loadCompanyInfo as loadCompanyInfoFromCloud,
+    fetchProjects as fetchProjectsFromCloud,
+    replaceAllProjects as replaceAllProjectsInCloud,
+    onAuthStateChange,
+    signInWithGoogle,
+    signOutUser
+} from './firebase.js';
 
 (function() {
         'use strict';
@@ -6,10 +19,19 @@ import { TakeoffManager } from './takeoff.js';
         const DATABASE_CACHE_KEY = 'ce:materials:cache:v2';
         const SETTINGS_STORAGE_KEY = 'ce:settings';
         const SYNC_STATUS_RESET_DELAY = 2500;
+        const SYNC_PROFILE_STORAGE_KEY = 'ce:cloud:profile-id';
         const FREQUENCY_INTERVALS = {
             daily: 24 * 60 * 60 * 1000,
             weekly: 7 * 24 * 60 * 60 * 1000,
             monthly: 30 * 24 * 60 * 60 * 1000
+        };
+        const CLOUD_STATUS_MESSAGES = {
+            disabled: 'Configure Firebase to enable cloud sync.',
+            offline: 'Cloud sync offline',
+            connecting: 'Connecting to Firebase…',
+            connected: 'Cloud sync connected',
+            error: 'Cloud sync unavailable',
+            authRequired: 'Sign in to enable cloud sync.'
         };
 
         const QUICK_SCOPE_CONFIG = [
@@ -72,11 +94,19 @@ import { TakeoffManager } from './takeoff.js';
             regionalAdjustments: {},
             databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
             pendingUpdate: null,
+            syncProfileId: null,
+            remoteSyncEnabled: false,
+            remoteSyncStatus: 'disabled',
+            authUser: null,
         };
 
         let takeoffManager = null;
         let autoSyncTimeoutId = null;
         let autoSyncInFlight = false;
+        let unsubscribeCloud = null;
+        let unsubscribeAuth = null;
+        let applyingRemoteProjects = false;
+        let firebaseReady = false;
 
         async function loadDatabase() {
             try {
@@ -1104,10 +1134,11 @@ import { TakeoffManager } from './takeoff.js';
                 }
             }
         }
-        function init() {
+        async function init() {
             loadSavedData();
             setupEventListeners();
             setupNavigation();
+            updateAuthUI();
             populateMaterialsTable();
             loadProjects();
             updateDashboard();
@@ -1124,6 +1155,8 @@ import { TakeoffManager } from './takeoff.js';
             if (bidDateInput) {
                 bidDateInput.value = new Date().toISOString().split('T')[0];
             }
+
+            await initCloudSync();
         }
 
         function loadSavedData() {
@@ -1131,12 +1164,18 @@ import { TakeoffManager } from './takeoff.js';
                 const savedData = localStorage.getItem('constructionProjects');
                 state.savedProjects = savedData ? JSON.parse(savedData) : [];
                 state.savedProjects.forEach(p => { if (!p.status) p.status = 'review'; });
+                const storedSyncId = localStorage.getItem(SYNC_PROFILE_STORAGE_KEY);
+                if (storedSyncId) state.syncProfileId = storedSyncId;
                 const companyData = localStorage.getItem('companyInfo');
-                state.companyInfo = companyData ? JSON.parse(companyData) : state.companyInfo;
-                document.getElementById('companyName').value = state.companyInfo.name || '';
-                document.getElementById('companyAddress').value = state.companyInfo.address || '';
-                document.getElementById('companyPhone').value = state.companyInfo.phone || '';
-                document.getElementById('companyEmail').value = state.companyInfo.email || '';
+                if (companyData) {
+                    try {
+                        applyCompanyInfo(JSON.parse(companyData), { persistLocal: false });
+                    } catch (error) {
+                        console.warn('Unable to parse stored company info', error);
+                    }
+                } else {
+                    populateCompanyInfoFields();
+                }
                 const settings = loadSettingsFromStorage();
                 state.autoUpdate = settings.autoUpdate || state.autoUpdate;
                 state.updateFrequency = settings.updateFrequency || state.updateFrequency;
@@ -1147,9 +1186,433 @@ import { TakeoffManager } from './takeoff.js';
                 if (frequencySelect) frequencySelect.value = state.updateFrequency;
                 const theme = localStorage.getItem('darkMode');
                 if (theme === 'on') document.body.classList.add('dark-mode');
+                ensureSyncProfileId();
             } catch (e) {
                 console.error('Error loading saved data:', e);
                 state.savedProjects = [];
+            }
+        }
+
+        // --- CLOUD SYNC ---
+        function generateSyncId() {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return crypto.randomUUID();
+            }
+            return `sync-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`;
+        }
+
+        function ensureSyncProfileId() {
+            if (state.syncProfileId) {
+                updateSyncIdDisplay();
+                return state.syncProfileId;
+            }
+            let stored = null;
+            try {
+                stored = localStorage.getItem(SYNC_PROFILE_STORAGE_KEY);
+            } catch (error) {
+                console.warn('Unable to access sync profile storage', error);
+            }
+            if (!stored) {
+                stored = generateSyncId();
+                try {
+                    localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, stored);
+                } catch (error) {
+                    console.warn('Unable to persist sync profile id', error);
+                }
+            }
+            state.syncProfileId = stored;
+            updateSyncIdDisplay();
+            return stored;
+        }
+
+        function updateSyncIdDisplay() {
+            const currentIdInput = document.getElementById('currentSyncId');
+            if (currentIdInput) {
+                currentIdInput.value = state.syncProfileId || 'Not linked';
+            }
+            const syncInput = document.getElementById('syncIdInput');
+            if (syncInput && !syncInput.placeholder) {
+                syncInput.placeholder = 'Paste sync ID';
+            }
+        }
+
+        function updateAuthUI() {
+            const user = state.authUser;
+            const nameEl = document.getElementById('cloudAuthName');
+            const emailEl = document.getElementById('cloudAuthEmail');
+            const avatarEl = document.getElementById('cloudAuthAvatar');
+            const buttonEl = document.getElementById('cloudAuthBtn');
+            const helperEl = document.getElementById('cloudAuthHelper');
+
+            if (nameEl) {
+                nameEl.textContent = user?.displayName || user?.email || 'Not signed in';
+            }
+            if (emailEl) {
+                if (user?.displayName && user?.email) {
+                    emailEl.textContent = user.email;
+                    emailEl.hidden = false;
+                } else {
+                    emailEl.textContent = '';
+                    emailEl.hidden = true;
+                }
+            }
+            if (avatarEl) {
+                const fallback = (user?.displayName || user?.email || '?').trim().charAt(0).toUpperCase() || '?';
+                if (user?.photoURL) {
+                    avatarEl.style.backgroundImage = `url(${user.photoURL})`;
+                    avatarEl.textContent = '';
+                    avatarEl.classList.add('has-photo');
+                } else {
+                    avatarEl.style.backgroundImage = '';
+                    avatarEl.textContent = fallback;
+                    avatarEl.classList.remove('has-photo');
+                }
+            }
+            if (buttonEl) {
+                buttonEl.textContent = user ? 'Sign out' : 'Sign in with Google';
+                buttonEl.disabled = !isFirebaseConfigured();
+            }
+            if (helperEl) {
+                if (!isFirebaseConfigured()) {
+                    helperEl.textContent = 'Add your Firebase configuration to enable cloud sync.';
+                } else if (user) {
+                    helperEl.textContent = 'Cloud sync is connected to your Google account.';
+                } else {
+                    helperEl.textContent = 'Sign in with Google to enable project syncing.';
+                }
+            }
+        }
+
+        function updateCloudStatus(status, message) {
+            state.remoteSyncStatus = status;
+            const statusEl = document.getElementById('cloudSyncStatus');
+            if (!statusEl) return;
+
+            const text = message || CLOUD_STATUS_MESSAGES[status] || CLOUD_STATUS_MESSAGES.offline;
+            statusEl.textContent = text;
+            statusEl.classList.remove('connected', 'error', 'syncing', 'warning');
+            if (status === 'connected') {
+                statusEl.classList.add('connected');
+            } else if (status === 'error') {
+                statusEl.classList.add('error');
+            } else if (status === 'connecting') {
+                statusEl.classList.add('syncing');
+            } else if (status === 'authRequired') {
+                statusEl.classList.add('warning');
+            }
+        }
+
+        function persistLocalProjects() {
+            try {
+                localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+            } catch (error) {
+                console.warn('Unable to persist projects locally', error);
+            }
+        }
+
+        function persistCompanyInfoLocal() {
+            try {
+                localStorage.setItem('companyInfo', JSON.stringify(state.companyInfo));
+            } catch (error) {
+                console.warn('Unable to persist company info locally', error);
+            }
+        }
+
+        function populateCompanyInfoFields() {
+            const { name, address, phone, email } = state.companyInfo || {};
+            const nameInput = document.getElementById('companyName');
+            const addressInput = document.getElementById('companyAddress');
+            const phoneInput = document.getElementById('companyPhone');
+            const emailInput = document.getElementById('companyEmail');
+            if (nameInput) nameInput.value = name || '';
+            if (addressInput) addressInput.value = address || '';
+            if (phoneInput) phoneInput.value = phone || '';
+            if (emailInput) emailInput.value = email || '';
+        }
+
+        function applyCompanyInfo(info = {}, { persistLocal = true } = {}) {
+            state.companyInfo = { ...state.companyInfo, ...(info || {}) };
+            populateCompanyInfoFields();
+            if (persistLocal) {
+                persistCompanyInfoLocal();
+            }
+        }
+
+        function hasCompanyInfo(info) {
+            if (!info) return false;
+            return ['name', 'address', 'phone', 'email'].some(key => {
+                const value = info[key];
+                if (typeof value === 'string') {
+                    return value.trim().length > 0;
+                }
+                return Boolean(value);
+            });
+        }
+
+        function stopCloudSubscription() {
+            if (typeof unsubscribeCloud === 'function') {
+                unsubscribeCloud();
+            }
+            unsubscribeCloud = null;
+        }
+
+        function applyRemoteProjects(projects = [], { persistLocal = true } = {}) {
+            applyingRemoteProjects = true;
+            try {
+                if (Array.isArray(projects)) {
+                    state.savedProjects = projects.slice().sort((a, b) => {
+                        const aTime = new Date(a?.date || a?.updatedAt || 0).getTime();
+                        const bTime = new Date(b?.date || b?.updatedAt || 0).getTime();
+                        return bTime - aTime;
+                    });
+                } else {
+                    state.savedProjects = [];
+                }
+                if (persistLocal) {
+                    persistLocalProjects();
+                }
+                const searchValue = document.getElementById('projectSearch')?.value || '';
+                loadProjects(searchValue);
+                updateDashboard();
+            } finally {
+                applyingRemoteProjects = false;
+            }
+        }
+
+        async function hydrateCloudState({ allowUpload = true } = {}) {
+            if (!state.remoteSyncEnabled || !state.syncProfileId || !state.authUser) return;
+
+            updateCloudStatus('connecting', CLOUD_STATUS_MESSAGES.connecting);
+            try {
+                const [remoteProjects, remoteCompany] = await Promise.all([
+                    fetchProjectsFromCloud(state.syncProfileId),
+                    loadCompanyInfoFromCloud(state.syncProfileId)
+                ]);
+
+                if (remoteProjects && remoteProjects.length) {
+                    applyRemoteProjects(remoteProjects);
+                } else if (allowUpload && state.savedProjects.length) {
+                    await replaceAllProjectsInCloud(state.syncProfileId, state.savedProjects);
+                    updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
+                } else {
+                    persistLocalProjects();
+                }
+
+                if (remoteCompany && Object.keys(remoteCompany).length) {
+                    applyCompanyInfo(remoteCompany);
+                } else if (allowUpload && hasCompanyInfo(state.companyInfo)) {
+                    await saveCompanyInfoToCloud(state.syncProfileId, state.companyInfo);
+                }
+
+                updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
+            } catch (error) {
+                console.error('Failed to hydrate cloud state:', error);
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+            }
+        }
+
+        function startCloudSubscription() {
+            if (!state.remoteSyncEnabled || !firebaseReady || !state.syncProfileId || !state.authUser) return;
+            stopCloudSubscription();
+            unsubscribeCloud = subscribeToCloudProjects(state.syncProfileId, (projects) => {
+                applyRemoteProjects(projects);
+                updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
+            }, (error) => {
+                console.error('Cloud sync listener error:', error);
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+            });
+        }
+
+        async function initCloudSync() {
+            ensureSyncProfileId();
+            if (!isFirebaseConfigured()) {
+                updateCloudStatus('disabled', CLOUD_STATUS_MESSAGES.disabled);
+                state.remoteSyncEnabled = false;
+                firebaseReady = false;
+                stopCloudSubscription();
+                stopAuthListener();
+                updateAuthUI();
+                return;
+            }
+
+            updateCloudStatus('connecting', CLOUD_STATUS_MESSAGES.connecting);
+            try {
+                await initializeFirebase();
+                firebaseReady = true;
+                updateAuthUI();
+                bindAuthListener();
+            } catch (error) {
+                console.error('Firebase initialization failed:', error);
+                state.remoteSyncEnabled = false;
+                firebaseReady = false;
+                stopCloudSubscription();
+                stopAuthListener();
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+            }
+        }
+
+        async function handleApplySyncId(event) {
+            event?.preventDefault?.();
+            ensureSyncProfileId();
+            const input = document.getElementById('syncIdInput');
+            if (!input) return;
+            const value = input.value.trim();
+            if (!value) {
+                showToast('Enter a sync ID to link this device.', 'warning');
+                return;
+            }
+            try {
+                localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, value);
+            } catch (error) {
+                console.warn('Unable to persist sync profile id', error);
+            }
+            state.syncProfileId = value;
+            updateSyncIdDisplay();
+            input.value = '';
+            if (state.remoteSyncEnabled) {
+                stopCloudSubscription();
+                await hydrateCloudState({ allowUpload: true });
+                startCloudSubscription();
+                showToast('Device linked to cloud workspace.', 'success');
+            } else {
+                const message = isFirebaseConfigured()
+                    ? 'Sync ID stored locally. Sign in to enable cloud syncing.'
+                    : 'Sync ID stored locally. Configure Firebase to enable syncing.';
+                showToast(message, 'success');
+            }
+        }
+
+        async function handleCopySyncId() {
+            ensureSyncProfileId();
+            if (!navigator?.clipboard) {
+                showToast('Clipboard access is unavailable in this browser.', 'warning');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(state.syncProfileId || '');
+                showToast('Sync ID copied to clipboard.', 'success');
+            } catch (error) {
+                console.warn('Unable to copy sync id', error);
+                showToast('Unable to copy the sync ID.', 'error');
+            }
+        }
+
+        function stopAuthListener() {
+            if (typeof unsubscribeAuth === 'function') {
+                unsubscribeAuth();
+            }
+            unsubscribeAuth = null;
+        }
+
+        function bindAuthListener() {
+            if (!firebaseReady) return;
+            stopAuthListener();
+            unsubscribeAuth = onAuthStateChange(async (user) => {
+                state.authUser = user || null;
+                updateAuthUI();
+
+                if (!user) {
+                    state.remoteSyncEnabled = false;
+                    stopCloudSubscription();
+                    updateCloudStatus('authRequired', CLOUD_STATUS_MESSAGES.authRequired);
+                    return;
+                }
+
+                if (!state.syncProfileId || state.syncProfileId.startsWith('sync-')) {
+                    state.syncProfileId = user.uid;
+                    try {
+                        localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, state.syncProfileId);
+                    } catch (error) {
+                        console.warn('Unable to persist sync profile id', error);
+                    }
+                    updateSyncIdDisplay();
+                }
+
+                state.remoteSyncEnabled = true;
+                updateCloudStatus('connecting', CLOUD_STATUS_MESSAGES.connecting);
+                try {
+                    await hydrateCloudState({ allowUpload: true });
+                    startCloudSubscription();
+                } catch (error) {
+                    console.error('Failed to synchronise after sign-in:', error);
+                    updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+                }
+            }, (error) => {
+                console.error('Firebase auth listener error:', error);
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+            });
+        }
+
+        async function handleCloudAuthClick(event) {
+            event?.preventDefault?.();
+            if (!isFirebaseConfigured()) {
+                showToast('Add your Firebase configuration details first.', 'warning');
+                return;
+            }
+
+            const buttonEl = event?.currentTarget || document.getElementById('cloudAuthBtn');
+            if (buttonEl) {
+                buttonEl.disabled = true;
+            }
+
+            try {
+                if (!firebaseReady) {
+                    await initializeFirebase();
+                    firebaseReady = true;
+                    updateAuthUI();
+                    bindAuthListener();
+                }
+
+                if (state.authUser) {
+                    await signOutUser();
+                    showToast('Signed out of cloud sync.', 'success');
+                } else {
+                    await signInWithGoogle();
+                    showToast('Google sign-in successful.', 'success');
+                }
+            } catch (error) {
+                console.error('Cloud auth action failed:', error);
+                showToast('Unable to complete the authentication request.', 'error');
+            } finally {
+                if (buttonEl) {
+                    buttonEl.disabled = !isFirebaseConfigured();
+                }
+            }
+        }
+
+        async function syncProjectToCloud(project) {
+            if (!state.remoteSyncEnabled || !firebaseReady || applyingRemoteProjects || !state.authUser) return;
+            try {
+                await saveProjectToCloud(state.syncProfileId, project);
+                updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
+            } catch (error) {
+                console.error('Failed to sync project to cloud:', error);
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+                showToast('Project saved locally. Cloud sync failed.', 'warning');
+            }
+        }
+
+        async function syncAllProjectsToCloud(projects) {
+            if (!state.remoteSyncEnabled || !firebaseReady || applyingRemoteProjects || !state.authUser) return;
+            try {
+                await replaceAllProjectsInCloud(state.syncProfileId, projects);
+                updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
+            } catch (error) {
+                console.error('Failed to sync projects to cloud:', error);
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+                showToast('Projects saved locally. Cloud sync failed.', 'warning');
+            }
+        }
+
+        async function syncCompanyInfoToCloud() {
+            if (!state.remoteSyncEnabled || !firebaseReady || !state.authUser) return;
+            try {
+                await saveCompanyInfoToCloud(state.syncProfileId, state.companyInfo);
+                updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
+            } catch (error) {
+                console.error('Failed to sync company info:', error);
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+                showToast('Company info saved locally. Cloud sync failed.', 'warning');
             }
         }
 
@@ -1187,6 +1650,9 @@ import { TakeoffManager } from './takeoff.js';
             document.getElementById('closeNewProjectModal')?.addEventListener('click', () => closeModal('newProjectModal'));
             document.getElementById('autoUpdate')?.addEventListener('change', handleAutoUpdateChange);
             document.getElementById('updateFrequency')?.addEventListener('change', handleUpdateFrequencyChange);
+            document.getElementById('copySyncIdBtn')?.addEventListener('click', () => { handleCopySyncId(); });
+            document.getElementById('applySyncIdBtn')?.addEventListener('click', handleApplySyncId);
+            document.getElementById('cloudAuthBtn')?.addEventListener('click', handleCloudAuthClick);
 
             // Modals
             document.getElementById('closeUpdateModal')?.addEventListener('click', () => closeModal('updateModal'));
@@ -1656,7 +2122,7 @@ import { TakeoffManager } from './takeoff.js';
             showToast('Worksheet reset to catalog defaults.', 'success');
         }
 
-        function saveProject() {
+        async function saveProject() {
             if (!state.currentEstimate) {
                 showToast('No estimate to save.', 'warning');
                 return;
@@ -1681,7 +2147,8 @@ import { TakeoffManager } from './takeoff.js';
                 state.savedProjects.push(estimate);
                 showToast('Project saved successfully!', 'success');
             }
-            localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+            persistLocalProjects();
+            await syncProjectToCloud(estimate);
             loadProjects();
             updateDashboard();
         }
@@ -1759,15 +2226,15 @@ import { TakeoffManager } from './takeoff.js';
             switchTab('detailed');
         }
 
-        function saveCompanyInfo() {
-            state.companyInfo = {
+        async function saveCompanyInfo() {
+            applyCompanyInfo({
                 name: document.getElementById('companyName').value,
                 address: document.getElementById('companyAddress').value,
                 phone: document.getElementById('companyPhone').value,
                 email: document.getElementById('companyEmail').value,
-            };
-            localStorage.setItem('companyInfo', JSON.stringify(state.companyInfo));
+            });
             showToast('Company information saved!', 'success');
+            await syncCompanyInfoToCloud();
         }
 
         function getSortedLineItemCategories() {
@@ -1978,7 +2445,7 @@ import { TakeoffManager } from './takeoff.js';
             document.getElementById('bidTotal').textContent = formatCurrency(total);
         }
         
-        function saveBid() {
+        async function saveBid() {
             const name = document.getElementById('bidProjectName').value;
             if (!name) {
                 showToast('Project name required', 'warning');
@@ -2033,7 +2500,8 @@ import { TakeoffManager } from './takeoff.js';
                 state.savedProjects.push(bid);
                 showToast('Bid saved!', 'success');
             }
-            localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+            persistLocalProjects();
+            await syncProjectToCloud(bid);
             loadProjects();
             updateDashboard();
         }
@@ -2502,11 +2970,12 @@ import { TakeoffManager } from './takeoff.js';
             });
         }
 
-        function updateProjectStatus(id, status) {
+        async function updateProjectStatus(id, status) {
             const proj = state.savedProjects.find(p => p.id === id);
             if (!proj) return;
             proj.status = status;
-            localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+            persistLocalProjects();
+            await syncProjectToCloud(proj);
             updateDashboard();
         }
 
@@ -2523,12 +2992,13 @@ import { TakeoffManager } from './takeoff.js';
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = () => {
+            reader.onload = async () => {
                 try {
                     const projects = JSON.parse(reader.result);
                     if (Array.isArray(projects)) {
                         state.savedProjects = projects;
-                        localStorage.setItem('constructionProjects', JSON.stringify(projects));
+                        persistLocalProjects();
+                        await syncAllProjectsToCloud(state.savedProjects);
                         loadProjects();
                         updateDashboard();
                         showToast('Projects imported!', 'success');
@@ -2731,7 +3201,7 @@ import { TakeoffManager } from './takeoff.js';
         // --- RUN APP ---
         document.addEventListener('DOMContentLoaded', async () => {
             await loadDatabase();
-            init();
+            await init();
         });
 
     })();

@@ -430,6 +430,122 @@
             box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
         }
 
+        .sync-id-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .sync-id-row .form-input[readonly] {
+            background: var(--gray-200);
+            color: var(--gray-700);
+            cursor: text;
+        }
+
+        .form-hint {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .cloud-status {
+            margin-top: 1.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--gray-600);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cloud-status::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--gray-400);
+        }
+
+        .cloud-status.connected {
+            color: var(--success);
+        }
+
+        .cloud-status.connected::before {
+            background: var(--success);
+        }
+
+        .cloud-status.syncing {
+            color: var(--warning);
+        }
+
+        .cloud-status.syncing::before {
+            background: var(--warning);
+        }
+
+        .cloud-status.warning {
+            color: var(--warning);
+        }
+
+        .cloud-status.warning::before {
+            background: var(--warning);
+        }
+
+        .cloud-status.error {
+            color: var(--danger);
+        }
+
+        .cloud-status.error::before {
+            background: var(--danger);
+        }
+
+        .cloud-auth {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--gray-200);
+            border-radius: 0.75rem;
+            background: var(--gray-50);
+            margin-bottom: 1rem;
+        }
+
+        .cloud-auth-profile {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .cloud-auth-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 999px;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            text-transform: uppercase;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .cloud-auth-avatar.has-photo {
+            background-color: transparent;
+        }
+
+        .cloud-auth-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .cloud-auth-email {
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
         /* Material Selection Cards */
         .material-grid {
             display: grid;
@@ -1794,6 +1910,16 @@
             .estimator-actions {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+            .cloud-auth {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .cloud-auth-profile {
+                width: 100%;
+            }
+            .cloud-auth .btn {
+                width: 100%;
             }
         }
 
