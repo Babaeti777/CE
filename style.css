@@ -430,6 +430,105 @@
             box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
         }
 
+        .sync-id-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .sync-id-row .form-input[readonly] {
+            background: var(--gray-200);
+            color: var(--gray-700);
+            cursor: text;
+        }
+
+        .form-hint {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--gray-600);
+        }
+
+        .cloud-auth-block {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .cloud-auth-user {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .cloud-auth-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--gray-200);
+        }
+
+        .cloud-auth-name {
+            margin: 0;
+            font-weight: 600;
+            color: var(--gray-800);
+        }
+
+        .cloud-auth-email {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--gray-600);
+        }
+
+        .cloud-auth-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .cloud-status {
+            margin-top: 1.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--gray-600);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cloud-status::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--gray-400);
+        }
+
+        .cloud-status.connected {
+            color: var(--success);
+        }
+
+        .cloud-status.connected::before {
+            background: var(--success);
+        }
+
+        .cloud-status.syncing {
+            color: var(--warning);
+        }
+
+        .cloud-status.syncing::before {
+            background: var(--warning);
+        }
+
+        .cloud-status.error {
+            color: var(--danger);
+        }
+
+        .cloud-status.error::before {
+            background: var(--danger);
+        }
+
         /* Material Selection Cards */
         .material-grid {
             display: grid;
