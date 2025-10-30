@@ -132,7 +132,10 @@ import { TakeoffManager } from './takeoff.js';
             sitework: 'sq ft',
             fireProtection: 'sq ft',
             specialties: 'allowance',
+            demolition: 'sq ft',
         };
+
+        const PRIORITY_LINE_ITEM_CATEGORIES = ['Demolition'];
 
         function normalizeMaterialEntry(category, key, entry, fallbackUpdated, fallbackSource) {
             const normalized = {};
@@ -703,10 +706,13 @@ import { TakeoffManager } from './takeoff.js';
         function setupEventListeners() {
             document.getElementById('menuToggle')?.addEventListener('click', toggleSidebar);
             document.getElementById('estimatorForm')?.addEventListener('submit', handleEstimatorSubmit);
+            document.getElementById('laborCost')?.addEventListener('input', handleLaborMultiplierChange);
             document.querySelectorAll('.material-card').forEach(card => card.addEventListener('click', handleMaterialSelection));
             document.getElementById('saveProjectBtn')?.addEventListener('click', saveProject);
             document.getElementById('addLineItemBtn')?.addEventListener('click', () => addLineItem());
-            
+            document.getElementById('generatePricingBtn')?.addEventListener('click', () => updateWorksheetTotals({ announce: true }));
+            document.getElementById('resetWorksheetBtn')?.addEventListener('click', resetWorksheet);
+
             // Export Buttons
             document.getElementById('exportPdfBtn')?.addEventListener('click', exportAsPdf);
             document.getElementById('exportXlsxBtn')?.addEventListener('click', exportAsXlsx);
@@ -741,46 +747,54 @@ import { TakeoffManager } from './takeoff.js';
             });
             
             const lineItemsContainer = document.getElementById('lineItems');
-            lineItemsContainer.addEventListener('change', (e) => {
-                const target = e.target;
-                const row = target.closest('.line-item-row');
-                if (!row) return;
+            if (lineItemsContainer) {
+                lineItemsContainer.addEventListener('change', (e) => {
+                    const target = e.target;
+                    const row = target.closest('.line-item-row');
+                    if (!row) return;
 
-                if (target.dataset.field === 'category') {
-                    updateItemSelectionOptions(row);
-                } else if (target.dataset.field === 'description') {
-                    updateLineItemFromSelection(target);
-                }
-            });
-            lineItemsContainer.addEventListener('input', (e) => {
-                const target = e.target;
-                const row = target.closest('.line-item-row');
-                if (!row) return;
+                    if (target.dataset.field === 'category') {
+                        updateItemSelectionOptions(row);
+                    } else if (target.dataset.field === 'description') {
+                        updateLineItemFromSelection(target);
+                    }
+                });
+                lineItemsContainer.addEventListener('input', (e) => {
+                    const target = e.target;
+                    const row = target.closest('.line-item-row');
+                    if (!row) return;
 
-                if (target.dataset.field === 'quantity' || target.dataset.field === 'rate' || target.dataset.field === 'unit') {
-                    updateLineItemTotal(row);
-                }
-            });
-            lineItemsContainer.addEventListener('click', (e) => {
-                const removeButton = e.target.closest('.remove-line-item');
-                if (removeButton) {
-                    removeLineItem(removeButton.closest('.line-item-row'));
-                }
-            });
-            lineItemsContainer.addEventListener('focusin', (e) => {
-                if (e.target.matches('[data-field="quantity"], [data-field="rate"]')) {
-                    state.lastFocusedInput = e.target;
-                }
-            });
-            
+                    if (target.dataset.field === 'quantity' || target.dataset.field === 'rate' || target.dataset.field === 'unit') {
+                        updateLineItemTotal(row);
+                    }
+                });
+                lineItemsContainer.addEventListener('click', (e) => {
+                    const removeButton = e.target.closest('.remove-line-item');
+                    if (removeButton) {
+                        removeLineItem(removeButton.closest('.line-item-row'));
+                    }
+                });
+                lineItemsContainer.addEventListener('focusin', (e) => {
+                    if (e.target.matches('[data-field="quantity"], [data-field="rate"]')) {
+                        state.lastFocusedInput = e.target;
+                    }
+                });
+            }
+            document.getElementById('lineItemSearch')?.addEventListener('input', handleLineItemSearch);
+
+            const worksheetBody = document.getElementById('estimateWorksheetBody');
+            worksheetBody?.addEventListener('input', handleWorksheetInput);
+
             // Calculator
             document.getElementById('calculatorGrid')?.addEventListener('click', handleCalculatorClick);
             document.getElementById('convertUnitBtn')?.addEventListener('click', handleUnitConversion);
             document.getElementById('useValueBtn')?.addEventListener('click', useCalculatorValue);
             document.getElementById('modeBasic')?.addEventListener('click', () => updateCalcMode('basic'));
             document.getElementById('modeEngineering')?.addEventListener('click', () => updateCalcMode('engineering'));
+            document.addEventListener('keydown', handleGlobalKeydown);
             document.getElementById('viewAllProjectsBtn')?.addEventListener('click', () => switchTab('projects'));
             updateCalcMode(state.calcMode);
+            updateLineItemEmptyState();
         }
 
         // --- NAVIGATION & UI ---
@@ -866,6 +880,33 @@ import { TakeoffManager } from './takeoff.js';
         function formatCurrency(amount) {
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
         }
+
+        function formatNumber(value, { decimals = 0 } = {}) {
+            if (!isFinite(value)) return '0';
+            return new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals,
+            }).format(value);
+        }
+
+        function formatInputNumber(value) {
+            if (!isFinite(value)) return '0';
+            return Number(value.toFixed(4)).toString();
+        }
+
+        function formatTimestamp(value) {
+            if (!value) return '';
+            try {
+                const date = new Date(value);
+                return new Intl.DateTimeFormat('en-US', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                }).format(date);
+            } catch (err) {
+                console.warn('Unable to format timestamp', err);
+                return '';
+            }
+        }
         
         function openModal(modalId) {
             document.getElementById(modalId)?.classList.add('active');
@@ -888,6 +929,9 @@ import { TakeoffManager } from './takeoff.js';
             const sqft = parseFloat(form.querySelector('#sqft').value);
             const floors = parseFloat(form.querySelector('#floors').value);
             const laborMultiplier = parseFloat(form.querySelector('#laborCost').value);
+            const sqftValue = Number.isFinite(sqft) ? sqft : 0;
+            const floorValue = Number.isFinite(floors) && floors > 0 ? floors : 1;
+            const laborMultiplierValue = Number.isFinite(laborMultiplier) ? laborMultiplier : 0;
 
             const selected = {
                 foundation: document.querySelector('.material-card[data-category="foundation"].selected')?.dataset.material,
@@ -904,14 +948,22 @@ import { TakeoffManager } from './takeoff.js';
             const framingData = getMaterialData('framing', selected.framing);
             const exteriorData = getMaterialData('exterior', selected.exterior);
 
-            const costs = {
-                foundation: foundationData.cost * sqft,
-                framing: framingData.cost * sqft * floors,
-                exterior: exteriorData.cost * sqft * floors * 0.8,
-            };
+            const worksheet = buildWorksheetRows({
+                sqft: sqftValue,
+                floors: floorValue,
+                foundationData,
+                framingData,
+                exteriorData,
+            });
+
+            const costs = worksheet.reduce((acc, row) => {
+                const total = (row.quantity || 0) * (row.unitCost || 0) * (row.adjustment || 0);
+                acc[row.id] = total;
+                return acc;
+            }, {});
 
             const materialTotal = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
-            const laborTotal = materialTotal * laborMultiplier;
+            const laborTotal = materialTotal * laborMultiplierValue;
             const total = materialTotal + laborTotal;
 
             state.currentEstimate = {
@@ -919,11 +971,17 @@ import { TakeoffManager } from './takeoff.js';
                 estimateType: 'quick',
                 name: form.querySelector('#projectName').value,
                 type: form.querySelector('#projectType').value,
-                sqft, floors, laborMultiplier,
+                sqft: sqftValue,
+                floors: floorValue,
+                laborMultiplier: laborMultiplierValue,
                 selected,
+                worksheet,
                 costs,
-                materialTotal, laborTotal, total,
-                date: new Date().toISOString(),
+                materialTotal,
+                laborTotal,
+                total,
+                date: state.currentEstimate?.date || new Date().toISOString(),
+                lastGenerated: new Date().toISOString(),
                 status: state.currentEstimate?.status || 'review'
             };
 
@@ -931,19 +989,222 @@ import { TakeoffManager } from './takeoff.js';
         }
 
         function displayEstimate(estimate) {
-            document.getElementById('materialCost').textContent = formatCurrency(estimate.materialTotal);
-            document.getElementById('laborCostDisplay').textContent = formatCurrency(estimate.laborTotal);
-            document.getElementById('totalCost').textContent = formatCurrency(estimate.total);
-
-            const breakdownContent = document.getElementById('breakdownContent');
-            breakdownContent.innerHTML = `
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--gray-200);"><span>Foundation:</span> <strong>${formatCurrency(estimate.costs.foundation)}</strong></div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--gray-200);"><span>Framing:</span> <strong>${formatCurrency(estimate.costs.framing)}</strong></div>
-                <div style="display: flex; justify-content: space-between;"><span>Exterior:</span> <strong>${formatCurrency(estimate.costs.exterior)}</strong></div>
-            `;
-
-            document.getElementById('breakdownCard').style.display = 'block';
+            if (!estimate) return;
+            ensureWorksheet(estimate);
+            renderWorksheet(estimate);
+            updateWorksheetTotals();
+            document.getElementById('estimateWorkspace').style.display = estimate.worksheet?.length ? 'block' : 'none';
             document.getElementById('estimateSummary').style.display = 'block';
+        }
+
+        function buildWorksheetRows({ sqft, floors, foundationData, framingData, exteriorData }) {
+            const safeSqft = Number.isFinite(sqft) ? sqft : 0;
+            const safeFloors = Number.isFinite(floors) && floors > 0 ? floors : 1;
+
+            const rows = [
+                {
+                    id: 'foundation',
+                    scope: 'Foundation',
+                    materialLabel: foundationData.label,
+                    basis: `${formatNumber(safeSqft, { decimals: 0 })} ${foundationData.unit}`,
+                    quantity: safeSqft,
+                    unitCost: foundationData.cost,
+                    adjustment: 1,
+                    unit: foundationData.unit,
+                },
+                {
+                    id: 'framing',
+                    scope: 'Framing',
+                    materialLabel: framingData.label,
+                    basis: `${formatNumber(safeSqft * safeFloors, { decimals: 0 })} ${framingData.unit}`,
+                    quantity: safeSqft * safeFloors,
+                    unitCost: framingData.cost,
+                    adjustment: 1,
+                    unit: framingData.unit,
+                },
+                {
+                    id: 'exterior',
+                    scope: 'Exterior Envelope',
+                    materialLabel: exteriorData.label,
+                    basis: `${formatNumber(safeSqft * safeFloors, { decimals: 0 })} ${exteriorData.unit} × 0.8 factor`,
+                    quantity: safeSqft * safeFloors,
+                    unitCost: exteriorData.cost,
+                    adjustment: 0.8,
+                    unit: exteriorData.unit,
+                }
+            ];
+
+            return rows.map(row => ({
+                ...row,
+                baseQuantity: row.quantity,
+                baseUnitCost: row.unitCost,
+                baseAdjustment: row.adjustment,
+                total: row.quantity * row.unitCost * row.adjustment,
+            }));
+        }
+
+        function ensureWorksheet(estimate) {
+            if (!estimate.worksheet || !estimate.worksheet.length) {
+                const costs = estimate.costs || {};
+                estimate.worksheet = Object.entries(costs).map(([id, total]) => ({
+                    id,
+                    scope: toTitleCase(id),
+                    materialLabel: toTitleCase(id),
+                    basis: '',
+                    quantity: total ? 1 : 0,
+                    unitCost: total || 0,
+                    adjustment: total ? 1 : 0,
+                    baseQuantity: total ? 1 : 0,
+                    baseUnitCost: total || 0,
+                    baseAdjustment: total ? 1 : 0,
+                    total: total || 0,
+                }));
+            }
+
+            estimate.worksheet = estimate.worksheet.map(row => ({
+                baseQuantity: row.baseQuantity ?? row.quantity ?? 0,
+                baseUnitCost: row.baseUnitCost ?? row.unitCost ?? 0,
+                baseAdjustment: row.baseAdjustment ?? (row.adjustment === 0 ? 0 : row.adjustment ?? 1),
+                total: row.total ?? ((row.quantity || 0) * (row.unitCost || 0) * (row.adjustment || 0)),
+                ...row,
+            }));
+        }
+
+        function renderWorksheet(estimate) {
+            const tbody = document.getElementById('estimateWorksheetBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            (estimate.worksheet || []).forEach(row => {
+                const tr = document.createElement('tr');
+                tr.dataset.rowId = row.id;
+                tr.innerHTML = `
+                    <td>
+                        <div class="worksheet-scope">
+                            <strong>${row.scope}</strong>
+                            <span>${[row.materialLabel, row.basis].filter(Boolean).join(' • ')}</span>
+                        </div>
+                    </td>
+                    <td><input type="number" min="0" step="0.01" data-row-id="${row.id}" data-field="quantity" value="${formatInputNumber(row.quantity || 0)}"></td>
+                    <td><input type="number" min="0" step="0.01" data-row-id="${row.id}" data-field="unitCost" value="${formatInputNumber(row.unitCost || 0)}"></td>
+                    <td><input type="number" min="0" step="0.01" data-row-id="${row.id}" data-field="adjustment" value="${formatInputNumber(row.adjustment ?? 1)}"></td>
+                    <td class="text-right" data-row-total="${row.id}">${formatCurrency(row.total || 0)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            updateWorksheetVisibility(estimate);
+        }
+
+        function updateWorksheetVisibility(estimate) {
+            const wrapper = document.querySelector('#estimateWorkspace .worksheet-table-wrapper');
+            const emptyMessage = document.getElementById('worksheetEmptyMessage');
+            if (!wrapper || !emptyMessage) return;
+            const hasRows = Boolean(estimate?.worksheet?.length);
+            wrapper.classList.toggle('empty', !hasRows);
+        }
+
+        function updateWorksheetTotals({ announce = false } = {}) {
+            if (!state.currentEstimate?.worksheet) return;
+
+            let materialTotal = 0;
+            state.currentEstimate.worksheet.forEach(row => {
+                const quantity = Number.isFinite(row.quantity) ? row.quantity : 0;
+                const unitCost = Number.isFinite(row.unitCost) ? row.unitCost : 0;
+                const adjustment = Number.isFinite(row.adjustment) ? row.adjustment : 0;
+                const rowTotal = quantity * unitCost * adjustment;
+                row.total = rowTotal;
+                const totalCell = document.querySelector(`[data-row-total="${row.id}"]`);
+                if (totalCell) {
+                    totalCell.textContent = formatCurrency(rowTotal);
+                }
+                materialTotal += rowTotal;
+            });
+
+            const laborMultiplierInput = document.getElementById('laborCost');
+            const multiplierValue = parseFloat(laborMultiplierInput?.value);
+            const multiplier = Number.isNaN(multiplierValue) ? (Number.isFinite(state.currentEstimate.laborMultiplier) ? state.currentEstimate.laborMultiplier : 0) : multiplierValue;
+            state.currentEstimate.laborMultiplier = multiplier;
+            state.currentEstimate.materialTotal = materialTotal;
+            state.currentEstimate.laborTotal = materialTotal * multiplier;
+            state.currentEstimate.total = state.currentEstimate.materialTotal + state.currentEstimate.laborTotal;
+            state.currentEstimate.costs = state.currentEstimate.worksheet.reduce((acc, row) => {
+                acc[row.id] = row.total || 0;
+                return acc;
+            }, {});
+            state.currentEstimate.lastGenerated = new Date().toISOString();
+
+            updateEstimateSummary(state.currentEstimate);
+            if (announce) {
+                showToast('Pricing refreshed from worksheet.', 'success');
+            }
+        }
+
+        function updateEstimateSummary(estimate) {
+            document.getElementById('materialCost').textContent = formatCurrency(estimate.materialTotal || 0);
+            document.getElementById('laborCostDisplay').textContent = formatCurrency(estimate.laborTotal || 0);
+            document.getElementById('totalCost').textContent = formatCurrency(estimate.total || 0);
+
+            const multiplierDisplay = document.getElementById('laborMultiplierDisplay');
+            if (multiplierDisplay) {
+                const multiplier = Number.isFinite(estimate.laborMultiplier) ? estimate.laborMultiplier : 0;
+                const formatted = Number(multiplier.toFixed(2));
+                multiplierDisplay.textContent = `${formatted.toString()}×`;
+            }
+
+            const sqftValue = Number.isFinite(estimate.sqft) ? estimate.sqft : parseFloat(document.getElementById('sqft')?.value) || 0;
+            const costPerSqFt = sqftValue ? estimate.total / sqftValue : 0;
+            document.getElementById('costPerSqFt').textContent = sqftValue ? formatCurrency(costPerSqFt) : '$0';
+
+            const metaEl = document.getElementById('estimateMeta');
+            if (metaEl) {
+                const generated = formatTimestamp(estimate.lastGenerated);
+                const scopeCount = estimate.worksheet?.length || 0;
+                const scopeLabel = `${scopeCount} scope${scopeCount === 1 ? '' : 's'} selected`;
+                metaEl.textContent = `${generated ? `Last generated ${generated} • ` : ''}${scopeLabel}`;
+            }
+        }
+
+        function handleWorksheetInput(e) {
+            const input = e.target;
+            if (!(input instanceof Element) || input.tagName !== 'INPUT') return;
+            const rowId = input.dataset.rowId;
+            const field = input.dataset.field;
+            if (!rowId || !field || !state.currentEstimate?.worksheet) return;
+
+            const row = state.currentEstimate.worksheet.find(r => r.id === rowId);
+            if (!row) return;
+
+            const parsed = parseFloat(input.value);
+            row[field] = Number.isNaN(parsed) ? 0 : parsed;
+
+            updateWorksheetTotals();
+        }
+
+        function handleLaborMultiplierChange(e) {
+            if (!state.currentEstimate?.worksheet) return;
+            const value = parseFloat(e.target.value);
+            state.currentEstimate.laborMultiplier = Number.isNaN(value) ? 0 : value;
+            updateWorksheetTotals();
+        }
+
+        function resetWorksheet() {
+            if (!state.currentEstimate?.worksheet) return;
+            state.currentEstimate.worksheet.forEach(row => {
+                row.quantity = row.baseQuantity ?? 0;
+                row.unitCost = row.baseUnitCost ?? 0;
+                row.adjustment = row.baseAdjustment ?? 1;
+
+                const quantityInput = document.querySelector(`input[data-field="quantity"][data-row-id="${row.id}"]`);
+                const unitCostInput = document.querySelector(`input[data-field="unitCost"][data-row-id="${row.id}"]`);
+                const adjustmentInput = document.querySelector(`input[data-field="adjustment"][data-row-id="${row.id}"]`);
+                if (quantityInput) quantityInput.value = formatInputNumber(row.quantity);
+                if (unitCostInput) unitCostInput.value = formatInputNumber(row.unitCost);
+                if (adjustmentInput) adjustmentInput.value = formatInputNumber(row.adjustment);
+            });
+
+            updateWorksheetTotals();
+            showToast('Worksheet reset to catalog defaults.', 'success');
         }
 
         function saveProject() {
@@ -951,7 +1212,15 @@ import { TakeoffManager } from './takeoff.js';
                 showToast('No estimate to save.', 'warning');
                 return;
             }
-            const estimate = { ...state.currentEstimate, estimateType: 'quick', status: state.currentEstimate.status || 'review' };
+            const estimate = {
+                ...state.currentEstimate,
+                estimateType: 'quick',
+                status: state.currentEstimate.status || 'review',
+                worksheet: state.currentEstimate.worksheet?.map(row => ({ ...row })) || [],
+                costs: { ...(state.currentEstimate.costs || {}) },
+                date: state.currentEstimate.date || new Date().toISOString(),
+                lastGenerated: state.currentEstimate.lastGenerated || new Date().toISOString(),
+            };
             if (state.editingProjectId) {
                 const idx = state.savedProjects.findIndex(p => p.id === state.editingProjectId);
                 if (idx !== -1) {
@@ -990,9 +1259,13 @@ import { TakeoffManager } from './takeoff.js';
             const project = state.savedProjects.find(p => p.id === id && p.estimateType === 'quick');
             if (!project) return;
             state.editingProjectId = id;
-            state.currentEstimate = { ...project };
-            populateEstimatorForm(project);
-            displayEstimate(project);
+            state.currentEstimate = {
+                ...project,
+                worksheet: project.worksheet ? project.worksheet.map(row => ({ ...row })) : [],
+                costs: { ...(project.costs || {}) },
+            };
+            populateEstimatorForm(state.currentEstimate);
+            displayEstimate(state.currentEstimate);
             switchTab('estimator');
         }
 
@@ -1008,7 +1281,7 @@ import { TakeoffManager } from './takeoff.js';
             document.getElementById('profit').value = bid.profitPercent || 15;
             document.getElementById('contingency').value = bid.contingencyPercent || 5;
             document.getElementById('lineItems').innerHTML = '';
-            bid.lineItems.forEach(item => addLineItem(item));
+            bid.lineItems.forEach(item => addLineItem(item, { position: 'bottom' }));
             updateBidTotal();
             switchTab('detailed');
         }
@@ -1024,8 +1297,22 @@ import { TakeoffManager } from './takeoff.js';
             showToast('Company information saved!', 'success');
         }
 
-        function refreshLineItemCategoryOptions() {
+        function getSortedLineItemCategories() {
             const categories = Object.keys(state.lineItemCategories || {});
+            return categories.sort((a, b) => {
+                const aIndex = PRIORITY_LINE_ITEM_CATEGORIES.indexOf(a);
+                const bIndex = PRIORITY_LINE_ITEM_CATEGORIES.indexOf(b);
+                if (aIndex !== -1 || bIndex !== -1) {
+                    if (aIndex === -1) return 1;
+                    if (bIndex === -1) return -1;
+                    return aIndex - bIndex;
+                }
+                return a.localeCompare(b);
+            });
+        }
+
+        function refreshLineItemCategoryOptions() {
+            const categories = getSortedLineItemCategories();
             document.querySelectorAll('.line-item-row').forEach(row => {
                 const categorySelect = row.querySelector('[data-field="category"]');
                 const descriptionSelect = row.querySelector('[data-field="description"]');
@@ -1040,10 +1327,11 @@ import { TakeoffManager } from './takeoff.js';
                 }
                 updateItemSelectionOptions(row, { preserveExisting: true, previousDescription });
             });
+            updateLineItemEmptyState();
         }
 
         // --- DETAILED BIDDING ---
-        function addLineItem(item = null) {
+        function addLineItem(item = null, { position = 'top' } = {}) {
             if (item?.category && !state.lineItemCategories[item.category]) {
                 state.lineItemCategories[item.category] = [];
             }
@@ -1053,7 +1341,7 @@ import { TakeoffManager } from './takeoff.js';
             div.className = 'line-item-row';
             div.dataset.id = state.lineItemId;
 
-            const categories = Object.keys(state.lineItemCategories);
+            const categories = getSortedLineItemCategories();
             const categoryOptions = categories
                 .map(cat => `<option value="${cat}">${cat}</option>`)
                 .join('');
@@ -1071,7 +1359,11 @@ import { TakeoffManager } from './takeoff.js';
             `;
 
             const container = document.getElementById('lineItems');
-            container.appendChild(div);
+            if (position === 'top' && container.firstChild) {
+                container.prepend(div);
+            } else {
+                container.appendChild(div);
+            }
 
             const categorySelect = div.querySelector('[data-field="category"]');
             if (item?.category && state.lineItemCategories[item.category]) {
@@ -1093,6 +1385,8 @@ import { TakeoffManager } from './takeoff.js';
                 div.querySelector('[data-field="rate"]').value = item.rate ?? 0;
                 updateLineItemTotal(div);
             }
+
+            updateLineItemEmptyState();
         }
         
         function updateItemSelectionOptions(row, { preserveExisting = false, previousDescription } = {}) {
@@ -1141,6 +1435,7 @@ import { TakeoffManager } from './takeoff.js';
         function removeLineItem(row) {
             row.remove();
             updateBidTotal();
+            updateLineItemEmptyState();
         }
 
         function updateLineItemTotal(row) {
@@ -1149,6 +1444,42 @@ import { TakeoffManager } from './takeoff.js';
             const total = quantity * rate;
             row.querySelector('.line-item-total').textContent = formatCurrency(total);
             updateBidTotal();
+        }
+
+        function updateLineItemEmptyState() {
+            const container = document.getElementById('lineItems');
+            const wrapper = container?.closest('.line-item-table-wrapper');
+            const message = document.getElementById('lineItemEmptyMessage');
+            if (!container || !wrapper || !message) return;
+            const hasRows = Boolean(container.querySelector('.line-item-row'));
+            wrapper.classList.toggle('empty', !hasRows);
+            message.textContent = 'Add your first item to start building the bid.';
+            message.style.display = hasRows ? 'none' : 'block';
+        }
+
+        function handleLineItemSearch(e) {
+            const term = e.target.value.trim().toLowerCase();
+            const rows = document.querySelectorAll('#lineItems .line-item-row');
+            let visible = 0;
+            rows.forEach(row => {
+                const category = row.querySelector('[data-field="category"]')?.value?.toLowerCase() || '';
+                const description = row.querySelector('[data-field="description"]')?.value?.toLowerCase() || '';
+                const matches = !term || category.includes(term) || description.includes(term);
+                row.classList.toggle('is-hidden', !matches);
+                if (matches) visible++;
+            });
+
+            const container = document.getElementById('lineItems');
+            const wrapper = container?.closest('.line-item-table-wrapper');
+            const message = document.getElementById('lineItemEmptyMessage');
+            if (!message || !wrapper || wrapper.classList.contains('empty')) return;
+            if (term && visible === 0) {
+                message.textContent = 'No items match your search. Try a different term.';
+                message.style.display = 'block';
+            } else {
+                message.textContent = 'Add your first item to start building the bid.';
+                message.style.display = 'none';
+            }
         }
 
         function updateBidTotal() {
@@ -1265,6 +1596,67 @@ import { TakeoffManager } from './takeoff.js';
                 state.calculator.displayValue = String(Math.sqrt(parseFloat(state.calculator.displayValue)));
             }
             updateCalculatorDisplay();
+        }
+
+        function handleGlobalKeydown(event) {
+            const modal = document.getElementById('calculatorModal');
+            if (!modal || !modal.classList.contains('active')) return;
+
+            const key = event.key;
+
+            if (/^[0-9]$/.test(key)) {
+                inputDigit(key);
+                updateCalculatorDisplay();
+                event.preventDefault();
+                return;
+            }
+
+            if (key === '.') {
+                inputDigit('.');
+                updateCalculatorDisplay();
+                event.preventDefault();
+                return;
+            }
+
+            if (['+', '-', '*', '/'].includes(key)) {
+                handleOperator(key);
+                updateCalculatorDisplay();
+                event.preventDefault();
+                return;
+            }
+
+            if (key === 'Enter' || key === '=') {
+                handleOperator('=');
+                updateCalculatorDisplay();
+                event.preventDefault();
+                return;
+            }
+
+            if (key === 'Backspace') {
+                state.calculator.displayValue = state.calculator.displayValue.slice(0, -1) || '0';
+                updateCalculatorDisplay();
+                event.preventDefault();
+                return;
+            }
+
+            if (key === 'Delete') {
+                resetCalculator();
+                updateCalculatorDisplay();
+                event.preventDefault();
+                return;
+            }
+
+            if (key === '%') {
+                state.calculator.displayValue = String(parseFloat(state.calculator.displayValue) / 100);
+                updateCalculatorDisplay();
+                event.preventDefault();
+                return;
+            }
+
+            if (key === 'Escape') {
+                closeModal('calculatorModal');
+                event.preventDefault();
+            }
         }
 
         function inputDigit(digit) {
