@@ -58,6 +58,7 @@ import {
         ];
 
         const QUICK_SCOPE_ORDER = QUICK_SCOPE_CONFIG.map(cfg => cfg.id);
+        const QUICK_SCOPE_CATEGORIES = [...new Set(QUICK_SCOPE_CONFIG.map(cfg => cfg.category))];
 
         // --- STATE MANAGEMENT ---
         const state = {
@@ -583,6 +584,79 @@ import {
             syncQuickEstimatorMaterials({ reRender: false });
             updateAutoQuantities({ reRender: false });
             renderEstimatorItems();
+            updateMaterialCardDisplays();
+            applyMaterialSelections(state.currentEstimate?.selected || {}, { force: false });
+        }
+
+        function getDefaultMaterialKey(category) {
+            const config = getScopeConfig(category);
+            return findFallbackMaterialKey(category, config?.fallbackMaterial);
+        }
+
+        function updateMaterialCardDisplays() {
+            document.querySelectorAll('.material-card').forEach(card => {
+                const category = card.dataset.category;
+                const material = card.dataset.material;
+                const priceEl = card.querySelector('.material-price');
+                if (!category || !material || !priceEl) return;
+
+                const materialData = getMaterialData(category, material);
+                if (!materialData) {
+                    priceEl.textContent = '--';
+                    return;
+                }
+
+                const price = Number.isFinite(materialData.cost) ? formatCurrency(materialData.cost) : '--';
+                const unit = materialData.unit || 'unit';
+                priceEl.textContent = price === '--' ? '--' : `${price} / ${unit}`;
+            });
+        }
+
+        function selectMaterialCard(category, materialKey) {
+            if (!category) return;
+            const cards = document.querySelectorAll(`.material-card[data-category="${category}"]`);
+            let applied = false;
+            cards.forEach(card => {
+                const isMatch = card.dataset.material === materialKey;
+                card.classList.toggle('selected', isMatch);
+                card.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+                if (isMatch) {
+                    applied = true;
+                }
+            });
+
+            if (!applied) {
+                const fallbackKey = getDefaultMaterialKey(category);
+                if (fallbackKey && fallbackKey !== materialKey) {
+                    selectMaterialCard(category, fallbackKey);
+                }
+            }
+        }
+
+        function applyMaterialSelections(selected = {}, { force = false } = {}) {
+            QUICK_SCOPE_CATEGORIES.forEach(category => {
+                const hasSelection = document.querySelector(`.material-card[data-category="${category}"].selected`);
+                if (hasSelection && !force) return;
+                const key = selected?.[category] || getDefaultMaterialKey(category);
+                selectMaterialCard(category, key);
+            });
+        }
+
+        function getSelectedMaterialKey(category) {
+            const selected = document.querySelector(`.material-card[data-category="${category}"].selected`);
+            if (selected) return selected.dataset.material;
+            return getDefaultMaterialKey(category);
+        }
+
+        function handleMaterialSelection(event) {
+            const card = event.currentTarget || event.target.closest('.material-card');
+            if (!card) return;
+            const { category, material } = card.dataset;
+            if (!category || !material) return;
+            selectMaterialCard(category, material);
+            if (state.currentEstimate?.selected) {
+                state.currentEstimate.selected[category] = material;
+            }
         }
 
         function findEstimatorItemByRow(row) {
@@ -770,6 +844,20 @@ import {
             } catch (error) {
                 console.warn('Unable to persist settings', error);
             }
+        }
+
+        function loadSettingsFromStorage() {
+            try {
+                const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+            } catch (error) {
+                console.warn('Unable to read stored settings', error);
+            }
+            return {};
         }
 
         function getFrequencyInterval(frequency = state.updateFrequency) {
@@ -1247,6 +1335,35 @@ import {
             }
         }
 
+        function updateAuthUI() {
+            const configured = isFirebaseConfigured();
+            const controls = [
+                document.getElementById('copySyncIdBtn'),
+                document.getElementById('applySyncIdBtn')
+            ];
+            controls.forEach(control => {
+                if (!control) return;
+                control.disabled = !configured;
+                control.setAttribute('aria-disabled', (!configured).toString());
+            });
+
+            const syncInput = document.getElementById('syncIdInput');
+            if (syncInput) {
+                syncInput.disabled = !configured;
+            }
+
+            if (!configured) {
+                updateCloudStatus('disabled', CLOUD_STATUS_MESSAGES.disabled);
+                return;
+            }
+
+            if (!state.remoteSyncEnabled) {
+                updateCloudStatus('offline', CLOUD_STATUS_MESSAGES.offline);
+            } else if (state.remoteSyncStatus) {
+                updateCloudStatus(state.remoteSyncStatus, CLOUD_STATUS_MESSAGES[state.remoteSyncStatus]);
+            }
+        }
+
         function persistLocalProjects() {
             try {
                 localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
@@ -1373,6 +1490,7 @@ import {
             if (!isFirebaseConfigured()) {
                 updateCloudStatus('disabled', CLOUD_STATUS_MESSAGES.disabled);
                 state.remoteSyncEnabled = false;
+                updateAuthUI();
                 return;
             }
 
@@ -1383,11 +1501,13 @@ import {
                 state.remoteSyncEnabled = true;
                 await hydrateCloudState({ allowUpload: true });
                 startCloudSubscription();
+                updateAuthUI();
             } catch (error) {
                 console.error('Firebase initialization failed:', error);
                 state.remoteSyncEnabled = false;
                 firebaseReady = false;
                 updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+                updateAuthUI();
             }
         }
 
@@ -1698,10 +1818,18 @@ import {
             const floorValue = Number.isFinite(floors) && floors > 0 ? floors : 1;
             const laborMultiplierValue = Number.isFinite(laborMultiplier) ? laborMultiplier : 0;
 
+            const foundationKey = getSelectedMaterialKey('foundation');
+            const framingKey = getSelectedMaterialKey('framing');
+            const exteriorKey = getSelectedMaterialKey('exterior');
+
+            const foundationData = getMaterialData('foundation', foundationKey);
+            const framingData = getMaterialData('framing', framingKey);
+            const exteriorData = getMaterialData('exterior', exteriorKey);
+
             const selected = {
-                foundation: document.querySelector('.material-card[data-category="foundation"].selected')?.dataset.material,
-                framing: document.querySelector('.material-card[data-category="framing"].selected')?.dataset.material,
-                exterior: document.querySelector('.material-card[data-category="exterior"].selected')?.dataset.material,
+                foundation: foundationKey,
+                framing: framingKey,
+                exterior: exteriorKey,
             };
 
             refreshQuickEstimatorFromDatabase();
@@ -1732,8 +1860,6 @@ import {
             const laborTotal = materialTotal * laborMultiplierValue;
             const total = materialTotal + laborTotal;
 
-            const { sqft, floors } = getEstimatorInputs();
-
             state.currentEstimate = {
                 id: state.editingProjectId || state.currentEstimate?.id || Date.now(),
                 estimateType: 'quick',
@@ -1753,6 +1879,7 @@ import {
                 status: state.currentEstimate?.status || 'review'
             };
 
+            applyMaterialSelections(selected, { force: true });
             displayEstimate(state.currentEstimate);
         }
 
@@ -1763,6 +1890,7 @@ import {
             updateWorksheetTotals();
             document.getElementById('estimateWorkspace').style.display = estimate.worksheet?.length ? 'block' : 'none';
             document.getElementById('estimateSummary').style.display = 'block';
+            applyMaterialSelections(estimate.selected || {}, { force: true });
         }
 
         function buildWorksheetRows({ sqft, floors, foundationData, framingData, exteriorData }) {
@@ -2046,6 +2174,7 @@ import {
             }
 
             refreshQuickEstimatorFromDatabase();
+            applyMaterialSelections(data.selected || {}, { force: true });
         }
 
         function editProject(id) {
@@ -2390,6 +2519,25 @@ import {
                 state.calculator.displayValue = String(Math.sqrt(parseFloat(state.calculator.displayValue)));
             }
             updateCalculatorDisplay();
+        }
+
+        function handleCalculatorKeydown(event) {
+            if (event.defaultPrevented) return;
+            const target = event.target;
+            if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) {
+                return;
+            }
+
+            if (event.ctrlKey && event.shiftKey && event.key?.toLowerCase() === 'c') {
+                const modal = document.getElementById('calculatorModal');
+                if (modal?.classList.contains('active')) {
+                    closeModal('calculatorModal');
+                } else {
+                    openModal('calculatorModal');
+                    updateCalculatorDisplay();
+                }
+                event.preventDefault();
+            }
         }
 
         function handleGlobalKeydown(event) {

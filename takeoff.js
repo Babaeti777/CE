@@ -484,7 +484,7 @@ export class TakeoffManager {
             if (this.elements.planContainer) {
                 this.elements.planContainer.style.display = 'none';
             }
-            this.setFullScreen(false);
+            this.setFullscreen(false);
             if (this.elements.activeMeta) {
                 this.elements.activeMeta.textContent = 'Select a drawing to begin.';
             }
