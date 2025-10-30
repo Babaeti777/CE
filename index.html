@@ -7,6 +7,17 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Replace the placeholder values below with your Firebase project settings.
+        window.FIREBASE_CONFIG = {
+            apiKey: 'YOUR_API_KEY',
+            authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
+            projectId: 'YOUR_PROJECT_ID',
+            storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+            messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+            appId: 'YOUR_APP_ID'
+        };
+    </script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -481,6 +492,26 @@
                         <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="companyEmail"></div>
                     </div>
                     <button class="btn btn-primary" id="saveCompanyBtn" style="margin-top:1rem;">Save Company Info</button>
+                </div>
+                <div class="card" style="margin-top:2rem;">
+                    <h3 class="card-title" style="margin-bottom:1.5rem;">Cloud Sync</h3>
+                    <p class="card-subtitle" style="margin-bottom:1.5rem;">Connect Firebase to sync your projects across browsers and devices.</p>
+                    <div class="form-group">
+                        <label class="form-label" for="currentSyncId">Current Sync ID</label>
+                        <div class="sync-id-row">
+                            <input type="text" class="form-input" id="currentSyncId" readonly>
+                            <button class="btn btn-secondary" id="copySyncIdBtn" type="button">Copy</button>
+                        </div>
+                        <p class="form-hint">Use this ID on another device after configuring Firebase to load the same workspace.</p>
+                    </div>
+                    <div class="form-group" style="margin-top:1.5rem;">
+                        <label class="form-label" for="syncIdInput">Link to an Existing ID</label>
+                        <div class="sync-id-row">
+                            <input type="text" class="form-input" id="syncIdInput" placeholder="Paste sync ID">
+                            <button class="btn btn-primary" id="applySyncIdBtn" type="button">Link Device</button>
+                        </div>
+                    </div>
+                    <div class="cloud-status" id="cloudSyncStatus">Cloud sync offline</div>
                 </div>
             </div>
         </div>
