@@ -1,21 +1,7 @@
 let appInstance = null;
 let firestoreInstance = null;
-let authInstance = null;
 let firebaseApi = null;
 let firebaseModulePromise = null;
-const PLACEHOLDER_VALUES = new Set([
-    'YOUR_API_KEY',
-    'YOUR_PROJECT_ID',
-    'YOUR_PROJECT_ID.firebaseapp.com',
-    'YOUR_PROJECT_ID.appspot.com',
-    'YOUR_MESSAGING_SENDER_ID',
-    'YOUR_APP_ID'
-]);
-
-function isPlaceholderValue(value) {
-    if (!value || typeof value !== 'string') return false;
-    return PLACEHOLDER_VALUES.has(value.trim());
-}
 
 async function loadFirebaseModules() {
     if (firebaseApi) return firebaseApi;
@@ -25,10 +11,9 @@ async function loadFirebaseModules() {
     }
     firebaseModulePromise = Promise.all([
         import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
-        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
-        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js')
+        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
     ])
-        .then(([appModule, firestoreModule, authModule]) => {
+        .then(([appModule, firestoreModule]) => {
             firebaseApi = {
                 initializeApp: appModule.initializeApp,
                 getFirestore: firestoreModule.getFirestore,
@@ -39,11 +24,6 @@ async function loadFirebaseModules() {
                 deleteDoc: firestoreModule.deleteDoc,
                 onSnapshot: firestoreModule.onSnapshot,
                 getDoc: firestoreModule.getDoc,
-                getAuth: authModule.getAuth,
-                onAuthStateChanged: authModule.onAuthStateChanged,
-                GoogleAuthProvider: authModule.GoogleAuthProvider,
-                signInWithPopup: authModule.signInWithPopup,
-                signOut: authModule.signOut,
             };
             return firebaseApi;
         })
@@ -62,13 +42,7 @@ function getFirebaseConfig() {
 
 export function isFirebaseConfigured() {
     const config = getFirebaseConfig();
-    if (!config) return false;
-    const requiredFields = ['apiKey', 'projectId', 'appId'];
-    return requiredFields.every((key) => {
-        const value = config[key];
-        if (!value) return false;
-        return !isPlaceholderValue(String(value));
-    });
+    return Boolean(config && config.apiKey && config.projectId && config.appId);
 }
 
 function requireFirebaseApi() {
@@ -85,13 +59,6 @@ function requireFirestore() {
     return firestoreInstance;
 }
 
-function requireAuth() {
-    if (!authInstance) {
-        throw new Error('Firebase Auth has not been initialised.');
-    }
-    return authInstance;
-}
-
 export async function initializeFirebase() {
     if (appInstance) {
         return { initialized: true };
@@ -105,7 +72,6 @@ export async function initializeFirebase() {
     const api = await loadFirebaseModules();
     appInstance = api.initializeApp(config);
     firestoreInstance = api.getFirestore(appInstance);
-    authInstance = api.getAuth(appInstance);
     return { initialized: true };
 }
 
@@ -182,28 +148,4 @@ export async function loadCompanyInfo(profileId) {
 export async function replaceAllProjects(profileId, projects = []) {
     const ops = projects.map(project => saveProject(profileId, project));
     await Promise.all(ops);
-}
-
-export function onAuthStateChange(callback, errorCallback = console.error) {
-    const auth = requireAuth();
-    const { onAuthStateChanged } = requireFirebaseApi();
-    return onAuthStateChanged(auth, callback, errorCallback);
-}
-
-export async function signInWithGoogle() {
-    const auth = requireAuth();
-    const { GoogleAuthProvider, signInWithPopup } = requireFirebaseApi();
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    return signInWithPopup(auth, provider);
-}
-
-export async function signOutUser() {
-    const auth = requireAuth();
-    const { signOut } = requireFirebaseApi();
-    await signOut(auth);
-}
-
-export function getCurrentUser() {
-    return authInstance?.currentUser || null;
 }

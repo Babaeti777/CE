@@ -482,68 +482,12 @@
             background: var(--warning);
         }
 
-        .cloud-status.warning {
-            color: var(--warning);
-        }
-
-        .cloud-status.warning::before {
-            background: var(--warning);
-        }
-
         .cloud-status.error {
             color: var(--danger);
         }
 
         .cloud-status.error::before {
             background: var(--danger);
-        }
-
-        .cloud-auth {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            padding: 1rem;
-            border: 1px solid var(--gray-200);
-            border-radius: 0.75rem;
-            background: var(--gray-50);
-            margin-bottom: 1rem;
-        }
-
-        .cloud-auth-profile {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .cloud-auth-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 999px;
-            background: var(--primary);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 1rem;
-            text-transform: uppercase;
-            background-size: cover;
-            background-position: center;
-        }
-
-        .cloud-auth-avatar.has-photo {
-            background-color: transparent;
-        }
-
-        .cloud-auth-name {
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
-
-        .cloud-auth-email {
-            font-size: 0.8rem;
-            color: var(--gray-600);
         }
 
         /* Material Selection Cards */
