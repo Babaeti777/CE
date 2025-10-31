@@ -30,6 +30,12 @@ export class TakeoffManager {
         this.canvasContext = null;
         this.pdfWorkerConfigured = false;
         this.zoomLimits = { min: 0.5, max: 3 };
+        this.pdfSources = new Map();
+        this.pdfViewerState = {
+            activePdfId: null,
+            objectUrl: null,
+            initialPage: 1
+        };
     }
 
     init() {
@@ -87,7 +93,12 @@ export class TakeoffManager {
             countColorInput: byId('takeoffCountColor'),
             countShapeSelect: byId('takeoffCountShape'),
             countLabelInput: byId('takeoffCountLabel'),
-            countToolbar: byId('takeoffCountToolbar')
+            countToolbar: byId('takeoffCountToolbar'),
+            openPdfBtn: byId('takeoffOpenPdfBtn'),
+            pdfModal: byId('takeoffPdfModal'),
+            pdfModalOverlay: byId('takeoffPdfModalOverlay'),
+            pdfModalClose: byId('takeoffPdfModalClose'),
+            pdfFrame: byId('takeoffPdfFrame')
         };
 
         if (this.elements.canvas) {
@@ -145,6 +156,15 @@ export class TakeoffManager {
 
         this.elements.quickShapeSelect?.addEventListener('change', () => this.updateQuickShapeInputs());
         this.elements.quickBtn?.addEventListener('click', () => this.calculateQuickArea());
+
+        this.elements.openPdfBtn?.addEventListener('click', () => this.openActivePdf());
+        this.elements.pdfModalClose?.addEventListener('click', () => this.closePdfViewer());
+        this.elements.pdfModalOverlay?.addEventListener('click', () => this.closePdfViewer());
+        this.elements.pdfModal?.addEventListener('click', (event) => {
+            if (event.target === this.elements.pdfModal) {
+                this.closePdfViewer();
+            }
+        });
     }
 
     setFullscreen(enabled) {
@@ -260,14 +280,24 @@ export class TakeoffManager {
         try {
             this.ensurePdfWorker();
             const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+            const pdfData = new Uint8Array(arrayBuffer);
+            const pdfId = this.createId('pdf');
+            const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+            this.pdfSources.set(pdfId, {
+                data: pdfData,
+                name: file.name,
+                totalPages: pdf.numPages
+            });
             for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
                 const imageUrl = await this.renderPdfPage(pdf, pageNumber);
                 this.addDrawing({
                     name: `${file.name.replace(/\.pdf$/i, '')} - Page ${pageNumber}`,
                     page: String(pageNumber),
                     imageUrl,
-                    type: 'pdf'
+                    type: 'pdf',
+                    pdfId,
+                    pdfPage: pageNumber,
+                    pdfTotalPages: pdf.numPages
                 });
             }
         } catch (error) {
@@ -308,7 +338,7 @@ export class TakeoffManager {
         });
     }
 
-    addDrawing({ name, page = '', trade = '', floor = '', imageUrl, type }) {
+    addDrawing({ name, page = '', trade = '', floor = '', imageUrl, type, ...metadata }) {
         const drawing = {
             id: this.createId('drawing'),
             name,
@@ -317,6 +347,7 @@ export class TakeoffManager {
             floor,
             imageUrl,
             type,
+            ...metadata,
             scale: 1,
             measurements: [],
             counters: { length: 1, area: 1, count: 1, diameter: 1 }
@@ -442,8 +473,18 @@ export class TakeoffManager {
     }
 
     removeDrawing(id) {
+        const target = this.state.drawings.find((drawing) => drawing.id === id) || null;
         const wasActive = id === this.state.currentDrawingId;
         this.state.drawings = this.state.drawings.filter((drawing) => drawing.id !== id);
+        if (target?.pdfId) {
+            const stillReferenced = this.state.drawings.some((drawing) => drawing.pdfId === target.pdfId);
+            if (!stillReferenced) {
+                if (this.pdfViewerState.activePdfId === target.pdfId) {
+                    this.closePdfViewer();
+                }
+                this.pdfSources.delete(target.pdfId);
+            }
+        }
         if (wasActive) {
             this.state.currentDrawingId = null;
             this.updateActiveDrawingDisplay();
@@ -492,6 +533,14 @@ export class TakeoffManager {
             this.state.countSettings.label = '';
             this.syncCountControls();
             this.clearCanvas();
+            if (this.elements.openPdfBtn) {
+                this.elements.openPdfBtn.classList.remove('is-visible');
+                this.elements.openPdfBtn.disabled = true;
+                this.elements.openPdfBtn.setAttribute('aria-hidden', 'true');
+                this.elements.openPdfBtn.setAttribute('aria-disabled', 'true');
+                this.elements.openPdfBtn.setAttribute('tabindex', '-1');
+                this.elements.openPdfBtn.textContent = 'Open PDF Reader';
+            }
             return;
         }
 
@@ -517,6 +566,28 @@ export class TakeoffManager {
         if (this.elements.activeMeta) {
             const pieces = [drawing.trade, drawing.floor, drawing.page].filter(Boolean);
             this.elements.activeMeta.textContent = pieces.length ? pieces.join(' • ') : 'No metadata assigned.';
+        }
+        if (this.elements.openPdfBtn) {
+            const isPdfDrawing = drawing.type === 'pdf';
+            let totalPages = null;
+            const drawingPageCount = Number.parseInt(drawing.pdfTotalPages, 10);
+            if (Number.isFinite(drawingPageCount) && drawingPageCount > 0) {
+                totalPages = drawingPageCount;
+            } else {
+                const sourcePages = Number(this.getPdfSource(drawing)?.totalPages);
+                if (Number.isFinite(sourcePages) && sourcePages > 0) {
+                    totalPages = sourcePages;
+                }
+            }
+            const parsedCurrent = Number.parseInt(drawing.pdfPage, 10);
+            const currentPage = Number.isFinite(parsedCurrent) && parsedCurrent > 0 ? parsedCurrent : 1;
+            const label = totalPages ? `Open PDF Reader (${currentPage}/${totalPages})` : 'Open PDF Reader';
+            this.elements.openPdfBtn.textContent = label;
+            this.elements.openPdfBtn.classList.toggle('is-visible', isPdfDrawing);
+            this.elements.openPdfBtn.disabled = !isPdfDrawing;
+            this.elements.openPdfBtn.setAttribute('aria-hidden', isPdfDrawing ? 'false' : 'true');
+            this.elements.openPdfBtn.setAttribute('aria-disabled', isPdfDrawing ? 'false' : 'true');
+            this.elements.openPdfBtn.setAttribute('tabindex', isPdfDrawing ? '0' : '-1');
         }
         this.state.points = [];
         this.state.previewPoint = null;
@@ -545,6 +616,87 @@ export class TakeoffManager {
         }
         this.applyZoom();
         this.drawMeasurements();
+    }
+
+    getPdfSource(drawing) {
+        if (!drawing || !drawing.pdfId) return null;
+        return this.pdfSources.get(drawing.pdfId) || null;
+    }
+
+    isPdfViewerOpen() {
+        return Boolean(this.elements.pdfModal?.classList.contains('is-open'));
+    }
+
+    openActivePdf() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            this.options.showToast('Select a drawing before opening the PDF reader.', 'warning');
+            return;
+        }
+        this.openPdfViewer(drawing);
+    }
+
+    openPdfViewer(drawing) {
+        const source = this.getPdfSource(drawing);
+        if (!source) {
+            this.options.showToast('Original PDF data is unavailable for this drawing.', 'error');
+            return;
+        }
+        if (!this.elements.pdfModal || !this.elements.pdfFrame) {
+            this.options.showToast('PDF reader is not available.', 'error');
+            return;
+        }
+
+        this.closePdfViewer({ returnFocus: false });
+
+        try {
+            const blob = new Blob([source.data], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const pageNumber = Number(drawing.pdfPage) || 1;
+            this.pdfViewerState = {
+                activePdfId: drawing.pdfId,
+                objectUrl: url,
+                initialPage: pageNumber
+            };
+            const pageFragment = pageNumber ? `#page=${pageNumber}` : '';
+            this.elements.pdfFrame.src = `${url}${pageFragment}`;
+            this.elements.pdfFrame.setAttribute('data-filename', source.name || '');
+            this.elements.pdfModal.classList.add('is-open');
+            this.elements.pdfModal.setAttribute('aria-hidden', 'false');
+            if (typeof document !== 'undefined') {
+                document.body.classList.add('takeoff-pdf-modal-open');
+            }
+            this.elements.pdfModalClose?.focus?.();
+        } catch (error) {
+            console.error('Error opening PDF viewer:', error);
+            this.options.showToast('Unable to open the PDF reader.', 'error');
+            this.closePdfViewer();
+        }
+    }
+
+    closePdfViewer(options = {}) {
+        const { returnFocus = true } = options;
+        if (!this.elements.pdfModal) return;
+        if (this.pdfViewerState.objectUrl) {
+            URL.revokeObjectURL(this.pdfViewerState.objectUrl);
+        }
+        if (this.elements.pdfFrame) {
+            this.elements.pdfFrame.src = '';
+            this.elements.pdfFrame.removeAttribute('data-filename');
+        }
+        this.pdfViewerState = {
+            activePdfId: null,
+            objectUrl: null,
+            initialPage: 1
+        };
+        this.elements.pdfModal.classList.remove('is-open');
+        this.elements.pdfModal.setAttribute('aria-hidden', 'true');
+        if (typeof document !== 'undefined') {
+            document.body.classList.remove('takeoff-pdf-modal-open');
+        }
+        if (returnFocus && this.elements.openPdfBtn?.classList.contains('is-visible')) {
+            this.elements.openPdfBtn.focus();
+        }
     }
 
     clearCanvas() {
@@ -1208,7 +1360,12 @@ export class TakeoffManager {
     }
 
     handleDocumentKeydown(event) {
-        if (event.key === 'Escape' && this.state.isFullscreen) {
+        if (event.key !== 'Escape') return;
+        if (this.isPdfViewerOpen()) {
+            this.closePdfViewer();
+            return;
+        }
+        if (this.state.isFullscreen) {
             this.setFullscreen(false);
         }
     }

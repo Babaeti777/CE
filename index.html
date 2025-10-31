@@ -336,6 +336,7 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomInBtn" aria-label="Zoom in">+</button>
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
+                                        <button type="button" class="btn btn-secondary takeoff-open-pdf-btn" id="takeoffOpenPdfBtn" aria-hidden="true">Open PDF Reader</button>
                                     </div>
                                     <div class="takeoff-toolbar-group takeoff-count-toolbar is-hidden" id="takeoffCountToolbar">
                                         <span class="takeoff-toolbar-label">Count marker</span>
@@ -590,5 +591,16 @@
     <div id="toastContainer"></div>
 
     <script type="module" src="app.js"></script>
+    <div id="takeoffPdfModal" class="takeoff-pdf-modal" aria-hidden="true">
+        <div class="takeoff-pdf-modal-overlay" id="takeoffPdfModalOverlay"></div>
+        <div class="takeoff-pdf-modal-window" role="dialog" aria-modal="true" aria-labelledby="takeoffPdfModalTitle">
+            <div class="takeoff-pdf-modal-header">
+                <h2 id="takeoffPdfModalTitle">PDF Reader</h2>
+                <button type="button" class="btn btn-ghost takeoff-pdf-modal-close" id="takeoffPdfModalClose" aria-label="Close PDF reader">×</button>
+            </div>
+            <iframe id="takeoffPdfFrame" title="PDF reader" loading="lazy"></iframe>
+            <p class="takeoff-pdf-modal-hint">Use the built-in PDF controls for search, download, zoom, and printing.</p>
+        </div>
+    </div>
 </body>
 </html>
