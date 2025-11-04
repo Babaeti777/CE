@@ -879,7 +879,18 @@
         }
 
         .takeoff-view-controls {
+            display: flex;
             align-items: center;
+            gap: 0.5rem;
+        }
+
+        .takeoff-open-pdf-btn {
+            display: none;
+            white-space: nowrap;
+        }
+
+        .takeoff-open-pdf-btn.is-visible {
+            display: inline-flex;
         }
 
         .takeoff-pdf-controls {
@@ -992,6 +1003,84 @@
         }
 
         body.takeoff-fullscreen-active {
+            overflow: hidden;
+        }
+
+        .takeoff-pdf-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1600;
+        }
+
+        .takeoff-pdf-modal.is-open {
+            display: flex;
+        }
+
+        .takeoff-pdf-modal-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        .takeoff-pdf-modal-window {
+            position: relative;
+            width: min(96vw, 1200px);
+            height: min(92vh, 840px);
+            background: var(--white);
+            border-radius: 18px;
+            box-shadow: var(--shadow-xl);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .takeoff-pdf-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+            background: rgba(248, 250, 252, 0.9);
+            backdrop-filter: blur(6px);
+        }
+
+        .takeoff-pdf-modal-header h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--gray-800);
+        }
+
+        .takeoff-pdf-modal-close {
+            font-size: 1.5rem;
+            line-height: 1;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #takeoffPdfFrame {
+            border: none;
+            width: 100%;
+            flex: 1;
+            background: #1f2937;
+        }
+
+        .takeoff-pdf-modal-hint {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.85rem;
+            color: var(--gray-600);
+            background: var(--gray-100);
+            border-top: 1px solid var(--gray-200);
+        }
+
+        body.takeoff-pdf-modal-open {
             overflow: hidden;
         }
 
@@ -1556,6 +1645,26 @@
         body.dark-mode .takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-toolbar {
             border-bottom-color: var(--gray-700);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-window {
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-header {
+            background: rgba(30, 41, 59, 0.9);
+            border-bottom-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-header h2 {
+            color: var(--gray-200);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-hint {
+            background: rgba(30, 41, 59, 0.85);
+            border-top-color: var(--gray-700);
+            color: var(--gray-300);
         }
 
         body.dark-mode .takeoff-toolbar-label,
