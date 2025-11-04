@@ -1,4 +1,7 @@
-const pdfjsLib = typeof window !== 'undefined' ? window['pdfjs-dist/build/pdf'] : null;
+const pdfjsLib =
+    typeof window !== 'undefined'
+        ? window.pdfjsLib || window['pdfjs-dist/build/pdf'] || null
+        : null;
 
 export class TakeoffManager {
     constructor(options = {}) {
@@ -30,6 +33,26 @@ export class TakeoffManager {
         this.canvasContext = null;
         this.pdfWorkerConfigured = false;
         this.zoomLimits = { min: 0.5, max: 3 };
+        this.pdfSources = new Map();
+        this.pdfDefaultScale = 1.25;
+        this.pdfViewerState = {
+            activePdfId: null,
+            pdfDocument: null,
+            currentPage: 1,
+            totalPages: 1,
+            scale: this.pdfDefaultScale,
+            renderTask: null,
+            fileName: '',
+            data: null
+        };
+        this.pdfZoomLimits = { min: 0.5, max: 3 };
+        this.pdfZoomStep = 0.25;
+        this.fullscreenContext = {
+            overlay: null,
+            placeholder: null,
+            parent: null
+        };
+        this.handleDocumentFullscreenChange = this.handleDocumentFullscreenChange.bind(this);
     }
 
     init() {
@@ -43,6 +66,7 @@ export class TakeoffManager {
         this.applyZoom();
         this.updateCountToolbarVisibility();
         this.updateFullscreenButton();
+        this.updatePdfControls();
         this.renderDrawingList();
         this.updateActiveDrawingDisplay();
         this.renderMeasurementTable();
@@ -87,7 +111,23 @@ export class TakeoffManager {
             countColorInput: byId('takeoffCountColor'),
             countShapeSelect: byId('takeoffCountShape'),
             countLabelInput: byId('takeoffCountLabel'),
-            countToolbar: byId('takeoffCountToolbar')
+            countToolbar: byId('takeoffCountToolbar'),
+            openPdfBtn: byId('takeoffOpenPdfBtn'),
+            pdfModal: byId('takeoffPdfModal'),
+            pdfModalOverlay: byId('takeoffPdfModalOverlay'),
+            pdfModalClose: byId('takeoffPdfModalClose'),
+            pdfCanvas: byId('takeoffPdfCanvas'),
+            pdfLoading: byId('takeoffPdfLoading'),
+            pdfPrevBtn: byId('takeoffPdfPrevBtn'),
+            pdfNextBtn: byId('takeoffPdfNextBtn'),
+            pdfZoomInBtn: byId('takeoffPdfZoomInBtn'),
+            pdfZoomOutBtn: byId('takeoffPdfZoomOutBtn'),
+            pdfZoomIndicator: byId('takeoffPdfZoomIndicator'),
+            pdfPageInput: byId('takeoffPdfPageInput'),
+            pdfPageTotal: byId('takeoffPdfPageTotal'),
+            pdfDownloadBtn: byId('takeoffPdfDownloadBtn'),
+            pdfFileName: byId('takeoffPdfFileName'),
+            pdfViewer: byId('takeoffPdfViewer')
         };
 
         if (this.elements.canvas) {
@@ -130,6 +170,8 @@ export class TakeoffManager {
 
         if (typeof document !== 'undefined') {
             document.addEventListener('keydown', (event) => this.handleDocumentKeydown(event));
+            document.addEventListener('fullscreenchange', this.handleDocumentFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', this.handleDocumentFullscreenChange);
         }
         this.elements.clearBtn?.addEventListener('click', () => this.clearMeasurements());
         this.elements.exportBtn?.addEventListener('click', () => this.exportCsv());
@@ -145,22 +187,112 @@ export class TakeoffManager {
 
         this.elements.quickShapeSelect?.addEventListener('change', () => this.updateQuickShapeInputs());
         this.elements.quickBtn?.addEventListener('click', () => this.calculateQuickArea());
+
+        this.elements.openPdfBtn?.addEventListener('click', () => this.openActivePdf());
+        this.elements.pdfModalClose?.addEventListener('click', () => this.closePdfViewer());
+        this.elements.pdfModalOverlay?.addEventListener('click', () => this.closePdfViewer());
+        this.elements.pdfModal?.addEventListener('click', (event) => {
+            if (event.target === this.elements.pdfModal) {
+                this.closePdfViewer();
+            }
+        });
+        this.elements.pdfPrevBtn?.addEventListener('click', () => this.stepPdfPage(-1));
+        this.elements.pdfNextBtn?.addEventListener('click', () => this.stepPdfPage(1));
+        this.elements.pdfZoomInBtn?.addEventListener('click', () => this.stepPdfZoom(this.pdfZoomStep));
+        this.elements.pdfZoomOutBtn?.addEventListener('click', () => this.stepPdfZoom(-this.pdfZoomStep));
+        this.elements.pdfDownloadBtn?.addEventListener('click', () => this.downloadActivePdf());
+        this.elements.pdfPageInput?.addEventListener('change', (event) => this.handlePdfPageInput(event));
+        this.elements.pdfPageInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                this.handlePdfPageInput(event);
+            }
+        });
     }
 
-    setFullscreen(enabled) {
-        if (!this.elements.planContainer) return;
-        this.state.isFullscreen = Boolean(enabled);
-        this.elements.planContainer.classList.toggle('takeoff-plan-fullscreen', this.state.isFullscreen);
-        if (this.state.isFullscreen) {
-            document.body.classList.add('takeoff-fullscreen-active');
-        } else {
-            document.body.classList.remove('takeoff-fullscreen-active');
+    setFullscreen(enabled, options = {}) {
+        const { syncNative = false } = options;
+        if (!this.elements.planContainer) {
+            this.state.isFullscreen = false;
+            if (syncNative) {
+                this.exitNativeFullscreen();
+            }
+            return;
+        }
+        const nextState = Boolean(enabled);
+        this.state.isFullscreen = nextState;
+        this.applyFullscreenStructure(nextState);
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.toggle('takeoff-fullscreen-active', nextState);
         }
         if (this.elements.fullScreenToggle) {
-            this.elements.fullScreenToggle.textContent = this.state.isFullscreen ? 'Exit Full View' : 'Full View';
-            this.elements.fullScreenToggle.setAttribute('aria-pressed', this.state.isFullscreen ? 'true' : 'false');
+            this.elements.fullScreenToggle.textContent = nextState ? 'Exit Full View' : 'Full View';
+            this.elements.fullScreenToggle.setAttribute('aria-pressed', nextState ? 'true' : 'false');
         }
         this.updateFullscreenButton();
+        if (syncNative) {
+            if (nextState) {
+                this.requestNativeFullscreen();
+            } else {
+                this.exitNativeFullscreen();
+            }
+        }
+    }
+
+    applyFullscreenStructure(enabled) {
+        if (!this.elements.planContainer) return;
+        if (enabled) {
+            this.enterFullscreenStructure();
+        } else {
+            this.exitFullscreenStructure();
+        }
+    }
+
+    enterFullscreenStructure() {
+        if (!this.elements.planContainer || this.fullscreenContext.overlay) return;
+        const container = this.elements.planContainer;
+        const parent = container.parentElement;
+        if (!parent) return;
+
+        const hasBody = typeof document !== 'undefined' && Boolean(document.body);
+        if (!hasBody) {
+            container.classList.add('takeoff-plan-fullscreen');
+            this.fullscreenContext = { overlay: null, placeholder: null, parent: null };
+            return;
+        }
+
+        const placeholder = document.createElement('div');
+        placeholder.style.display = 'none';
+        placeholder.className = 'takeoff-fullscreen-placeholder';
+        parent.insertBefore(placeholder, container);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'takeoff-plan-fullscreen-overlay';
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        container.classList.add('takeoff-plan-fullscreen');
+        this.fullscreenContext = { overlay, placeholder, parent };
+        if (this.elements.planStage) {
+            this.elements.planStage.scrollTo?.(0, 0);
+        }
+    }
+
+    exitFullscreenStructure() {
+        const { overlay, placeholder, parent } = this.fullscreenContext;
+        const container = this.elements.planContainer;
+        if (!container) return;
+
+        if (overlay && overlay.contains(container)) {
+            overlay.removeChild(container);
+        }
+        if (parent && placeholder && parent.contains(placeholder)) {
+            parent.insertBefore(container, placeholder);
+            parent.removeChild(placeholder);
+        }
+        overlay?.remove();
+        container.classList.remove('takeoff-plan-fullscreen');
+        this.fullscreenContext = { overlay: null, placeholder: null, parent: null };
     }
 
     toggleFullscreen() {
@@ -168,8 +300,9 @@ export class TakeoffManager {
             this.options.showToast('Select a drawing before using full screen.', 'warning');
             return;
         }
-        this.setFullscreen(!this.state.isFullscreen);
-        if (this.state.isFullscreen) {
+        const shouldEnable = !this.state.isFullscreen;
+        this.setFullscreen(shouldEnable, { syncNative: true });
+        if (shouldEnable) {
             this.elements.planStage?.focus?.();
         }
     }
@@ -260,14 +393,24 @@ export class TakeoffManager {
         try {
             this.ensurePdfWorker();
             const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+            const pdfData = new Uint8Array(arrayBuffer);
+            const pdfId = this.createId('pdf');
+            const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+            this.pdfSources.set(pdfId, {
+                data: pdfData,
+                name: file.name,
+                totalPages: pdf.numPages
+            });
             for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
                 const imageUrl = await this.renderPdfPage(pdf, pageNumber);
                 this.addDrawing({
                     name: `${file.name.replace(/\.pdf$/i, '')} - Page ${pageNumber}`,
                     page: String(pageNumber),
                     imageUrl,
-                    type: 'pdf'
+                    type: 'pdf',
+                    pdfId,
+                    pdfPage: pageNumber,
+                    pdfTotalPages: pdf.numPages
                 });
             }
         } catch (error) {
@@ -308,7 +451,7 @@ export class TakeoffManager {
         });
     }
 
-    addDrawing({ name, page = '', trade = '', floor = '', imageUrl, type }) {
+    addDrawing({ name, page = '', trade = '', floor = '', imageUrl, type, ...metadata }) {
         const drawing = {
             id: this.createId('drawing'),
             name,
@@ -317,6 +460,7 @@ export class TakeoffManager {
             floor,
             imageUrl,
             type,
+            ...metadata,
             scale: 1,
             measurements: [],
             counters: { length: 1, area: 1, count: 1, diameter: 1 }
@@ -442,8 +586,18 @@ export class TakeoffManager {
     }
 
     removeDrawing(id) {
+        const target = this.state.drawings.find((drawing) => drawing.id === id) || null;
         const wasActive = id === this.state.currentDrawingId;
         this.state.drawings = this.state.drawings.filter((drawing) => drawing.id !== id);
+        if (target?.pdfId) {
+            const stillReferenced = this.state.drawings.some((drawing) => drawing.pdfId === target.pdfId);
+            if (!stillReferenced) {
+                if (this.pdfViewerState.activePdfId === target.pdfId) {
+                    this.closePdfViewer();
+                }
+                this.pdfSources.delete(target.pdfId);
+            }
+        }
         if (wasActive) {
             this.state.currentDrawingId = null;
             this.updateActiveDrawingDisplay();
@@ -484,15 +638,26 @@ export class TakeoffManager {
             if (this.elements.planContainer) {
                 this.elements.planContainer.style.display = 'none';
             }
-            this.setFullscreen(false);
+            this.setFullscreen(false, { syncNative: true });
             if (this.elements.activeMeta) {
                 this.elements.activeMeta.textContent = 'Select a drawing to begin.';
             }
-            this.setFullscreen(false);
             this.state.countSettings.label = '';
             this.syncCountControls();
             this.clearCanvas();
+            if (this.elements.openPdfBtn) {
+                this.elements.openPdfBtn.classList.remove('is-visible');
+                this.elements.openPdfBtn.disabled = true;
+                this.elements.openPdfBtn.setAttribute('aria-hidden', 'true');
+                this.elements.openPdfBtn.setAttribute('aria-disabled', 'true');
+                this.elements.openPdfBtn.setAttribute('tabindex', '-1');
+                this.elements.openPdfBtn.textContent = 'Open PDF Reader';
+            }
             return;
+        }
+
+        if (this.isPdfViewerOpen() && drawing.pdfId !== this.pdfViewerState.activePdfId) {
+            this.closePdfViewer({ returnFocus: false });
         }
 
         if (this.elements.planContainer) {
@@ -517,6 +682,28 @@ export class TakeoffManager {
         if (this.elements.activeMeta) {
             const pieces = [drawing.trade, drawing.floor, drawing.page].filter(Boolean);
             this.elements.activeMeta.textContent = pieces.length ? pieces.join(' • ') : 'No metadata assigned.';
+        }
+        if (this.elements.openPdfBtn) {
+            const isPdfDrawing = drawing.type === 'pdf';
+            let totalPages = null;
+            const drawingPageCount = Number.parseInt(drawing.pdfTotalPages, 10);
+            if (Number.isFinite(drawingPageCount) && drawingPageCount > 0) {
+                totalPages = drawingPageCount;
+            } else {
+                const sourcePages = Number(this.getPdfSource(drawing)?.totalPages);
+                if (Number.isFinite(sourcePages) && sourcePages > 0) {
+                    totalPages = sourcePages;
+                }
+            }
+            const parsedCurrent = Number.parseInt(drawing.pdfPage, 10);
+            const currentPage = Number.isFinite(parsedCurrent) && parsedCurrent > 0 ? parsedCurrent : 1;
+            const label = totalPages ? `Open PDF Reader (${currentPage}/${totalPages})` : 'Open PDF Reader';
+            this.elements.openPdfBtn.textContent = label;
+            this.elements.openPdfBtn.classList.toggle('is-visible', isPdfDrawing);
+            this.elements.openPdfBtn.disabled = !isPdfDrawing;
+            this.elements.openPdfBtn.setAttribute('aria-hidden', isPdfDrawing ? 'false' : 'true');
+            this.elements.openPdfBtn.setAttribute('aria-disabled', isPdfDrawing ? 'false' : 'true');
+            this.elements.openPdfBtn.setAttribute('tabindex', isPdfDrawing ? '0' : '-1');
         }
         this.state.points = [];
         this.state.previewPoint = null;
@@ -545,6 +732,308 @@ export class TakeoffManager {
         }
         this.applyZoom();
         this.drawMeasurements();
+    }
+
+    getPdfSource(drawing) {
+        if (!drawing || !drawing.pdfId) return null;
+        return this.pdfSources.get(drawing.pdfId) || null;
+    }
+
+    isPdfViewerOpen() {
+        return Boolean(this.elements.pdfModal?.classList.contains('is-open'));
+    }
+
+    openActivePdf() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            this.options.showToast('Select a drawing before opening the PDF reader.', 'warning');
+            return;
+        }
+        this.openPdfViewer(drawing);
+    }
+
+    async openPdfViewer(drawing) {
+        const source = this.getPdfSource(drawing);
+        if (!source) {
+            this.options.showToast('Original PDF data is unavailable for this drawing.', 'error');
+            return;
+        }
+        if (!this.elements.pdfModal || !this.elements.pdfCanvas) {
+            this.options.showToast('PDF reader is not available.', 'error');
+            return;
+        }
+        if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
+            this.options.showToast('PDF support is unavailable.', 'error');
+            return;
+        }
+
+        this.closePdfViewer({ returnFocus: false });
+        this.ensurePdfWorker();
+
+        try {
+            this.showPdfLoading(true);
+            const loadingTask = pdfjsLib.getDocument({ data: source.data });
+            const pdfDocument = await loadingTask.promise;
+            const totalPages = pdfDocument?.numPages || Number(source.totalPages) || 1;
+            const parsed = Number.parseInt(drawing.pdfPage, 10);
+            const initialPage = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+            const clampedPage = Math.min(Math.max(initialPage, 1), totalPages || 1);
+            this.pdfViewerState = {
+                activePdfId: drawing.pdfId,
+                pdfDocument,
+                currentPage: clampedPage,
+                totalPages: totalPages || 1,
+                scale: this.pdfDefaultScale,
+                renderTask: null,
+                fileName: source.name || drawing.name || '',
+                data: source.data
+            };
+            this.updatePdfControls();
+            this.elements.pdfModal.classList.add('is-open');
+            this.elements.pdfModal.setAttribute('aria-hidden', 'false');
+            if (typeof document !== 'undefined') {
+                document.body.classList.add('takeoff-pdf-modal-open');
+            }
+            if (this.elements.pdfViewer) {
+                this.elements.pdfViewer.scrollTop = 0;
+                this.elements.pdfViewer.scrollLeft = 0;
+            }
+            await this.renderActivePdfPage();
+            this.elements.pdfModalClose?.focus?.();
+        } catch (error) {
+            console.error('Error opening PDF viewer:', error);
+            this.options.showToast('Unable to open the PDF reader.', 'error');
+            this.closePdfViewer({ returnFocus: false });
+        } finally {
+            this.showPdfLoading(false);
+        }
+    }
+
+    closePdfViewer(options = {}) {
+        const { returnFocus = true } = options;
+        if (!this.elements.pdfModal) return;
+        if (this.pdfViewerState.renderTask && typeof this.pdfViewerState.renderTask.cancel === 'function') {
+            try {
+                this.pdfViewerState.renderTask.cancel();
+            } catch (error) {
+                console.warn('Unable to cancel PDF render task:', error);
+            }
+        }
+        if (this.pdfViewerState.pdfDocument && typeof this.pdfViewerState.pdfDocument.destroy === 'function') {
+            try {
+                this.pdfViewerState.pdfDocument.destroy();
+            } catch (error) {
+                console.warn('Unable to destroy PDF document:', error);
+            }
+        }
+        this.pdfViewerState = {
+            activePdfId: null,
+            pdfDocument: null,
+            currentPage: 1,
+            totalPages: 1,
+            scale: this.pdfDefaultScale,
+            renderTask: null,
+            fileName: '',
+            data: null
+        };
+        if (this.elements.pdfCanvas) {
+            const context = this.elements.pdfCanvas.getContext('2d');
+            if (context) {
+                context.setTransform(1, 0, 0, 1, 0, 0);
+                context.clearRect(0, 0, this.elements.pdfCanvas.width || 0, this.elements.pdfCanvas.height || 0);
+            }
+            this.elements.pdfCanvas.width = 0;
+            this.elements.pdfCanvas.height = 0;
+            this.elements.pdfCanvas.style.width = '';
+            this.elements.pdfCanvas.style.height = '';
+        }
+        this.updatePdfControls();
+        this.showPdfLoading(false);
+        this.elements.pdfModal.classList.remove('is-open');
+        this.elements.pdfModal.setAttribute('aria-hidden', 'true');
+        if (typeof document !== 'undefined') {
+            document.body.classList.remove('takeoff-pdf-modal-open');
+        }
+        if (returnFocus && this.elements.openPdfBtn?.classList.contains('is-visible')) {
+            this.elements.openPdfBtn.focus();
+        }
+    }
+
+    showPdfLoading(isActive) {
+        if (!this.elements.pdfLoading) return;
+        const nextState = Boolean(isActive);
+        this.elements.pdfLoading.classList.toggle('is-active', nextState);
+        this.elements.pdfLoading.setAttribute('aria-hidden', nextState ? 'false' : 'true');
+    }
+
+    updatePdfControls() {
+        const state = this.pdfViewerState;
+        const hasDocument = Boolean(state.pdfDocument);
+        const totalPages = state.totalPages || 1;
+        if (this.elements.pdfPageInput) {
+            this.elements.pdfPageInput.value = hasDocument ? String(state.currentPage) : '1';
+            this.elements.pdfPageInput.disabled = !hasDocument;
+        }
+        if (this.elements.pdfPageTotal) {
+            this.elements.pdfPageTotal.textContent = `/ ${totalPages}`;
+        }
+        if (this.elements.pdfPrevBtn) {
+            this.elements.pdfPrevBtn.disabled = !hasDocument || state.currentPage <= 1;
+        }
+        if (this.elements.pdfNextBtn) {
+            this.elements.pdfNextBtn.disabled = !hasDocument || state.currentPage >= totalPages;
+        }
+        if (this.elements.pdfZoomOutBtn) {
+            this.elements.pdfZoomOutBtn.disabled = !hasDocument || state.scale <= this.pdfZoomLimits.min + 0.001;
+        }
+        if (this.elements.pdfZoomInBtn) {
+            this.elements.pdfZoomInBtn.disabled = !hasDocument || state.scale >= this.pdfZoomLimits.max - 0.001;
+        }
+        if (this.elements.pdfZoomIndicator) {
+            const displayScale = Math.round((state.scale || this.pdfDefaultScale) * 100);
+            this.elements.pdfZoomIndicator.textContent = `${displayScale}%`;
+        }
+        if (this.elements.pdfDownloadBtn) {
+            this.elements.pdfDownloadBtn.disabled = !hasDocument || !state.data;
+        }
+        if (this.elements.pdfFileName) {
+            this.elements.pdfFileName.textContent = state.fileName || '';
+        }
+    }
+
+    async renderActivePdfPage() {
+        if (!this.pdfViewerState.pdfDocument) return;
+        const totalPages = this.pdfViewerState.totalPages || 1;
+        const targetPage = Math.min(Math.max(this.pdfViewerState.currentPage, 1), totalPages);
+        this.pdfViewerState.currentPage = targetPage;
+        this.updatePdfControls();
+        await this.renderPdfPage(targetPage);
+    }
+
+    async renderPdfPage(pageNumber) {
+        if (!this.pdfViewerState.pdfDocument || !this.elements.pdfCanvas) return;
+        const canvas = this.elements.pdfCanvas;
+        const context = canvas.getContext('2d');
+        if (!context) return;
+        if (this.pdfViewerState.renderTask && typeof this.pdfViewerState.renderTask.cancel === 'function') {
+            try {
+                this.pdfViewerState.renderTask.cancel();
+            } catch (error) {
+                console.warn('Unable to cancel previous PDF render:', error);
+            }
+        }
+        const scale = this.pdfViewerState.scale;
+        const outputScale = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
+        this.showPdfLoading(true);
+        try {
+            const page = await this.pdfViewerState.pdfDocument.getPage(pageNumber);
+            const viewport = page.getViewport({ scale });
+            const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = `${viewport.width}px`;
+            canvas.style.height = `${viewport.height}px`;
+            const renderTask = page.render({ canvasContext: context, viewport, transform });
+            this.pdfViewerState.renderTask = renderTask;
+            await renderTask.promise;
+        } catch (error) {
+            if (!error || error.name !== 'RenderingCancelledException') {
+                console.error('Error rendering PDF page:', error);
+                this.options.showToast('Unable to render the selected PDF page.', 'error');
+            }
+        } finally {
+            this.pdfViewerState.renderTask = null;
+            this.showPdfLoading(false);
+        }
+    }
+
+    stepPdfPage(delta) {
+        if (!this.pdfViewerState.pdfDocument) return;
+        const nextPage = this.pdfViewerState.currentPage + delta;
+        this.setPdfPage(nextPage);
+    }
+
+    setPdfPage(pageNumber) {
+        if (!this.pdfViewerState.pdfDocument) return;
+        const totalPages = this.pdfViewerState.totalPages || 1;
+        if (!Number.isFinite(pageNumber)) {
+            this.updatePdfControls();
+            return;
+        }
+        const clamped = Math.min(Math.max(Math.round(pageNumber), 1), totalPages);
+        if (clamped === this.pdfViewerState.currentPage) {
+            this.updatePdfControls();
+            return;
+        }
+        this.pdfViewerState.currentPage = clamped;
+        this.updatePdfControls();
+        this.renderActivePdfPage();
+    }
+
+    handlePdfPageInput(event) {
+        const value = Number.parseInt(event.target?.value, 10);
+        if (!this.pdfViewerState.pdfDocument) {
+            if (event.target) {
+                event.target.value = '1';
+            }
+            return;
+        }
+        if (!Number.isFinite(value)) {
+            if (event.target) {
+                event.target.value = String(this.pdfViewerState.currentPage);
+            }
+            return;
+        }
+        this.setPdfPage(value);
+    }
+
+    stepPdfZoom(delta) {
+        if (!this.pdfViewerState.pdfDocument) return;
+        const next = this.pdfViewerState.scale + delta;
+        this.setPdfZoom(next);
+    }
+
+    setPdfZoom(scale) {
+        if (!this.pdfViewerState.pdfDocument) return;
+        if (!Number.isFinite(scale)) return;
+        const clamped = Math.min(Math.max(scale, this.pdfZoomLimits.min), this.pdfZoomLimits.max);
+        if (Math.abs(clamped - this.pdfViewerState.scale) < 0.001) {
+            this.updatePdfControls();
+            return;
+        }
+        this.pdfViewerState.scale = clamped;
+        this.updatePdfControls();
+        this.renderActivePdfPage();
+    }
+
+    downloadActivePdf() {
+        if (!this.pdfViewerState.data) {
+            this.options.showToast('Original PDF data is unavailable.', 'error');
+            return;
+        }
+        try {
+            const payload = this.pdfViewerState.data instanceof Uint8Array
+                ? this.pdfViewerState.data.slice()
+                : this.pdfViewerState.data;
+            const blob = new Blob([payload], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            if (typeof document !== 'undefined' && document.body) {
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                const baseName = this.pdfViewerState.fileName || 'drawing.pdf';
+                anchor.download = baseName.toLowerCase().endsWith('.pdf') ? baseName : `${baseName}.pdf`;
+                anchor.style.display = 'none';
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+            } else {
+                this.options.showToast('Downloading is not supported in this environment.', 'warning');
+            }
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+            this.options.showToast('Unable to download the PDF.', 'error');
+        }
     }
 
     clearCanvas() {
@@ -611,12 +1100,13 @@ export class TakeoffManager {
 
         if (mode === 'count') {
             const baseLabel = (this.state.countSettings.label || '').trim();
-            const label = baseLabel || `Count ${drawing.counters.count}`;
+            const defaultLabel = baseLabel || `Count ${drawing.counters.count}`;
+            const label = this.promptForMeasurementLabel(defaultLabel);
             drawing.counters.count += 1;
             const measurement = {
                 id: this.createId('measurement'),
                 type: 'count',
-                label: this.promptForMeasurementLabel(defaultLabel),
+                label,
                 points: [point],
                 count: 1,
                 style: {
@@ -1208,8 +1698,97 @@ export class TakeoffManager {
     }
 
     handleDocumentKeydown(event) {
-        if (event.key === 'Escape' && this.state.isFullscreen) {
+        if (event.key !== 'Escape') return;
+        if (this.isPdfViewerOpen()) {
+            this.closePdfViewer();
+            return;
+        }
+        if (this.state.isFullscreen) {
+            this.setFullscreen(false, { syncNative: true });
+        }
+    }
+
+    getFullscreenTarget() {
+        if (this.fullscreenContext.overlay) {
+            return this.fullscreenContext.overlay;
+        }
+        return this.elements.planContainer || this.elements.planStage || null;
+    }
+
+    getNativeFullscreenElement() {
+        if (typeof document === 'undefined') return null;
+        return (
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.msFullscreenElement ||
+            null
+        );
+    }
+
+    requestNativeFullscreen() {
+        const target = this.getFullscreenTarget();
+        if (!target) return;
+        const request =
+            target.requestFullscreen ||
+            target.webkitRequestFullscreen ||
+            target.msRequestFullscreen ||
+            target.mozRequestFullScreen;
+        if (typeof request === 'function') {
+            try {
+                const result = request.call(target);
+                if (result && typeof result.catch === 'function') {
+                    result.catch(() => {});
+                }
+            } catch (error) {
+                console.warn('Unable to enter browser fullscreen:', error);
+            }
+        }
+    }
+
+    exitNativeFullscreen() {
+        if (typeof document === 'undefined') return;
+        const active = this.getNativeFullscreenElement();
+        const target = this.getFullscreenTarget();
+        if (
+            !active ||
+            (target &&
+                active !== target &&
+                active !== this.elements.planContainer &&
+                active !== this.elements.planStage)
+        ) {
+            return;
+        }
+        const exit =
+            document.exitFullscreen ||
+            document.webkitExitFullscreen ||
+            document.msExitFullscreen ||
+            document.mozCancelFullScreen;
+        if (typeof exit === 'function') {
+            try {
+                const result = exit.call(document);
+                if (result && typeof result.catch === 'function') {
+                    result.catch(() => {});
+                }
+            } catch (error) {
+                console.warn('Unable to exit browser fullscreen:', error);
+            }
+        }
+    }
+
+    handleDocumentFullscreenChange() {
+        const active = this.getNativeFullscreenElement();
+        const target = this.getFullscreenTarget();
+        const isTargetActive = Boolean(
+            active &&
+            (active === target ||
+                active === this.elements.planContainer ||
+                active === this.elements.planStage ||
+                active === this.fullscreenContext.overlay)
+        );
+        if (!isTargetActive && this.state.isFullscreen) {
             this.setFullscreen(false);
+        } else if (isTargetActive && !this.state.isFullscreen) {
+            this.setFullscreen(true);
         }
     }
 

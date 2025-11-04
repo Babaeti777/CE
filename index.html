@@ -336,6 +336,7 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomInBtn" aria-label="Zoom in">+</button>
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
+                                        <button type="button" class="btn btn-secondary takeoff-open-pdf-btn" id="takeoffOpenPdfBtn" aria-hidden="true">Open PDF Reader</button>
                                     </div>
                                     <div class="takeoff-toolbar-group takeoff-count-toolbar is-hidden" id="takeoffCountToolbar">
                                         <span class="takeoff-toolbar-label">Count marker</span>
@@ -590,5 +591,39 @@
     <div id="toastContainer"></div>
 
     <script type="module" src="app.js"></script>
+    <div id="takeoffPdfModal" class="takeoff-pdf-modal" aria-hidden="true">
+        <div class="takeoff-pdf-modal-overlay" id="takeoffPdfModalOverlay"></div>
+        <div class="takeoff-pdf-modal-window" role="dialog" aria-modal="true" aria-labelledby="takeoffPdfModalTitle">
+            <div class="takeoff-pdf-modal-header">
+                <div class="takeoff-pdf-modal-title">
+                    <h2 id="takeoffPdfModalTitle">PDF Reader</h2>
+                    <p id="takeoffPdfFileName" class="takeoff-pdf-filename"></p>
+                </div>
+                <div class="takeoff-pdf-controls" role="group" aria-label="PDF controls">
+                    <button type="button" class="btn btn-ghost" id="takeoffPdfPrevBtn" aria-label="Previous page">‹</button>
+                    <div class="takeoff-pdf-page">
+                        <label for="takeoffPdfPageInput">Page</label>
+                        <input type="number" id="takeoffPdfPageInput" class="form-input" min="1" value="1" aria-label="Current page">
+                        <span id="takeoffPdfPageTotal">/ 1</span>
+                    </div>
+                    <button type="button" class="btn btn-ghost" id="takeoffPdfNextBtn" aria-label="Next page">›</button>
+                    <div class="takeoff-pdf-zoom">
+                        <button type="button" class="btn btn-ghost" id="takeoffPdfZoomOutBtn" aria-label="Zoom out">−</button>
+                        <span id="takeoffPdfZoomIndicator">100%</span>
+                        <button type="button" class="btn btn-ghost" id="takeoffPdfZoomInBtn" aria-label="Zoom in">+</button>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="takeoffPdfDownloadBtn">Download</button>
+                </div>
+                <button type="button" class="btn btn-ghost takeoff-pdf-modal-close" id="takeoffPdfModalClose" aria-label="Close PDF reader">×</button>
+            </div>
+            <div class="takeoff-pdf-viewer" id="takeoffPdfViewer">
+                <canvas id="takeoffPdfCanvas"></canvas>
+                <div class="takeoff-pdf-loading" id="takeoffPdfLoading" aria-hidden="true">
+                    <span class="sr-only">Loading PDF…</span>
+                </div>
+            </div>
+            <p class="takeoff-pdf-modal-hint">Use the controls above to navigate, zoom, and download the original plan PDF.</p>
+        </div>
+    </div>
 </body>
 </html>
