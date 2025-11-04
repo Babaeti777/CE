@@ -39,7 +39,6 @@ export class TakeoffManager {
             objectUrl: null,
             initialPage: 1
         };
-        this.handleDocumentFullscreenChange = this.handleDocumentFullscreenChange.bind(this);
     }
 
     init() {
@@ -1386,75 +1385,6 @@ export class TakeoffManager {
             return;
         }
         if (this.state.isFullscreen) {
-            this.setFullscreen(false, { syncNative: true });
-        }
-    }
-
-    getFullscreenTarget() {
-        return this.elements.planContainer || this.elements.planStage || null;
-    }
-
-    getNativeFullscreenElement() {
-        if (typeof document === 'undefined') return null;
-        return (
-            document.fullscreenElement ||
-            document.webkitFullscreenElement ||
-            document.msFullscreenElement ||
-            null
-        );
-    }
-
-    requestNativeFullscreen() {
-        const target = this.getFullscreenTarget();
-        if (!target) return;
-        const request =
-            target.requestFullscreen ||
-            target.webkitRequestFullscreen ||
-            target.msRequestFullscreen ||
-            target.mozRequestFullScreen;
-        if (typeof request === 'function') {
-            try {
-                const result = request.call(target);
-                if (result && typeof result.catch === 'function') {
-                    result.catch(() => {});
-                }
-            } catch (error) {
-                console.warn('Unable to enter browser fullscreen:', error);
-            }
-        }
-    }
-
-    exitNativeFullscreen() {
-        if (typeof document === 'undefined') return;
-        const active = this.getNativeFullscreenElement();
-        const target = this.getFullscreenTarget();
-        if (!active || (target && active !== target && active !== this.elements.planStage)) {
-            return;
-        }
-        const exit =
-            document.exitFullscreen ||
-            document.webkitExitFullscreen ||
-            document.msExitFullscreen ||
-            document.mozCancelFullScreen;
-        if (typeof exit === 'function') {
-            try {
-                const result = exit.call(document);
-                if (result && typeof result.catch === 'function') {
-                    result.catch(() => {});
-                }
-            } catch (error) {
-                console.warn('Unable to exit browser fullscreen:', error);
-            }
-        }
-    }
-
-    handleDocumentFullscreenChange() {
-        const active = this.getNativeFullscreenElement();
-        const target = this.getFullscreenTarget();
-        const isTargetActive = Boolean(
-            active && (active === target || active === this.elements.planStage)
-        );
-        if (!isTargetActive && this.state.isFullscreen) {
             this.setFullscreen(false);
         } else if (isTargetActive && !this.state.isFullscreen) {
             this.setFullscreen(true);
