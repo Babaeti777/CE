@@ -80,6 +80,13 @@ export class TakeoffManager {
             zoomIndicator: byId('takeoffZoomIndicator'),
             fullscreenBtn: byId('takeoffFullscreenBtn'),
             fullScreenToggle: byId('takeoffFullScreenToggle'),
+            pdfControls: byId('takeoffPdfControls'),
+            pdfPrevBtn: byId('takeoffPdfPrev'),
+            pdfNextBtn: byId('takeoffPdfNext'),
+            pdfPageInput: byId('takeoffPdfPageInput'),
+            pdfPageTotal: byId('takeoffPdfPageTotal'),
+            pdfOpenBtn: byId('takeoffPdfOpen'),
+            pdfDownloadBtn: byId('takeoffPdfDownload'),
             status: byId('takeoffStatus'),
             clearBtn: byId('takeoffClearBtn'),
             exportBtn: byId('takeoffExportCsvBtn'),
@@ -132,6 +139,19 @@ export class TakeoffManager {
         this.elements.zoomInBtn?.addEventListener('click', () => this.stepZoom(0.1));
         this.elements.zoomOutBtn?.addEventListener('click', () => this.stepZoom(-0.1));
         this.elements.zoomResetBtn?.addEventListener('click', () => this.resetZoom());
+
+        this.elements.pdfPrevBtn?.addEventListener('click', () => this.navigatePdfPage(-1));
+        this.elements.pdfNextBtn?.addEventListener('click', () => this.navigatePdfPage(1));
+        this.elements.pdfPageInput?.addEventListener('change', (event) => {
+            const value = parseInt(event.target.value, 10);
+            if (Number.isFinite(value)) {
+                this.jumpToPdfPage(value);
+            } else {
+                this.updatePdfToolbar(this.getActiveDrawing());
+            }
+        });
+        this.elements.pdfOpenBtn?.addEventListener('click', () => this.openActivePdfInViewer());
+        this.elements.pdfDownloadBtn?.addEventListener('click', () => this.downloadActivePdf());
 
         const handleColorChange = (event) => this.updateCountColor(event.target.value);
         this.elements.countColorInput?.addEventListener('input', handleColorChange);
@@ -296,6 +316,7 @@ export class TakeoffManager {
     }
 
     async processPdfFile(file) {
+        let pdfDocId = null;
         try {
             this.ensurePdfWorker();
             const arrayBuffer = await file.arrayBuffer();
@@ -309,7 +330,7 @@ export class TakeoffManager {
             });
             for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
                 const imageUrl = await this.renderPdfPage(pdf, pageNumber);
-                this.addDrawing({
+                const drawing = this.addDrawing({
                     name: `${file.name.replace(/\.pdf$/i, '')} - Page ${pageNumber}`,
                     page: String(pageNumber),
                     imageUrl,
@@ -318,10 +339,24 @@ export class TakeoffManager {
                     pdfPage: pageNumber,
                     pdfTotalPages: pdf.numPages
                 });
+                const docMeta = this.pdfDocuments.get(pdfDocId);
+                if (docMeta) {
+                    docMeta.refCount += 1;
+                }
+            }
+            const meta = this.pdfDocuments.get(pdfDocId);
+            if (meta && meta.refCount === 0) {
+                this.teardownPdfDocument(pdfDocId);
             }
         } catch (error) {
             console.error('Error rendering PDF:', error);
             this.options.showToast('Unable to render PDF drawing.', 'error');
+            if (pdfDocId) {
+                const meta = this.pdfDocuments.get(pdfDocId);
+                if (meta && meta.refCount === 0) {
+                    this.teardownPdfDocument(pdfDocId);
+                }
+            }
         }
     }
 
@@ -369,12 +404,14 @@ export class TakeoffManager {
             ...metadata,
             scale: 1,
             measurements: [],
-            counters: { length: 1, area: 1, count: 1, diameter: 1 }
+            counters: { length: 1, area: 1, count: 1, diameter: 1 },
+            ...rest
         };
         this.state.drawings.push(drawing);
         this.state.currentDrawingId = drawing.id;
         this.updateActiveDrawingDisplay();
         this.updateStatus('Drawing loaded. Choose a mode to start measuring.');
+        return drawing;
     }
 
     filterAndSortDrawings() {
@@ -541,6 +578,7 @@ export class TakeoffManager {
     updateActiveDrawingDisplay() {
         const drawing = this.getActiveDrawing();
         if (!drawing) {
+            this.updatePdfToolbar(null);
             if (this.elements.planContainer) {
                 this.elements.planContainer.style.display = 'none';
             }
@@ -562,6 +600,7 @@ export class TakeoffManager {
             return;
         }
 
+        this.updatePdfToolbar(drawing);
         if (this.elements.planContainer) {
             this.elements.planContainer.style.display = 'block';
         }
@@ -1445,6 +1484,164 @@ export class TakeoffManager {
     updateSortDirectionIcon() {
         if (!this.elements.sortDirection) return;
         this.elements.sortDirection.textContent = this.state.sortDir === 'asc' ? '▲' : '▼';
+    }
+
+    updatePdfToolbar(drawing) {
+        const controls = this.elements.pdfControls;
+        if (!controls) return;
+        if (!drawing || drawing.type !== 'pdf') {
+            controls.classList.add('is-hidden');
+            return;
+        }
+
+        controls.classList.remove('is-hidden');
+        const pageNumber = this.getPdfPageNumber(drawing);
+        const totalPages = this.getPdfTotalPages(drawing);
+        if (this.elements.pdfPageInput) {
+            this.elements.pdfPageInput.value = String(pageNumber);
+            this.elements.pdfPageInput.min = '1';
+            this.elements.pdfPageInput.max = String(totalPages);
+        }
+        if (this.elements.pdfPageTotal) {
+            this.elements.pdfPageTotal.textContent = `of ${totalPages}`;
+        }
+
+        const prev = this.findPdfNeighbor(drawing, -1);
+        const next = this.findPdfNeighbor(drawing, 1);
+
+        if (this.elements.pdfPrevBtn) {
+            const disabled = !prev;
+            this.elements.pdfPrevBtn.disabled = disabled;
+            this.elements.pdfPrevBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        }
+        if (this.elements.pdfNextBtn) {
+            const disabled = !next;
+            this.elements.pdfNextBtn.disabled = disabled;
+            this.elements.pdfNextBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        }
+    }
+
+    getPdfPageNumber(drawing) {
+        if (!drawing) return 1;
+        if (typeof drawing.pdfPageNumber === 'number') return drawing.pdfPageNumber;
+        const parsed = parseInt(drawing.page, 10);
+        return Number.isFinite(parsed) ? parsed : 1;
+    }
+
+    getPdfTotalPages(drawing) {
+        if (!drawing) return 1;
+        if (typeof drawing.pdfTotalPages === 'number' && drawing.pdfTotalPages > 0) {
+            return drawing.pdfTotalPages;
+        }
+        const meta = this.getPdfDocumentMeta(drawing.pdfDocId);
+        return meta?.pageCount || 1;
+    }
+
+    getPdfDocumentMeta(docId) {
+        if (!docId) return null;
+        return this.pdfDocuments.get(docId) || null;
+    }
+
+    getPdfPagesForDoc(docId) {
+        return this.state.drawings
+            .filter((drawing) => drawing.pdfDocId === docId)
+            .sort((a, b) => this.getPdfPageNumber(a) - this.getPdfPageNumber(b));
+    }
+
+    findPdfNeighbor(drawing, delta) {
+        if (!drawing || !drawing.pdfDocId || !delta) return null;
+        const pages = this.getPdfPagesForDoc(drawing.pdfDocId);
+        const index = pages.findIndex((page) => page.id === drawing.id);
+        if (index === -1) return null;
+        return pages[index + delta] || null;
+    }
+
+    navigatePdfPage(delta) {
+        const current = this.getActiveDrawing();
+        if (!current || current.type !== 'pdf') return;
+        const neighbor = this.findPdfNeighbor(current, delta);
+        if (neighbor) {
+            this.setCurrentDrawing(neighbor.id);
+        }
+    }
+
+    jumpToPdfPage(pageNumber) {
+        const current = this.getActiveDrawing();
+        if (!current || current.type !== 'pdf' || !current.pdfDocId) {
+            return;
+        }
+        const totalPages = this.getPdfTotalPages(current);
+        let targetPage = Number.isFinite(pageNumber) ? pageNumber : Number.parseInt(pageNumber, 10);
+        if (!Number.isFinite(targetPage) || targetPage < 1) {
+            targetPage = 1;
+        }
+        if (targetPage > totalPages) {
+            targetPage = totalPages;
+        }
+        const pages = this.getPdfPagesForDoc(current.pdfDocId);
+        const target = pages.find((page) => this.getPdfPageNumber(page) === targetPage);
+        if (target) {
+            this.setCurrentDrawing(target.id);
+        } else {
+            this.options.showToast('Page not found in this PDF.', 'warning');
+            this.updatePdfToolbar(current);
+        }
+    }
+
+    openActivePdfInViewer() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing || drawing.type !== 'pdf') return;
+        const meta = this.getPdfDocumentMeta(drawing.pdfDocId);
+        if (!meta || !meta.url) {
+            this.options.showToast('PDF source not available.', 'error');
+            return;
+        }
+        if (typeof window === 'undefined' || typeof window.open !== 'function') {
+            this.options.showToast('Opening PDFs is not supported in this environment.', 'warning');
+            return;
+        }
+        window.open(meta.url, '_blank', 'noopener');
+    }
+
+    downloadActivePdf() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing || drawing.type !== 'pdf') return;
+        const meta = this.getPdfDocumentMeta(drawing.pdfDocId);
+        if (!meta || !meta.url) {
+            this.options.showToast('PDF source not available.', 'error');
+            return;
+        }
+        if (typeof document === 'undefined') {
+            this.options.showToast('Downloading is not supported in this environment.', 'warning');
+            return;
+        }
+        const link = document.createElement('a');
+        link.href = meta.url;
+        link.download = drawing.pdfFileName || meta.name || 'drawing.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    releaseDrawingResources(drawing) {
+        if (!drawing || drawing.type !== 'pdf' || !drawing.pdfDocId) {
+            return;
+        }
+        const meta = this.pdfDocuments.get(drawing.pdfDocId);
+        if (!meta) return;
+        meta.refCount = Math.max(0, (meta.refCount || 0) - 1);
+        if (meta.refCount === 0) {
+            this.teardownPdfDocument(drawing.pdfDocId);
+        }
+    }
+
+    teardownPdfDocument(docId) {
+        const meta = this.pdfDocuments.get(docId);
+        if (!meta) return;
+        if (meta.url) {
+            URL.revokeObjectURL(meta.url);
+        }
+        this.pdfDocuments.delete(docId);
     }
 
     createId(prefix) {
