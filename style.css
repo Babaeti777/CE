@@ -977,29 +977,54 @@
             width: 180px;
         }
 
-        .takeoff-plan.takeoff-plan-fullscreen {
+        .takeoff-plan-fullscreen-overlay {
             position: fixed;
             inset: 0;
-            width: 100vw;
-            height: 100vh;
-            border-radius: 0;
+            display: flex;
+            padding: clamp(1rem, 3vw, 2.5rem);
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(8px);
+            z-index: 1500;
+            overflow: hidden;
+        }
+
+        .takeoff-plan-fullscreen-overlay::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(15, 23, 42, 0.1));
+            pointer-events: none;
+        }
+
+        .takeoff-plan-fullscreen-overlay .takeoff-plan {
+            position: relative;
+            z-index: 1;
+            margin: auto;
+            max-width: min(96vw, 1700px);
+            width: 100%;
+            height: 100%;
+            box-shadow: 0 32px 70px rgba(15, 23, 42, 0.35);
+        }
+
+        .takeoff-plan.takeoff-plan-fullscreen {
+            border-radius: 20px;
             border: none;
-            z-index: 1200;
-            background: var(--gray-50);
-            padding: 0 0 1.5rem 0;
+            background: var(--gray-0);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
 
         .takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-toolbar {
-            border-radius: 0;
-            border-left: none;
-            border-right: none;
-            border-top: none;
+            border: none;
             border-bottom: 1px solid var(--gray-200);
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
         }
 
         .takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-stage {
             flex: 1;
+            border-radius: 0 0 20px 20px;
         }
 
         body.takeoff-fullscreen-active {
@@ -1638,13 +1663,59 @@
             border-color: var(--gray-700);
         }
 
+        body.dark-mode .takeoff-plan-fullscreen-overlay {
+            background: rgba(15, 23, 42, 0.9);
+        }
+
         body.dark-mode .takeoff-plan.takeoff-plan-fullscreen {
             background: var(--gray-900);
         }
 
         body.dark-mode .takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-toolbar {
             border-bottom-color: var(--gray-700);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+            background: rgba(15, 23, 42, 0.85);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-window {
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-header {
+            background: rgba(30, 41, 59, 0.9);
+            border-bottom-color: var(--gray-700);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-header h2 {
+            color: var(--gray-200);
+        }
+
+        body.dark-mode .takeoff-pdf-filename {
+            color: var(--gray-400);
+        }
+
+        body.dark-mode .takeoff-pdf-page {
+            color: var(--gray-400);
+        }
+
+        body.dark-mode .takeoff-pdf-zoom {
+            color: var(--gray-200);
+        }
+
+        body.dark-mode #takeoffPdfCanvas {
+            background: rgba(15, 23, 42, 0.85);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+        }
+
+        body.dark-mode .takeoff-pdf-loading {
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        body.dark-mode .takeoff-pdf-modal-hint {
+            background: rgba(30, 41, 59, 0.85);
+            border-top-color: var(--gray-700);
+            color: var(--gray-300);
         }
 
         body.dark-mode .takeoff-pdf-modal-window {

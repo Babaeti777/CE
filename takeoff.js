@@ -52,6 +52,7 @@ export class TakeoffManager {
         this.applyZoom();
         this.updateCountToolbarVisibility();
         this.updateFullscreenButton();
+        this.updatePdfControls();
         this.renderDrawingList();
         this.updateActiveDrawingDisplay();
         this.renderMeasurementTable();
