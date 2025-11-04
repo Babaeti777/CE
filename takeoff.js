@@ -294,7 +294,9 @@ export class TakeoffManager {
 
     async processFile(file) {
         try {
-            const isPdf = (file.type && file.type.toLowerCase() === 'application/pdf') || file.name.toLowerCase().endsWith('.pdf');
+            const isPdf =
+                (file.type && file.type.toLowerCase() === 'application/pdf') ||
+                file.name.toLowerCase().endsWith('.pdf');
             if (isPdf) {
                 if (!pdfjsLib) {
                     this.options.showToast('PDF support is unavailable.', 'error');
