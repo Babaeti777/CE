@@ -1,4 +1,7 @@
-const pdfjsLib = typeof window !== 'undefined' ? window['pdfjs-dist/build/pdf'] : null;
+const pdfjsLib =
+    typeof window !== 'undefined'
+        ? window.pdfjsLib || window['pdfjs-dist/build/pdf'] || null
+        : null;
 
 export class TakeoffManager {
     constructor(options = {}) {
@@ -141,6 +144,8 @@ export class TakeoffManager {
 
         if (typeof document !== 'undefined') {
             document.addEventListener('keydown', (event) => this.handleDocumentKeydown(event));
+            document.addEventListener('fullscreenchange', this.handleDocumentFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', this.handleDocumentFullscreenChange);
         }
         this.elements.clearBtn?.addEventListener('click', () => this.clearMeasurements());
         this.elements.exportBtn?.addEventListener('click', () => this.exportCsv());
@@ -167,20 +172,33 @@ export class TakeoffManager {
         });
     }
 
-    setFullscreen(enabled) {
-        if (!this.elements.planContainer) return;
-        this.state.isFullscreen = Boolean(enabled);
-        this.elements.planContainer.classList.toggle('takeoff-plan-fullscreen', this.state.isFullscreen);
-        if (this.state.isFullscreen) {
-            document.body.classList.add('takeoff-fullscreen-active');
-        } else {
-            document.body.classList.remove('takeoff-fullscreen-active');
+    setFullscreen(enabled, options = {}) {
+        const { syncNative = false } = options;
+        if (!this.elements.planContainer) {
+            this.state.isFullscreen = false;
+            if (syncNative) {
+                this.exitNativeFullscreen();
+            }
+            return;
+        }
+        const nextState = Boolean(enabled);
+        this.state.isFullscreen = nextState;
+        this.elements.planContainer.classList.toggle('takeoff-plan-fullscreen', nextState);
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.toggle('takeoff-fullscreen-active', nextState);
         }
         if (this.elements.fullScreenToggle) {
-            this.elements.fullScreenToggle.textContent = this.state.isFullscreen ? 'Exit Full View' : 'Full View';
-            this.elements.fullScreenToggle.setAttribute('aria-pressed', this.state.isFullscreen ? 'true' : 'false');
+            this.elements.fullScreenToggle.textContent = nextState ? 'Exit Full View' : 'Full View';
+            this.elements.fullScreenToggle.setAttribute('aria-pressed', nextState ? 'true' : 'false');
         }
         this.updateFullscreenButton();
+        if (syncNative) {
+            if (nextState) {
+                this.requestNativeFullscreen();
+            } else {
+                this.exitNativeFullscreen();
+            }
+        }
     }
 
     toggleFullscreen() {
@@ -188,8 +206,9 @@ export class TakeoffManager {
             this.options.showToast('Select a drawing before using full screen.', 'warning');
             return;
         }
-        this.setFullscreen(!this.state.isFullscreen);
-        if (this.state.isFullscreen) {
+        const shouldEnable = !this.state.isFullscreen;
+        this.setFullscreen(shouldEnable, { syncNative: true });
+        if (shouldEnable) {
             this.elements.planStage?.focus?.();
         }
     }
@@ -525,11 +544,10 @@ export class TakeoffManager {
             if (this.elements.planContainer) {
                 this.elements.planContainer.style.display = 'none';
             }
-            this.setFullscreen(false);
+            this.setFullscreen(false, { syncNative: true });
             if (this.elements.activeMeta) {
                 this.elements.activeMeta.textContent = 'Select a drawing to begin.';
             }
-            this.setFullscreen(false);
             this.state.countSettings.label = '';
             this.syncCountControls();
             this.clearCanvas();
@@ -763,12 +781,13 @@ export class TakeoffManager {
 
         if (mode === 'count') {
             const baseLabel = (this.state.countSettings.label || '').trim();
-            const label = baseLabel || `Count ${drawing.counters.count}`;
+            const defaultLabel = baseLabel || `Count ${drawing.counters.count}`;
+            const label = this.promptForMeasurementLabel(defaultLabel);
             drawing.counters.count += 1;
             const measurement = {
                 id: this.createId('measurement'),
                 type: 'count',
-                label: this.promptForMeasurementLabel(defaultLabel),
+                label,
                 points: [point],
                 count: 1,
                 style: {
@@ -1367,6 +1386,8 @@ export class TakeoffManager {
         }
         if (this.state.isFullscreen) {
             this.setFullscreen(false);
+        } else if (isTargetActive && !this.state.isFullscreen) {
+            this.setFullscreen(true);
         }
     }
 
