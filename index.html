@@ -337,6 +337,17 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
                                     </div>
+                                    <div class="takeoff-toolbar-group takeoff-pdf-controls is-hidden" id="takeoffPdfControls">
+                                        <span class="takeoff-toolbar-label">PDF</span>
+                                        <button type="button" class="btn btn-ghost takeoff-pdf-nav-btn" id="takeoffPdfPrev" aria-label="Previous page">Prev</button>
+                                        <div class="takeoff-pdf-page">
+                                            <input type="number" class="form-input takeoff-pdf-page-input" id="takeoffPdfPageInput" value="1" min="1" aria-label="Page number">
+                                            <span class="takeoff-pdf-page-total" id="takeoffPdfPageTotal">of 1</span>
+                                        </div>
+                                        <button type="button" class="btn btn-ghost takeoff-pdf-nav-btn" id="takeoffPdfNext" aria-label="Next page">Next</button>
+                                        <button type="button" class="btn btn-secondary" id="takeoffPdfOpen">Open PDF</button>
+                                        <button type="button" class="btn btn-secondary" id="takeoffPdfDownload">Download</button>
+                                    </div>
                                     <div class="takeoff-toolbar-group takeoff-count-toolbar is-hidden" id="takeoffCountToolbar">
                                         <span class="takeoff-toolbar-label">Count marker</span>
                                         <label class="takeoff-count-setting">
