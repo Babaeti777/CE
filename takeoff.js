@@ -34,6 +34,7 @@ export class TakeoffManager {
         this.pdfWorkerConfigured = false;
         this.zoomLimits = { min: 0.5, max: 3 };
         this.pdfSources = new Map();
+        this.pdfDocuments = new Map();
         this.pdfViewerState = {
             activePdfId: null,
             objectUrl: null,
@@ -320,16 +321,27 @@ export class TakeoffManager {
 
     async processPdfFile(file) {
         let pdfDocId = null;
+        let objectUrl = null;
         try {
             this.ensurePdfWorker();
             const arrayBuffer = await file.arrayBuffer();
             const pdfData = new Uint8Array(arrayBuffer);
             const pdfId = this.createId('pdf');
             const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+            pdfDocId = this.createId('pdfDoc');
+            const blob = new Blob([pdfData], { type: 'application/pdf' });
+            objectUrl = URL.createObjectURL(blob);
             this.pdfSources.set(pdfId, {
                 data: pdfData,
                 name: file.name,
                 totalPages: pdf.numPages
+            });
+            this.pdfDocuments.set(pdfDocId, {
+                id: pdfDocId,
+                name: file.name,
+                url: objectUrl,
+                pageCount: pdf.numPages,
+                refCount: 0
             });
             for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
                 const imageUrl = await this.renderPdfPage(pdf, pageNumber);
@@ -339,6 +351,9 @@ export class TakeoffManager {
                     imageUrl,
                     type: 'pdf',
                     pdfId,
+                    pdfDocId,
+                    pdfFileName: file.name,
+                    pdfPageNumber: pageNumber,
                     pdfPage: pageNumber,
                     pdfTotalPages: pdf.numPages
                 });
@@ -359,6 +374,9 @@ export class TakeoffManager {
                 if (meta && meta.refCount === 0) {
                     this.teardownPdfDocument(pdfDocId);
                 }
+            }
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
             }
         }
     }
@@ -407,8 +425,7 @@ export class TakeoffManager {
             ...metadata,
             scale: 1,
             measurements: [],
-            counters: { length: 1, area: 1, count: 1, diameter: 1 },
-            ...rest
+            counters: { length: 1, area: 1, count: 1, diameter: 1 }
         };
         this.state.drawings.push(drawing);
         this.state.currentDrawingId = drawing.id;
