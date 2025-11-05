@@ -40,6 +40,8 @@ export class TakeoffManager {
             objectUrl: null,
             initialPage: 1
         };
+
+        this.handleDocumentFullscreenChange = this.handleDocumentFullscreenChange.bind(this);
     }
 
     init() {
@@ -221,6 +223,56 @@ export class TakeoffManager {
                 this.exitNativeFullscreen();
             }
         }
+    }
+
+    requestNativeFullscreen() {
+        if (typeof document === 'undefined') return;
+        const container = this.elements.planContainer;
+        if (!container) return;
+        const request =
+            container.requestFullscreen ||
+            container.webkitRequestFullscreen ||
+            container.msRequestFullscreen ||
+            container.mozRequestFullScreen;
+        if (!request) return;
+        try {
+            const result = request.call(container);
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => {});
+            }
+        } catch (error) {
+            console.warn('Unable to enter fullscreen mode:', error);
+        }
+    }
+
+    exitNativeFullscreen() {
+        if (typeof document === 'undefined') return;
+        const exit =
+            document.exitFullscreen ||
+            document.webkitExitFullscreen ||
+            document.msExitFullscreen ||
+            document.mozCancelFullScreen;
+        if (!exit) return;
+        try {
+            const result = exit.call(document);
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => {});
+            }
+        } catch (error) {
+            console.warn('Unable to exit fullscreen mode:', error);
+        }
+    }
+
+    handleDocumentFullscreenChange() {
+        if (typeof document === 'undefined') return;
+        const fullscreenElement =
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.msFullscreenElement ||
+            document.mozFullScreenElement ||
+            null;
+        const isFullscreenActive = Boolean(fullscreenElement);
+        this.setFullscreen(isFullscreenActive, { syncNative: false });
     }
 
     toggleFullscreen() {
@@ -1443,6 +1495,11 @@ export class TakeoffManager {
             this.closePdfViewer();
             return;
         }
+        const activeElement =
+            typeof document !== 'undefined' ? document.activeElement : null;
+        const isTargetActive =
+            !!(this.elements.planStage &&
+            (activeElement === this.elements.planStage || this.elements.planStage.contains(activeElement)));
         if (this.state.isFullscreen) {
             this.setFullscreen(false);
         } else if (isTargetActive && !this.state.isFullscreen) {
