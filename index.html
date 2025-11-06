@@ -22,7 +22,7 @@
 </head>
 <body>
     <!-- Mobile Menu Toggle -->
-    <button class="menu-toggle" id="menuToggle">
+    <button class="menu-toggle" id="menuToggle" aria-controls="sidebar" aria-expanded="true" title="Toggle navigation">
         <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
         </svg>
@@ -259,7 +259,7 @@
                         <input type="search" class="form-input" id="projectSearch" placeholder="Search projects..." style="max-width: 200px;">
                         <button class="btn btn-secondary" id="exportProjectsBtn">Export</button>
                         <button class="btn btn-secondary" id="importProjectsBtn">Import</button>
-                        <input type="file" id="importProjectsInput" style="display:none">
+                        <input type="file" id="importProjectsInput" style="display:none" accept=".json,.csv,.xlsx,.xls">
                     </div>
                     <div id="projectsList" style="margin-top: 2rem;"></div>
                 </div>

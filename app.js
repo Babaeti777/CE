@@ -1268,6 +1268,10 @@ import {
                 if (frequencySelect) frequencySelect.value = state.updateFrequency;
                 const theme = localStorage.getItem('darkMode');
                 if (theme === 'on') document.body.classList.add('dark-mode');
+                const storedSidebarState = localStorage.getItem('sidebarCollapsed');
+                const isSidebarCollapsed = storedSidebarState === '1';
+                document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
+                setMenuToggleExpanded(!isSidebarCollapsed);
                 ensureSyncProfileId();
             } catch (e) {
                 console.error('Error loading saved data:', e);
@@ -1698,6 +1702,8 @@ import {
             const worksheetBody = document.getElementById('estimateWorksheetBody');
             worksheetBody?.addEventListener('input', handleWorksheetInput);
 
+            window.addEventListener('resize', handleSidebarResize);
+
             // Calculator
             document.getElementById('calculatorGrid')?.addEventListener('click', handleCalculatorClick);
             document.getElementById('convertUnitBtn')?.addEventListener('click', handleUnitConversion);
@@ -1709,6 +1715,8 @@ import {
             document.addEventListener('keydown', handleCalculatorKeydown);
             updateCalcMode(state.calcMode);
             updateLineItemEmptyState();
+
+            handleSidebarResize();
         }
 
         // --- NAVIGATION & UI ---
@@ -1747,11 +1755,50 @@ import {
 
             if (window.innerWidth <= 1024) {
                 document.getElementById('sidebar')?.classList.remove('open');
+                setMenuToggleExpanded(false);
             }
         }
 
         function toggleSidebar() {
-            document.getElementById('sidebar')?.classList.toggle('open');
+            const sidebar = document.getElementById('sidebar');
+            const menuToggle = document.getElementById('menuToggle');
+            if (!sidebar || !menuToggle) return;
+
+            if (window.innerWidth <= 1024) {
+                const isOpen = sidebar.classList.toggle('open');
+                setMenuToggleExpanded(isOpen);
+                return;
+            }
+
+            const shouldCollapse = !document.body.classList.contains('sidebar-collapsed');
+            document.body.classList.toggle('sidebar-collapsed', shouldCollapse);
+            setMenuToggleExpanded(!shouldCollapse);
+
+            try {
+                localStorage.setItem('sidebarCollapsed', shouldCollapse ? '1' : '0');
+            } catch (error) {
+                console.warn('Unable to persist sidebar preference', error);
+            }
+        }
+
+        function setMenuToggleExpanded(isExpanded) {
+            const menuToggle = document.getElementById('menuToggle');
+            if (!menuToggle) return;
+            menuToggle.setAttribute('aria-expanded', Boolean(isExpanded).toString());
+        }
+
+        function handleSidebarResize() {
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar) return;
+
+            if (window.innerWidth > 1024) {
+                sidebar.classList.remove('open');
+                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                setMenuToggleExpanded(!isCollapsed);
+            } else {
+                const isOpen = sidebar.classList.contains('open');
+                setMenuToggleExpanded(isOpen);
+            }
         }
 
         function toggleTheme() {
@@ -3013,25 +3060,164 @@ import {
         }
 
         function importProjects(e) {
-            const file = e.target.files[0];
+            const input = e.target;
+            const file = input?.files?.[0];
+            if (input) input.value = '';
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async () => {
-                try {
-                    const projects = JSON.parse(reader.result);
-                    if (Array.isArray(projects)) {
-                        state.savedProjects = projects;
-                        persistLocalProjects();
-                        await syncAllProjectsToCloud(state.savedProjects);
-                        loadProjects();
-                        updateDashboard();
-                        showToast('Projects imported!', 'success');
+
+            const extension = (file.name.split('.').pop() || '').toLowerCase();
+
+            if (extension === 'json') {
+                const reader = new FileReader();
+                reader.onload = () => handleImportedProjects(reader.result, 'json');
+                reader.onerror = () => showToast('Unable to read file.', 'error');
+                reader.readAsText(file);
+                return;
+            }
+
+            if (extension === 'csv') {
+                const reader = new FileReader();
+                reader.onload = () => handleImportedProjects(reader.result, 'csv');
+                reader.onerror = () => showToast('Unable to read CSV file.', 'error');
+                reader.readAsText(file);
+                return;
+            }
+
+            if (extension === 'xlsx' || extension === 'xls') {
+                const reader = new FileReader();
+                reader.onload = (event) => handleImportedProjects(event.target.result, 'excel');
+                reader.onerror = () => showToast('Unable to read Excel file.', 'error');
+                reader.readAsArrayBuffer(file);
+                return;
+            }
+
+            showToast('Unsupported file type. Please import JSON, CSV, or Excel files.', 'error');
+        }
+
+        async function handleImportedProjects(rawData, type) {
+            try {
+                let projects = [];
+                if (type === 'json') {
+                    const parsed = JSON.parse(rawData);
+                    if (Array.isArray(parsed)) {
+                        projects = parsed;
                     }
-                } catch (err) {
-                    showToast('Invalid project file.', 'error');
+                } else {
+                    const rows = extractRowsFromSpreadsheet(rawData, type);
+                    projects = normalizeImportedProjects(rows);
                 }
+
+                if (!Array.isArray(projects) || projects.length === 0) {
+                    showToast('No projects found in file.', 'warning');
+                    return;
+                }
+
+                state.savedProjects = projects;
+                persistLocalProjects();
+                await syncAllProjectsToCloud(state.savedProjects);
+                loadProjects();
+                updateDashboard();
+                showToast('Projects imported!', 'success');
+            } catch (error) {
+                console.error('Project import failed:', error);
+                showToast('Invalid project file.', 'error');
+            }
+        }
+
+        function extractRowsFromSpreadsheet(rawData, type) {
+            if (typeof XLSX === 'undefined') return [];
+            let workbook = null;
+            if (type === 'excel') {
+                const data = new Uint8Array(rawData);
+                workbook = XLSX.read(data, { type: 'array' });
+            } else {
+                workbook = XLSX.read(rawData, { type: 'string' });
+            }
+            if (!workbook?.SheetNames?.length) return [];
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            if (!sheet) return [];
+            return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        }
+
+        function normalizeImportedProjects(rows) {
+            if (!Array.isArray(rows)) return [];
+            const now = Date.now();
+            return rows
+                .map((row, index) => normalizeImportedProject(row, index, now))
+                .filter(Boolean);
+        }
+
+        function normalizeImportedProject(row, index, timestampBase) {
+            if (!row || typeof row !== 'object') return null;
+
+            const name = extractProjectField(row, ['name', 'Name', 'project', 'Project', 'Project Name']);
+            if (!name) return null;
+
+            const type = extractProjectField(row, ['type', 'Type', 'Project Type']);
+            const sqft = parseNumericField(extractProjectField(row, ['sqft', 'Sqft', 'Square Footage', 'SquareFootage']));
+            const floors = parseNumericField(extractProjectField(row, ['floors', 'Floors'])) || 1;
+            const laborMultiplier = parseNumericField(extractProjectField(row, ['laborMultiplier', 'LaborMultiplier', 'Labor Multiplier'])) ?? 1.5;
+            const total = parseNumericField(extractProjectField(row, ['total', 'Total', 'Amount', 'Bid Total'])) || 0;
+            const status = normalizeProjectStatus(extractProjectField(row, ['status', 'Status']));
+            const estimateType = normalizeEstimateType(extractProjectField(row, ['estimateType', 'EstimateType', 'Mode']));
+            const dateValue = extractProjectField(row, ['date', 'Date', 'Created', 'Updated']);
+            const parsedDate = dateValue ? new Date(dateValue) : new Date();
+            const safeDate = Number.isNaN(parsedDate.valueOf()) ? new Date() : parsedDate;
+
+            const idField = extractProjectField(row, ['id', 'ID', 'Id']);
+            const id = idField || `import-${timestampBase}-${index}`;
+
+            const effectiveLaborMultiplier = Number.isFinite(laborMultiplier) && laborMultiplier > 0 ? laborMultiplier : 0;
+            const materialTotal = effectiveLaborMultiplier > 0 ? total / (1 + effectiveLaborMultiplier) : total;
+            const laborTotal = total - materialTotal;
+
+            return {
+                id,
+                estimateType,
+                name: String(name).trim(),
+                type: type ? String(type).trim() : '',
+                sqft: Number.isFinite(sqft) ? sqft : undefined,
+                floors: Number.isFinite(floors) ? floors : 1,
+                laborMultiplier: Number.isFinite(laborMultiplier) ? laborMultiplier : 1.5,
+                worksheet: [],
+                costs: {},
+                materialTotal,
+                laborTotal,
+                total,
+                status,
+                date: safeDate.toISOString(),
+                lastGenerated: safeDate.toISOString(),
             };
-            reader.readAsText(file);
+        }
+
+        function extractProjectField(row, keys) {
+            for (const key of keys) {
+                if (Object.prototype.hasOwnProperty.call(row, key)) {
+                    const value = row[key];
+                    if (value !== undefined && value !== null && String(value).trim() !== '') {
+                        return value;
+                    }
+                }
+            }
+            return '';
+        }
+
+        function parseNumericField(value) {
+            if (value === '' || value === null || value === undefined) return null;
+            const number = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.-]/g, ''));
+            return Number.isFinite(number) ? number : null;
+        }
+
+        function normalizeProjectStatus(status) {
+            const normalized = String(status || '').toLowerCase();
+            if (normalized === 'won' || normalized === 'lost') return normalized;
+            if (normalized === 'pending' || normalized === 'in progress' || normalized === 'in-progress') return 'review';
+            return 'review';
+        }
+
+        function normalizeEstimateType(type) {
+            const normalized = String(type || '').toLowerCase();
+            return normalized === 'detailed' ? 'detailed' : 'quick';
         }
 
         function updateDashboard() {
