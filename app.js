@@ -42,6 +42,8 @@ import {
             authRequired: 'Sign in with Google to enable cloud sync.'
         };
 
+        const EMPTY_COMPANY_INFO = { name: '', address: '', phone: '', email: '' };
+
         const QUICK_SCOPE_CONFIG = [
             {
                 id: 'foundation',
@@ -84,7 +86,7 @@ import {
             referenceAssemblies: [],
             databaseMeta: {},
             savedProjects: [],
-            companyInfo: { name: '', address: '', phone: '', email: '' },
+            companyInfo: { ...EMPTY_COMPANY_INFO },
             currentEstimate: null,
             quickEstimatorItems: [],
             editingProjectId: null,
@@ -1515,6 +1517,15 @@ import {
             }
         }
 
+        function clearCloudScopedState({ persistLocal = true } = {}) {
+            applyRemoteProjects([], { persistLocal });
+            state.companyInfo = { ...EMPTY_COMPANY_INFO };
+            populateCompanyInfoFields();
+            if (persistLocal) {
+                persistCompanyInfoLocal();
+            }
+        }
+
         async function handleAuthStateChange(user) {
             stopCloudSubscription();
 
@@ -1522,6 +1533,7 @@ import {
                 state.authUser = null;
                 state.remoteSyncEnabled = false;
                 state.syncProfileId = null;
+                clearCloudScopedState();
                 try {
                     storage.removeItem(SYNC_PROFILE_STORAGE_KEY);
                 } catch (error) {
