@@ -12,5 +12,8 @@
   "type": "module",
   "devDependencies": {
     "jest": "^29.7.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.4.394"
   }
 }

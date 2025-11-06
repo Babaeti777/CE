@@ -1,10 +1,11 @@
 import { LifecycleManager } from './services/lifecycle-manager.js';
 import { Validator, ValidationError } from './utils/validator.js';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
-const pdfjsLib =
-    typeof window !== 'undefined'
-        ? window.pdfjsLib || window['pdfjs-dist/build/pdf'] || null
-        : null;
+if (pdfjsLib?.GlobalWorkerOptions) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerType = 'module';
+}
 
 class OptimizedCanvas {
     constructor(canvas) {
@@ -80,6 +81,9 @@ export class TakeoffManager {
             initialPage: 1
         };
 
+        this.pendingLabelRequest = null;
+        this.labelReturnFocus = null;
+
         this.handleDocumentFullscreenChange = this.handleDocumentFullscreenChange.bind(this);
     }
 
@@ -151,7 +155,13 @@ export class TakeoffManager {
             pdfModal: byId('takeoffPdfModal'),
             pdfModalOverlay: byId('takeoffPdfModalOverlay'),
             pdfModalClose: byId('takeoffPdfModalClose'),
-            pdfFrame: byId('takeoffPdfFrame')
+            pdfFrame: byId('takeoffPdfFrame'),
+            labelModal: byId('takeoffLabelModal'),
+            labelForm: byId('takeoffLabelForm'),
+            labelInput: byId('takeoffLabelInput'),
+            labelCancel: byId('cancelTakeoffLabelModal'),
+            labelConfirm: byId('confirmTakeoffLabelModal'),
+            labelClose: byId('closeTakeoffLabelModal')
         };
 
         if (this.elements.canvas) {
@@ -203,6 +213,33 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(this.elements.countShapeSelect, 'change', (event) => this.updateCountShape(event.target.value));
         this.lifecycle.addEventListener(this.elements.countLabelInput, 'input', (event) => this.updateCountLabel(event.target.value));
 
+        if (this.elements.labelForm) {
+            this.lifecycle.addEventListener(this.elements.labelForm, 'submit', (event) => {
+                event.preventDefault();
+                this.resolveLabelModal(true);
+            });
+        }
+        if (this.elements.labelCancel) {
+            this.lifecycle.addEventListener(this.elements.labelCancel, 'click', (event) => {
+                event.preventDefault();
+                this.resolveLabelModal(false);
+            });
+        }
+        if (this.elements.labelClose) {
+            this.lifecycle.addEventListener(this.elements.labelClose, 'click', (event) => {
+                event.preventDefault();
+                this.resolveLabelModal(false);
+            });
+        }
+        if (this.elements.labelModal) {
+            this.lifecycle.addEventListener(this.elements.labelModal, 'keydown', (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    this.resolveLabelModal(false);
+                }
+            });
+        }
+
         this.lifecycle.addEventListener(this.elements.fullscreenBtn, 'click', () => this.toggleFullscreen());
         this.lifecycle.addEventListener(this.elements.fullScreenToggle, 'click', () => this.toggleFullscreen());
 
@@ -218,7 +255,7 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(this.elements.canvas, 'click', (event) => this.handleCanvasClick(event));
         this.lifecycle.addEventListener(this.elements.canvas, 'mousemove', (event) => this.handleCanvasMove(event));
         this.lifecycle.addEventListener(this.elements.canvas, 'mouseleave', () => this.handleCanvasLeave());
-        this.lifecycle.addEventListener(this.elements.canvas, 'dblclick', () => this.handleCanvasDoubleClick());
+        this.lifecycle.addEventListener(this.elements.canvas, 'dblclick', (event) => this.handleCanvasDoubleClick(event));
 
         this.lifecycle.addEventListener(this.elements.measurementTableBody, 'input', (event) => this.handleMeasurementInput(event));
         this.lifecycle.addEventListener(this.elements.measurementTableBody, 'click', (event) => this.handleMeasurementClick(event));
@@ -477,7 +514,8 @@ export class TakeoffManager {
     ensurePdfWorker() {
         if (this.pdfWorkerConfigured || !pdfjsLib || !pdfjsLib.GlobalWorkerOptions) return;
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.mjs';
+            pdfjsLib.GlobalWorkerOptions.workerType = 'module';
         }
         this.pdfWorkerConfigured = true;
     }
@@ -919,7 +957,7 @@ export class TakeoffManager {
         }
     }
 
-    handleCanvasClick(event) {
+    async handleCanvasClick(event) {
         const drawing = this.getActiveDrawing();
         if (!drawing) {
             this.services.toastService('Select a drawing before measuring.', 'warning');
@@ -937,7 +975,7 @@ export class TakeoffManager {
         if (mode === 'count') {
             const baseLabel = (this.state.countSettings.label || '').trim();
             const defaultLabel = baseLabel || `Count ${drawing.counters.count}`;
-            const label = this.promptForMeasurementLabel(defaultLabel);
+            const label = await this.promptForMeasurementLabel(defaultLabel);
             drawing.counters.count += 1;
             const measurement = {
                 id: this.createId('measurement'),
@@ -960,9 +998,9 @@ export class TakeoffManager {
         this.state.points.push(point);
 
         if (mode === 'length' && this.state.points.length === 2) {
-            this.finalizeLengthMeasurement('length');
+            await this.finalizeLengthMeasurement('length');
         } else if (mode === 'diameter' && this.state.points.length === 2) {
-            this.finalizeLengthMeasurement('diameter');
+            await this.finalizeLengthMeasurement('diameter');
         } else if (mode === 'area') {
             this.updateStatus('Double-click to finish the area measurement.');
             this.drawMeasurements();
@@ -988,9 +1026,9 @@ export class TakeoffManager {
         this.drawMeasurements();
     }
 
-    handleCanvasDoubleClick() {
+    async handleCanvasDoubleClick() {
         if (this.state.mode !== 'area' || this.state.points.length < 3) return;
-        this.finalizeAreaMeasurement();
+        await this.finalizeAreaMeasurement();
     }
 
     getCanvasPoint(event) {
@@ -1005,7 +1043,7 @@ export class TakeoffManager {
         };
     }
 
-    finalizeLengthMeasurement(type) {
+    async finalizeLengthMeasurement(type) {
         const drawing = this.getActiveDrawing();
         if (!drawing) return;
         const [start, end] = this.state.points;
@@ -1014,7 +1052,7 @@ export class TakeoffManager {
         const measurement = {
             id: this.createId('measurement'),
             type,
-            label: this.promptForMeasurementLabel(defaultLabel),
+            label: await this.promptForMeasurementLabel(defaultLabel),
             points: [start, end],
             pixels
         };
@@ -1027,7 +1065,7 @@ export class TakeoffManager {
         this.updateStatus(`${measurement.label} saved: ${value} ${this.getMeasurementUnits(measurement)}.`);
     }
 
-    finalizeAreaMeasurement() {
+    async finalizeAreaMeasurement() {
         const drawing = this.getActiveDrawing();
         if (!drawing) return;
         const points = [...this.state.points];
@@ -1035,7 +1073,7 @@ export class TakeoffManager {
         const measurement = {
             id: this.createId('measurement'),
             type: 'area',
-            label: this.promptForMeasurementLabel(defaultLabel),
+            label: await this.promptForMeasurementLabel(defaultLabel),
             points,
             pixelArea: this.calculatePolygonArea(points),
             pixelPerimeter: this.calculatePolygonPerimeter(points)
@@ -1562,15 +1600,84 @@ export class TakeoffManager {
     }
 
     promptForMeasurementLabel(defaultLabel) {
-        if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
-            return defaultLabel;
+        if (!this.elements.labelModal || !this.elements.labelInput) {
+            return Promise.resolve(defaultLabel);
         }
-        const response = window.prompt('Name this measurement', defaultLabel);
-        if (typeof response === 'string') {
-            const trimmed = response.trim();
-            if (trimmed) return trimmed;
+
+        if (this.pendingLabelRequest) {
+            this.pendingLabelRequest.resolve(defaultLabel);
         }
-        return defaultLabel;
+
+        this.openLabelModal(defaultLabel);
+
+        return new Promise((resolve) => {
+            this.pendingLabelRequest = {
+                resolve,
+                defaultLabel
+            };
+        });
+    }
+
+    openLabelModal(defaultLabel) {
+        const { labelModal, labelInput } = this.elements;
+        if (!labelModal || !labelInput) return;
+
+        labelModal.classList.add('open');
+        labelModal.setAttribute('aria-hidden', 'false');
+        labelInput.value = defaultLabel;
+        labelInput.setSelectionRange(0, defaultLabel.length);
+
+        if (typeof document !== 'undefined') {
+            this.labelReturnFocus = document.activeElement;
+        }
+
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => {
+                labelInput.focus();
+                labelInput.select();
+            });
+        } else {
+            labelInput.focus();
+            labelInput.select();
+        }
+    }
+
+    resolveLabelModal(submitted) {
+        if (!this.elements.labelModal) return;
+
+        const pending = this.pendingLabelRequest;
+        this.pendingLabelRequest = null;
+
+        const { labelInput } = this.elements;
+        const defaultLabel = pending?.defaultLabel || (labelInput?.value ?? '');
+        let result = defaultLabel;
+
+        if (submitted && labelInput) {
+            const value = labelInput.value.trim();
+            result = value || defaultLabel;
+        }
+
+        this.closeLabelModal();
+
+        if (pending?.resolve) {
+            pending.resolve(result);
+        }
+    }
+
+    closeLabelModal() {
+        const { labelModal, labelInput } = this.elements;
+        if (labelModal) {
+            labelModal.classList.remove('open');
+            labelModal.setAttribute('aria-hidden', 'true');
+        }
+        if (labelInput) {
+            labelInput.value = '';
+        }
+
+        if (this.labelReturnFocus && typeof this.labelReturnFocus.focus === 'function') {
+            this.labelReturnFocus.focus();
+        }
+        this.labelReturnFocus = null;
     }
 
     updateQuickShapeInputs() {
