@@ -1,4 +1,12 @@
 import { TakeoffManager } from './takeoff.js';
+import { StateManager } from './state/state-manager.js';
+import { createStorageService } from './services/storage-service.js';
+import { ErrorBoundary } from './utils/error-boundary.js';
+import { debounce } from './utils/debounce.js';
+import { VirtualList } from './ui/virtual-list.js';
+import { LoadingManager } from './services/loading-manager.js';
+import { CommandHistory } from './services/command-history.js';
+import { LifecycleManager } from './services/lifecycle-manager.js';
 import {
     initializeFirebase,
     isFirebaseConfigured,
@@ -65,7 +73,7 @@ import {
         const QUICK_SCOPE_CATEGORIES = [...new Set(QUICK_SCOPE_CONFIG.map(cfg => cfg.category))];
 
         // --- STATE MANAGEMENT ---
-        const state = {
+        const initialState = {
             currentTab: 'dashboard',
             materialPrices: {},
             lineItemCategories: {},
@@ -101,6 +109,13 @@ import {
             authUser: null,
         };
 
+        const stateManager = new StateManager(initialState);
+        const state = stateManager.state;
+        const storage = createStorageService({ prefix: 'ce' });
+        const loadingManager = new LoadingManager();
+        const commandHistory = new CommandHistory();
+        const lifecycle = new LifecycleManager();
+
         let takeoffManager = null;
         let autoSyncTimeoutId = null;
         let autoSyncInFlight = false;
@@ -110,6 +125,7 @@ import {
         let firebaseReady = false;
         let lastScreenIsMobile = window.matchMedia('(max-width: 1024px)').matches;
         let wasSidebarCollapsedDesktop = false;
+        let projectListVirtualizer = null;
 
         async function loadDatabase() {
             try {
@@ -128,9 +144,11 @@ import {
             }
         }
 
+        const safeLoadDatabase = ErrorBoundary.wrap(loadDatabase, 'Load material database');
+
         function loadCachedDatabase() {
             try {
-                const cached = localStorage.getItem('materialDatabase');
+                const cached = storage.getItem('materialDatabase');
                 return cached ? JSON.parse(cached) : null;
             } catch (error) {
                 console.warn('Unable to parse cached database payload.', error);
@@ -168,7 +186,7 @@ import {
                     ...data,
                     materialPrices: normalizedMaterials,
                 };
-                localStorage.setItem('materialDatabase', JSON.stringify(payload));
+                storage.setItem('materialDatabase', JSON.stringify(payload));
             }
 
             refreshQuickEstimatorFromDatabase();
@@ -848,7 +866,7 @@ import {
                     updateFrequency: state.updateFrequency,
                     lastSyncCheck: state.lastSyncCheck
                 };
-                localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
+                storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
             } catch (error) {
                 console.warn('Unable to persist settings', error);
             }
@@ -856,7 +874,7 @@ import {
 
         function loadSettingsFromStorage() {
             try {
-                const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+                const raw = storage.getItem(SETTINGS_STORAGE_KEY);
                 if (!raw) return {};
                 const parsed = JSON.parse(raw);
                 if (parsed && typeof parsed === 'object') {
@@ -1225,38 +1243,42 @@ import {
             }
         }
         async function init() {
-            loadSavedData();
-            setupEventListeners();
-            setupNavigation();
-            updateAuthUI();
-            populateMaterialsTable();
-            loadProjects();
-            updateDashboard();
-            initCharts();
-            checkForUpdatesOnLoad();
+            await loadingManager.track('bootstrap', async () => {
+                loadSavedData();
+                setupEventListeners();
+                setupNavigation();
+                enhanceAccessibility();
+                updateAuthUI();
+                populateMaterialsTable();
+                loadProjects();
+                updateDashboard();
+                initCharts();
+                checkForUpdatesOnLoad();
 
-            takeoffManager = new TakeoffManager({
-                showToast,
-                onPushToEstimate: handleTakeoffPush
+                takeoffManager = new TakeoffManager({
+                    toastService: showToast,
+                    estimateService: { push: handleTakeoffPush },
+                    storageService: storage
+                });
+                takeoffManager.init();
+
+                const bidDateInput = document.getElementById('bidDate');
+                if (bidDateInput) {
+                    bidDateInput.value = new Date().toISOString().split('T')[0];
+                }
+
+                await safeInitCloudSync();
             });
-            takeoffManager.init();
-
-            const bidDateInput = document.getElementById('bidDate');
-            if (bidDateInput) {
-                bidDateInput.value = new Date().toISOString().split('T')[0];
-            }
-
-            await initCloudSync();
         }
 
         function loadSavedData() {
             try {
-                const savedData = localStorage.getItem('constructionProjects');
+                const savedData = storage.getItem('constructionProjects');
                 state.savedProjects = savedData ? JSON.parse(savedData) : [];
                 state.savedProjects.forEach(p => { if (!p.status) p.status = 'review'; });
-                const storedSyncId = localStorage.getItem(SYNC_PROFILE_STORAGE_KEY);
+                const storedSyncId = storage.getItem(SYNC_PROFILE_STORAGE_KEY);
                 if (storedSyncId) state.syncProfileId = storedSyncId;
-                const companyData = localStorage.getItem('companyInfo');
+                const companyData = storage.getItem('companyInfo');
                 if (companyData) {
                     try {
                         applyCompanyInfo(JSON.parse(companyData), { persistLocal: false });
@@ -1274,9 +1296,9 @@ import {
                 if (autoUpdateSelect) autoUpdateSelect.value = state.autoUpdate;
                 const frequencySelect = document.getElementById('updateFrequency');
                 if (frequencySelect) frequencySelect.value = state.updateFrequency;
-                const theme = localStorage.getItem('darkMode');
+                const theme = storage.getItem('darkMode');
                 if (theme === 'on') document.body.classList.add('dark-mode');
-                const storedSidebarState = localStorage.getItem('sidebarCollapsed');
+                const storedSidebarState = storage.getItem('sidebarCollapsed');
                 const isSidebarCollapsed = storedSidebarState === '1';
                 document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
                 setMenuToggleExpanded(!isSidebarCollapsed);
@@ -1302,14 +1324,14 @@ import {
             }
             let stored = null;
             try {
-                stored = localStorage.getItem(SYNC_PROFILE_STORAGE_KEY);
+                stored = storage.getItem(SYNC_PROFILE_STORAGE_KEY);
             } catch (error) {
                 console.warn('Unable to access sync profile storage', error);
             }
             if (!stored) {
                 stored = generateSyncId();
                 try {
-                    localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, stored);
+                    storage.setItem(SYNC_PROFILE_STORAGE_KEY, stored);
                 } catch (error) {
                     console.warn('Unable to persist sync profile id', error);
                 }
@@ -1411,7 +1433,7 @@ import {
 
         function persistLocalProjects() {
             try {
-                localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+                storage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
             } catch (error) {
                 console.warn('Unable to persist projects locally', error);
             }
@@ -1419,7 +1441,7 @@ import {
 
         function persistCompanyInfoLocal() {
             try {
-                localStorage.setItem('companyInfo', JSON.stringify(state.companyInfo));
+                storage.setItem('companyInfo', JSON.stringify(state.companyInfo));
             } catch (error) {
                 console.warn('Unable to persist company info locally', error);
             }
@@ -1501,7 +1523,7 @@ import {
                 state.remoteSyncEnabled = false;
                 state.syncProfileId = null;
                 try {
-                    localStorage.removeItem(SYNC_PROFILE_STORAGE_KEY);
+                    storage.removeItem(SYNC_PROFILE_STORAGE_KEY);
                 } catch (error) {
                     console.warn('Unable to clear sync profile id after sign-out', error);
                 }
@@ -1521,7 +1543,7 @@ import {
             state.remoteSyncEnabled = true;
             state.syncProfileId = user.uid;
             try {
-                localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, state.syncProfileId);
+                storage.setItem(SYNC_PROFILE_STORAGE_KEY, state.syncProfileId);
             } catch (error) {
                 console.warn('Unable to persist sync profile id for authenticated user', error);
             }
@@ -1618,6 +1640,8 @@ import {
             }
         }
 
+        const safeInitCloudSync = ErrorBoundary.wrap(initCloudSync, 'Initialize cloud sync');
+
         async function handleApplySyncId(event) {
             event?.preventDefault?.();
             ensureSyncProfileId();
@@ -1629,7 +1653,7 @@ import {
                 return;
             }
             try {
-                localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, value);
+                storage.setItem(SYNC_PROFILE_STORAGE_KEY, value);
             } catch (error) {
                 console.warn('Unable to persist sync profile id', error);
             }
@@ -1742,7 +1766,29 @@ import {
             document.getElementById('laborCost')?.addEventListener('input', handleLaborMultiplierChange);
             document.querySelectorAll('.material-card').forEach(card => card.addEventListener('click', handleMaterialSelection));
             document.getElementById('saveProjectBtn')?.addEventListener('click', saveProject);
-            document.getElementById('addLineItemBtn')?.addEventListener('click', () => addLineItem());
+            document.getElementById('addLineItemBtn')?.addEventListener('click', () => {
+                commandHistory.execute({
+                    execute() {
+                        const row = addLineItem();
+                        this.snapshot = serializeLineItemRow(row);
+                    },
+                    undo() {
+                        if (!this.snapshot?.id) return;
+                        const existing = document.querySelector(`.line-item-row[data-id="${this.snapshot.id}"]`);
+                        existing?.remove();
+                        updateBidTotal();
+                        updateLineItemEmptyState();
+                    },
+                    redo() {
+                        if (!this.snapshot) {
+                            this.execute();
+                            return;
+                        }
+                        const row = restoreLineItem(this.snapshot, { position: 'top' });
+                        this.snapshot = serializeLineItemRow(row);
+                    }
+                });
+            });
             document.getElementById('generatePricingBtn')?.addEventListener('click', () => updateWorksheetTotals({ announce: true }));
             document.getElementById('resetWorksheetBtn')?.addEventListener('click', resetWorksheet);
 
@@ -1809,7 +1855,29 @@ import {
                 lineItemsContainer.addEventListener('click', (e) => {
                     const removeButton = e.target.closest('.remove-line-item');
                     if (removeButton) {
-                        removeLineItem(removeButton.closest('.line-item-row'));
+                        const row = removeButton.closest('.line-item-row');
+                        const snapshot = serializeLineItemRow(row);
+                        if (!snapshot) return;
+                        commandHistory.execute({
+                            execute() {
+                                row.remove();
+                                updateBidTotal();
+                                updateLineItemEmptyState();
+                            },
+                            undo() {
+                                const restored = restoreLineItem(snapshot, { position: 'top' });
+                                if (restored) {
+                                    const quantity = restored.querySelector('[data-field="quantity"]');
+                                    quantity?.focus?.();
+                                }
+                            },
+                            redo() {
+                                const existing = document.querySelector(`.line-item-row[data-id="${snapshot.id}"]`);
+                                existing?.remove();
+                                updateBidTotal();
+                                updateLineItemEmptyState();
+                            }
+                        });
                     }
                 });
                 lineItemsContainer.addEventListener('focusin', (e) => {
@@ -1818,12 +1886,16 @@ import {
                     }
                 });
             }
-            document.getElementById('lineItemSearch')?.addEventListener('input', handleLineItemSearch);
+            const lineItemSearch = document.getElementById('lineItemSearch');
+            if (lineItemSearch) {
+                const debouncedSearch = debounce((value) => handleLineItemSearch(value), 250);
+                lineItemSearch.addEventListener('input', (event) => debouncedSearch(event.target.value));
+            }
 
             const worksheetBody = document.getElementById('estimateWorksheetBody');
             worksheetBody?.addEventListener('input', handleWorksheetInput);
 
-            window.addEventListener('resize', handleSidebarResize);
+            lifecycle.addEventListener(window, 'resize', handleSidebarResize);
             updateSidebarToggleState();
 
             // Calculator
@@ -1832,9 +1904,9 @@ import {
             document.getElementById('useValueBtn')?.addEventListener('click', useCalculatorValue);
             document.getElementById('modeBasic')?.addEventListener('click', () => updateCalcMode('basic'));
             document.getElementById('modeEngineering')?.addEventListener('click', () => updateCalcMode('engineering'));
-            document.addEventListener('keydown', handleGlobalKeydown);
+            lifecycle.addEventListener(document, 'keydown', handleGlobalKeydown);
             document.getElementById('viewAllProjectsBtn')?.addEventListener('click', () => switchTab('projects'));
-            document.addEventListener('keydown', handleCalculatorKeydown);
+            lifecycle.addEventListener(document, 'keydown', handleCalculatorKeydown);
             updateCalcMode(state.calcMode);
             updateLineItemEmptyState();
 
@@ -1955,7 +2027,7 @@ import {
 
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
-            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
+            storage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
         }
 
         async function handleAutoUpdateChange(event) {
@@ -1983,11 +2055,15 @@ import {
             toast.className = `toast ${type}`;
 
             const icon = type === 'success' ? '✓' : type === 'error' ? '!' : '?';
-            
+
             toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
             container.appendChild(toast);
 
             setTimeout(() => toast.remove(), 3000);
+        }
+
+        if (typeof window !== 'undefined') {
+            window.showToast = showToast;
         }
         
         function formatCurrency(amount) {
@@ -2474,16 +2550,44 @@ import {
             updateLineItemEmptyState();
         }
 
+        function serializeLineItemRow(row) {
+            if (!row) return null;
+            return {
+                id: row.dataset.id,
+                category: row.querySelector('[data-field="category"]')?.value || '',
+                description: row.querySelector('[data-field="description"]')?.value || '',
+                quantity: parseFloat(row.querySelector('[data-field="quantity"]').value) || 0,
+                unit: row.querySelector('[data-field="unit"]')?.value || '',
+                rate: parseFloat(row.querySelector('[data-field="rate"]').value) || 0,
+            };
+        }
+
+        function restoreLineItem(snapshot, options = {}) {
+            if (!snapshot) return null;
+            return addLineItem({
+                category: snapshot.category,
+                description: snapshot.description,
+                quantity: snapshot.quantity,
+                unit: snapshot.unit,
+                rate: snapshot.rate,
+            }, { ...options, reuseId: snapshot.id });
+        }
+
         // --- DETAILED BIDDING ---
-        function addLineItem(item = null, { position = 'top' } = {}) {
+        function addLineItem(item = null, { position = 'top', reuseId = null } = {}) {
             if (item?.category && !state.lineItemCategories[item.category]) {
                 state.lineItemCategories[item.category] = [];
             }
 
-            state.lineItemId++;
+            const reused = reuseId != null;
+            const numericReuse = reused ? Number.parseInt(reuseId, 10) : null;
+            const rowId = reused ? reuseId : String(++state.lineItemId);
+            if (reused && Number.isFinite(numericReuse) && numericReuse > state.lineItemId) {
+                state.lineItemId = numericReuse;
+            }
             const div = document.createElement('div');
             div.className = 'line-item-row';
-            div.dataset.id = state.lineItemId;
+            div.dataset.id = rowId;
 
             const categories = getSortedLineItemCategories();
             const categoryOptions = categories
@@ -2531,6 +2635,7 @@ import {
             }
 
             updateLineItemEmptyState();
+            return div;
         }
         
         function updateItemSelectionOptions(row, { preserveExisting = false, previousDescription } = {}) {
@@ -2576,12 +2681,6 @@ import {
             }
         }
 
-        function removeLineItem(row) {
-            row.remove();
-            updateBidTotal();
-            updateLineItemEmptyState();
-        }
-
         function updateLineItemTotal(row) {
             const quantity = parseFloat(row.querySelector('[data-field="quantity"]').value) || 0;
             const rate = parseFloat(row.querySelector('[data-field="rate"]').value) || 0;
@@ -2601,8 +2700,10 @@ import {
             message.style.display = hasRows ? 'none' : 'block';
         }
 
-        function handleLineItemSearch(e) {
-            const term = e.target.value.trim().toLowerCase();
+        function handleLineItemSearch(value) {
+            const term = typeof value === 'string'
+                ? value.trim().toLowerCase()
+                : String(value?.target?.value || '').trim().toLowerCase();
             const rows = document.querySelectorAll('#lineItems .line-item-row');
             let visible = 0;
             rows.forEach(row => {
@@ -3150,47 +3251,74 @@ import {
         }
 
         // --- PROJECTS & MATERIALS ---
+        function ensureProjectVirtualizer() {
+            const list = document.getElementById('projectsList');
+            if (!list) return null;
+            if (projectListVirtualizer) return projectListVirtualizer;
+            list.innerHTML = '';
+            projectListVirtualizer = new VirtualList(list, 148, (project) => buildProjectListItem(project));
+            return projectListVirtualizer;
+        }
+
+        function destroyProjectVirtualizer() {
+            projectListVirtualizer?.destroy();
+            projectListVirtualizer = null;
+        }
+
+        function buildProjectListItem(project) {
+            const div = document.createElement('div');
+            div.className = 'project-list-item';
+            div.style.padding = '1rem';
+            div.style.background = 'var(--gray-100)';
+            div.style.borderRadius = '12px';
+            div.style.marginBottom = '1rem';
+            const typeLabel = project.estimateType === 'detailed' ? 'Detailed' : 'Quick';
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="font-weight: 600;">${project.name}</h4>
+                        <p style="color: var(--gray-600); font-size: 0.875rem;">${project.type || ''}${project.sqft ? ' • ' + project.sqft + ' sqft' : ''} • ${typeLabel}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p style="font-weight: 700; color: var(--primary);">${formatCurrency(project.total)}</p>
+                        <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(project.date).toLocaleDateString()}</p>
+                        <select class="form-select project-status" data-id="${project.id}" style="margin-top:0.25rem;">
+                            <option value="review" ${project.status === 'review' ? 'selected' : ''}>Under Review</option>
+                            <option value="won" ${project.status === 'won' ? 'selected' : ''}>Won</option>
+                            <option value="lost" ${project.status === 'lost' ? 'selected' : ''}>Lost</option>
+                        </select>
+                        <button class="btn btn-secondary ${project.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${project.id}" style="margin-top:0.25rem;">Edit</button>
+                    </div>
+                </div>
+            `;
+            const statusSelect = div.querySelector('.project-status');
+            statusSelect.addEventListener('change', (e) => updateProjectStatus(project.id, e.target.value));
+            div.querySelector('.edit-project')?.addEventListener('click', () => editProject(project.id));
+            div.querySelector('.edit-bid')?.addEventListener('click', () => editBid(project.id));
+            return div;
+        }
+
         function loadProjects(searchTerm = '') {
             const list = document.getElementById('projectsList');
-            list.innerHTML = '';
-            
+            if (!list) return;
+
             const filteredProjects = state.savedProjects.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
             if (filteredProjects.length === 0) {
+                destroyProjectVirtualizer();
                 list.innerHTML = `<p style="color: var(--gray-600);">No saved projects found.</p>`;
                 return;
             }
 
-            filteredProjects.forEach(p => {
-                const div = document.createElement('div');
-                div.style = "padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem;";
-                const typeLabel = p.estimateType === 'detailed' ? 'Detailed' : 'Quick';
-                div.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h4 style="font-weight: 600;">${p.name}</h4>
-                            <p style="color: var(--gray-600); font-size: 0.875rem;">${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}</p>
-                        </div>
-                        <div style="text-align: right;">
-                            <p style="font-weight: 700; color: var(--primary);">${formatCurrency(p.total)}</p>
-                            <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
-                            <select class="form-select project-status" data-id="${p.id}" style="margin-top:0.25rem;">
-                                <option value="review" ${p.status === 'review' ? 'selected' : ''}>Under Review</option>
-                                <option value="won" ${p.status === 'won' ? 'selected' : ''}>Won</option>
-                                <option value="lost" ${p.status === 'lost' ? 'selected' : ''}>Lost</option>
-                            </select>
-                            <button class="btn btn-secondary ${p.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${p.id}" style="margin-top:0.25rem;">Edit</button>
-                        </div>
-                    </div>
-                `;
-                const statusSelect = div.querySelector('.project-status');
-                statusSelect.addEventListener('change', (e) => updateProjectStatus(p.id, e.target.value));
-                div.querySelector('.edit-project')?.addEventListener('click', () => editProject(p.id));
-                div.querySelector('.edit-bid')?.addEventListener('click', () => editBid(p.id));
-                list.appendChild(div);
-            });
+            const virtualizer = ensureProjectVirtualizer();
+            if (!virtualizer) {
+                list.innerHTML = '';
+                filteredProjects.forEach(project => list.appendChild(buildProjectListItem(project)));
+                return;
+            }
+            virtualizer.setItems(filteredProjects);
         }
 
         async function updateProjectStatus(id, status) {
@@ -3200,6 +3328,51 @@ import {
             persistLocalProjects();
             await syncProjectToCloud(proj);
             updateDashboard();
+        }
+
+        function enhanceAccessibility() {
+            if (typeof document === 'undefined') return;
+            let announcer = document.getElementById('srAnnouncer');
+            if (!announcer) {
+                announcer = document.createElement('div');
+                announcer.id = 'srAnnouncer';
+                announcer.className = 'sr-only';
+                announcer.setAttribute('aria-live', 'polite');
+                announcer.setAttribute('aria-atomic', 'true');
+                document.body.appendChild(announcer);
+            }
+
+            const announce = (message) => {
+                announcer.textContent = message;
+                setTimeout(() => { announcer.textContent = ''; }, 120);
+            };
+
+            lifecycle.addEventListener(document, 'keydown', (event) => {
+                const target = event.target;
+                if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) {
+                    return;
+                }
+                const key = event.key?.toLowerCase();
+                const modifierActive = event.ctrlKey || event.metaKey;
+                if (!modifierActive) return;
+                if (!event.shiftKey && key === 'z') {
+                    event.preventDefault();
+                    commandHistory.undo();
+                    announce('Undid last action');
+                } else if ((event.shiftKey && key === 'z') || key === 'y') {
+                    event.preventDefault();
+                    commandHistory.redo();
+                    announce('Redid last action');
+                } else if (key === 's') {
+                    event.preventDefault();
+                    saveProject();
+                    announce('Saving project');
+                }
+            });
+
+            if (typeof window !== 'undefined') {
+                window.announce = announce;
+            }
         }
 
         function exportProjects() {
@@ -3627,8 +3800,14 @@ import {
         
         // --- RUN APP ---
         document.addEventListener('DOMContentLoaded', async () => {
-            await loadDatabase();
+            await loadingManager.track('load-database', () => safeLoadDatabase());
             await init();
+            if (typeof window !== 'undefined') {
+                window.addEventListener('beforeunload', () => {
+                    takeoffManager?.destroy();
+                    lifecycle.cleanup();
+                });
+            }
         });
 
     })();

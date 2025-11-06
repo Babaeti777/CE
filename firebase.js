@@ -4,14 +4,58 @@ let authInstance = null;
 let firebaseApi = null;
 let firebaseModulePromise = null;
 
-const DEFAULT_FIREBASE_CONFIG = {
-    apiKey: 'AIzaSyD3_zQVowO0Sg5rFSGkcSU0NoI852PuPAA',
-    authDomain: 'construction-estimator-d2633.firebaseapp.com',
-    projectId: 'construction-estimator-d2633',
-    storageBucket: 'construction-estimator-d2633.firebasestorage.app',
-    messagingSenderId: '252394591641',
-    appId: '1:252394591641:web:3e8e9ceb6da9052c7daf08',
-};
+const CONFIG_KEYS = [
+    'apiKey',
+    'authDomain',
+    'projectId',
+    'storageBucket',
+    'messagingSenderId',
+    'appId',
+];
+
+function sanitizeConfig(config) {
+    if (!config || typeof config !== 'object') {
+        return null;
+    }
+    const sanitized = {};
+    let hasValue = false;
+    CONFIG_KEYS.forEach((key) => {
+        if (config[key]) {
+            sanitized[key] = config[key];
+            hasValue = true;
+        }
+    });
+    return hasValue ? sanitized : null;
+}
+
+function resolveEnvironmentConfig() {
+    if (typeof process === 'undefined' || !process?.env) {
+        return null;
+    }
+    const candidate = {};
+    CONFIG_KEYS.forEach((key) => {
+        const envKey = `FIREBASE_${key.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase()}`;
+        if (process.env[envKey]) {
+            candidate[key] = process.env[envKey];
+        }
+    });
+    return sanitizeConfig(candidate);
+}
+
+function resolveMetaConfig() {
+    if (typeof document === 'undefined') return null;
+    const meta = document.querySelector('meta[name="firebase-config"]');
+    if (!meta) return null;
+    try {
+        const parsed = JSON.parse(meta.content);
+        return sanitizeConfig(parsed);
+    } catch (error) {
+        console.warn('Unable to parse firebase-config meta tag.', error);
+        return null;
+    }
+}
+
+const ENVIRONMENT_FALLBACK_CONFIG = resolveEnvironmentConfig();
 
 async function loadFirebaseModules() {
     if (firebaseApi) return firebaseApi;
@@ -56,13 +100,19 @@ async function loadFirebaseModules() {
 }
 
 function getFirebaseConfig() {
-    if (typeof window === 'undefined') return DEFAULT_FIREBASE_CONFIG;
-    return window.FIREBASE_CONFIG || DEFAULT_FIREBASE_CONFIG;
+    if (typeof window !== 'undefined' && window.FIREBASE_CONFIG) {
+        return sanitizeConfig(window.FIREBASE_CONFIG);
+    }
+    const metaConfig = resolveMetaConfig();
+    if (metaConfig) {
+        return metaConfig;
+    }
+    return ENVIRONMENT_FALLBACK_CONFIG;
 }
 
 export function isFirebaseConfigured() {
     const config = getFirebaseConfig();
-    return Boolean(config && config.apiKey && config.projectId && config.appId && config.authDomain);
+    return Boolean(config && CONFIG_KEYS.every((key) => Boolean(config[key])));
 }
 
 function requireFirebaseApi() {
