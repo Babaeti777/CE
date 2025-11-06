@@ -4,14 +4,15 @@ let authInstance = null;
 let firebaseApi = null;
 let firebaseModulePromise = null;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD3_zQVowO0Sg5rFSGkcSU0NoI852PuPAA",
-  authDomain: "construction-estimator-d2633.firebaseapp.com",
-  projectId: "construction-estimator-d2633",
-  storageBucket: "construction-estimator-d2633.firebasestorage.app",
-  messagingSenderId: "252394591641",
-  appId: "1:252394591641:web:3e8e9ceb6da9052c7daf08",
-};
+function resolveFirebaseOptions() {
+    if (typeof window === 'undefined') return null;
+    try {
+        const compatApp = window.firebase?.app?.();
+        return compatApp?.options || null;
+    } catch (error) {
+        return null;
+    }
+}
 
 async function loadFirebaseModules() {
     if (firebaseApi) return firebaseApi;
@@ -19,6 +20,7 @@ async function loadFirebaseModules() {
     if (typeof window === 'undefined') {
         throw new Error('Firebase SDK is only available in browser environments.');
     }
+
     firebaseModulePromise = Promise.all([
         import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
         import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
@@ -27,6 +29,8 @@ async function loadFirebaseModules() {
         .then(([appModule, firestoreModule, authModule]) => {
             firebaseApi = {
                 initializeApp: appModule.initializeApp,
+                getApp: appModule.getApp,
+                getApps: appModule.getApps,
                 getFirestore: firestoreModule.getFirestore,
                 collection: firestoreModule.collection,
                 doc: firestoreModule.doc,
@@ -55,20 +59,9 @@ async function loadFirebaseModules() {
     return firebaseModulePromise;
 }
 
-function getFirebaseConfig() {
-    if (typeof window !== 'undefined' && window.FIREBASE_CONFIG) {
-        return sanitizeConfig(window.FIREBASE_CONFIG);
-    }
-    const metaConfig = resolveMetaConfig();
-    if (metaConfig) {
-        return metaConfig;
-    }
-    return ENVIRONMENT_FALLBACK_CONFIG;
-}
-
 export function isFirebaseConfigured() {
-    const config = getFirebaseConfig();
-    return Boolean(config && CONFIG_KEYS.every((key) => Boolean(config[key])));
+    const options = resolveFirebaseOptions();
+    return Boolean(options && options.projectId);
 }
 
 function requireFirebaseApi() {
@@ -90,13 +83,20 @@ export async function initializeFirebase() {
         return { initialized: true };
     }
 
-    const config = getFirebaseConfig();
-    if (!config) {
-        throw new Error('Firebase configuration is missing.');
+    const options = resolveFirebaseOptions();
+    if (!options) {
+        throw new Error('Firebase configuration is missing. Confirm that Firebase Hosting has injected the SDK.');
     }
 
     const api = await loadFirebaseModules();
-    appInstance = api.initializeApp(config);
+
+    const apps = api.getApps ? api.getApps() : [];
+    if (apps.length) {
+        appInstance = api.getApp();
+    } else {
+        appInstance = api.initializeApp(options);
+    }
+
     firestoreInstance = api.getFirestore(appInstance);
     authInstance = api.getAuth(appInstance);
 

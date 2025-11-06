@@ -114,6 +114,9 @@ import {
         const stateManager = new StateManager(initialState);
         const state = stateManager.state;
         const storage = createStorageService({ prefix: 'ce' });
+        const DATABASE_STORAGE_KEY = 'materialDatabase';
+        const DATABASE_VERSION_KEY = 'materialDatabaseVersion';
+        const DATABASE_SOURCE_URL = 'data/database.json';
         const loadingManager = new LoadingManager();
         const commandHistory = new CommandHistory();
         const lifecycle = new LifecycleManager();
@@ -129,34 +132,75 @@ import {
         let wasSidebarCollapsedDesktop = false;
         let projectListVirtualizer = null;
 
-        async function loadDatabase() {
-            try {
-                const cached = loadCachedDatabase();
-                if (cached) {
-                    applyDatabase(cached, { persist: false });
-                }
-
-                const res = await fetch('database.json', { cache: 'no-store' });
-                if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
-                const data = await res.json();
-                applyDatabase(data);
-            } catch (err) {
-                console.error('Error loading database:', err);
-                showToast('Unable to load material database. Offline data will be used if available.', 'error');
-            }
-        }
-
-        const safeLoadDatabase = ErrorBoundary.wrap(loadDatabase, 'Load material database');
-
         function loadCachedDatabase() {
             try {
-                const cached = storage.getItem('materialDatabase');
+                const cached = storage.getItem(DATABASE_STORAGE_KEY);
                 return cached ? JSON.parse(cached) : null;
             } catch (error) {
                 console.warn('Unable to parse cached database payload.', error);
                 return null;
             }
         }
+
+        function persistDatabaseVersion(version) {
+            if (!version) return;
+            try {
+                storage.setItem(DATABASE_VERSION_KEY, version);
+            } catch (error) {
+                console.warn('Unable to persist material database version.', error);
+            }
+        }
+
+        function getInstalledDatabaseVersion(cached) {
+            const stored = storage.getItem(DATABASE_VERSION_KEY);
+            if (stored) return stored;
+            if (cached?.version) return cached.version;
+            if (cached?.databaseMeta?.version) return cached.databaseMeta.version;
+            return null;
+        }
+
+        async function downloadDatabase(url = DATABASE_SOURCE_URL) {
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Failed to load database: ${response.status}`);
+            return response.json();
+        }
+
+        async function ensureMaterialDatabase() {
+            const cached = loadCachedDatabase();
+            if (cached) {
+                applyDatabase(cached, { persist: false });
+            }
+
+            try {
+                setSyncState('syncing', 'Checking for updates…');
+                const manifest = await fetchUpdateManifest();
+                const latestVersion = manifest?.latestVersion || null;
+                const currentVersion = getInstalledDatabaseVersion(cached);
+                const dataUrl = manifest?.dataUrl || DATABASE_SOURCE_URL;
+                const needsDownload =
+                    !cached || !currentVersion || (latestVersion && isNewerVersion(latestVersion, currentVersion));
+
+                if (needsDownload) {
+                    const data = await downloadDatabase(dataUrl);
+                    applyDatabase(data, { announce: Boolean(currentVersion) });
+                    persistDatabaseVersion(data.version || latestVersion);
+                    setSyncState('success');
+                } else {
+                    setSyncState('success');
+                    persistDatabaseVersion(currentVersion);
+                }
+
+                state.pendingUpdate = null;
+            } catch (error) {
+                console.error('Error loading material database:', error);
+                setSyncState('error', 'Update check failed');
+                if (!cached) {
+                    showToast('Unable to load material database. Offline data will be used if available.', 'error');
+                }
+            }
+        }
+
+        const safeEnsureMaterialDatabase = ErrorBoundary.wrap(ensureMaterialDatabase, 'Load material database');
 
         function applyDatabase(data, options = {}) {
             if (!data) return;
@@ -188,7 +232,8 @@ import {
                     ...data,
                     materialPrices: normalizedMaterials,
                 };
-                storage.setItem('materialDatabase', JSON.stringify(payload));
+                storage.setItem(DATABASE_STORAGE_KEY, JSON.stringify(payload));
+                persistDatabaseVersion(payload.version || state.databaseMeta.version);
             }
 
             refreshQuickEstimatorFromDatabase();
@@ -647,7 +692,10 @@ import {
             cards.forEach(card => {
                 const isMatch = card.dataset.material === materialKey;
                 card.classList.toggle('selected', isMatch);
-                card.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+                const input = card.querySelector('.material-input');
+                if (input) {
+                    input.checked = isMatch;
+                }
                 if (isMatch) {
                     applied = true;
                 }
@@ -677,7 +725,7 @@ import {
         }
 
         function handleMaterialSelection(event) {
-            const card = event.currentTarget || event.target.closest('.material-card');
+            const card = event.target?.closest('.material-card');
             if (!card) return;
             const { category, material } = card.dataset;
             if (!category || !material) return;
@@ -1255,7 +1303,6 @@ import {
                 loadProjects();
                 updateDashboard();
                 initCharts();
-                checkForUpdatesOnLoad();
 
                 takeoffManager = new TakeoffManager({
                     toastService: showToast,
@@ -1270,6 +1317,7 @@ import {
                 }
 
                 await safeInitCloudSync();
+                scheduleAutoSync();
             });
         }
 
@@ -1776,7 +1824,7 @@ import {
             });
             document.getElementById('estimatorForm')?.addEventListener('submit', handleEstimatorSubmit);
             document.getElementById('laborCost')?.addEventListener('input', handleLaborMultiplierChange);
-            document.querySelectorAll('.material-card').forEach(card => card.addEventListener('click', handleMaterialSelection));
+            document.querySelectorAll('.material-input').forEach(input => input.addEventListener('change', handleMaterialSelection));
             document.getElementById('saveProjectBtn')?.addEventListener('click', saveProject);
             document.getElementById('addLineItemBtn')?.addEventListener('click', () => {
                 commandHistory.execute({
@@ -3713,13 +3761,6 @@ import {
         }
 
         // --- SETTINGS & UPDATES ---
-        async function checkForUpdatesOnLoad() {
-            const result = await checkForUpdates({ silent: true });
-            if (result.updateAvailable) {
-                openModal('updateModal');
-            }
-        }
-
         async function checkForUpdates(options = {}) {
             if (options instanceof Event) {
                 options.preventDefault?.();
@@ -3791,9 +3832,8 @@ import {
             setSyncState('syncing', 'Downloading update...');
 
             try {
-                const res = await fetch(state.pendingUpdate.dataUrl, { cache: 'no-store' });
-                if (!res.ok) throw new Error(`Update download failed: ${res.status}`);
-                const data = await res.json();
+                const dataUrl = state.pendingUpdate.dataUrl || DATABASE_SOURCE_URL;
+                const data = await downloadDatabase(dataUrl);
 
                 if (data.version && !isNewerVersion(data.version, state.databaseMeta.version)) {
                     throw new Error('Downloaded database is not newer than the installed version.');
@@ -3812,7 +3852,7 @@ import {
         
         // --- RUN APP ---
         document.addEventListener('DOMContentLoaded', async () => {
-            await loadingManager.track('load-database', () => safeLoadDatabase());
+            await loadingManager.track('load-database', () => safeEnsureMaterialDatabase());
             await init();
             if (typeof window !== 'undefined') {
                 window.addEventListener('beforeunload', () => {

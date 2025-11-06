@@ -6,17 +6,16 @@
     <title>Construction Estimator Pro - Modern Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        // Firebase configuration used by the application. Update these values if you deploy with a different project.
-        window.FIREBASE_CONFIG = {
-            apiKey: "AIzaSyD3_zQVowO0Sg5rFSGkcSU0NoI852PuPAA",
-            authDomain: "construction-estimator-d2633.firebaseapp.com",
-            projectId: "construction-estimator-d2633",
-            storageBucket: "construction-estimator-d2633.firebasestorage.app",
-            messagingSenderId: "252394591641",
-            appId: "1:252394591641:web:3e8e9ceb6da9052c7daf08"
-        };
+    <script src="/__/firebase/10.12.2/firebase-app-compat.js"></script>
+    <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "pdfjs-dist/build/pdf": "./vendor/pdfjs/pdf.mjs"
+            }
+        }
     </script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -146,9 +145,101 @@
                                 <div class="form-group"><label class="form-label" for="floors">Number of Floors</label><input type="number" class="form-input" id="floors" value="1" min="1" required></div>
                                 <div class="form-group"><label class="form-label" for="laborCost">Labor Multiplier</label><input type="number" class="form-input" id="laborCost" value="1.5" step="0.1" min="1"></div>
                             </div>
-                            <div class="form-group"><label class="form-label">Foundation Type</label><div class="material-grid"><div class="material-card" data-category="foundation" data-material="slab"><div class="material-name">Slab</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="crawl"><div class="material-name">Crawl Space</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="basement"><div class="material-name">Basement</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="pier"><div class="material-name">Pier & Grade Beam</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="mat"><div class="material-name">Mat Foundation</div><div class="material-price">--</div></div></div></div>
-                            <div class="form-group"><label class="form-label">Framing Material</label><div class="material-grid"><div class="material-card" data-category="framing" data-material="wood"><div class="material-name">Wood Stud</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="steel"><div class="material-name">Structural Steel</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="concrete"><div class="material-name">Cast-in-Place Concrete</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="massTimber"><div class="material-name">Mass Timber</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="coldFormed"><div class="material-name">Cold-Formed Steel</div><div class="material-price">--</div></div></div></div>
-                            <div class="form-group"><label class="form-label">Exterior Finish</label><div class="material-grid"><div class="material-card" data-category="exterior" data-material="vinyl"><div class="material-name">Vinyl</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="brick"><div class="material-name">Brick Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stucco"><div class="material-name">Stucco</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stone"><div class="material-name">Stone Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="fiberCement"><div class="material-name">Fiber Cement</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="curtainWall"><div class="material-name">Curtain Wall</div><div class="material-price">--</div></div></div></div>
+                            <fieldset class="form-group material-fieldset">
+                                <legend class="form-label">Foundation Type</legend>
+                                <div class="material-grid" role="radiogroup" aria-label="Foundation Type">
+                                    <label class="material-card" data-category="foundation" data-material="slab">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="slab">
+                                        <span class="material-name">Slab</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="crawl">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="crawl">
+                                        <span class="material-name">Crawl Space</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="basement">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="basement">
+                                        <span class="material-name">Basement</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="pier">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="pier">
+                                        <span class="material-name">Pier &amp; Grade Beam</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="mat">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="mat">
+                                        <span class="material-name">Mat Foundation</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                            <fieldset class="form-group material-fieldset">
+                                <legend class="form-label">Framing Material</legend>
+                                <div class="material-grid" role="radiogroup" aria-label="Framing Material">
+                                    <label class="material-card" data-category="framing" data-material="wood">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="wood">
+                                        <span class="material-name">Wood Stud</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="steel">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="steel">
+                                        <span class="material-name">Structural Steel</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="concrete">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="concrete">
+                                        <span class="material-name">Cast-in-Place Concrete</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="massTimber">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="massTimber">
+                                        <span class="material-name">Mass Timber</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="coldFormed">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="coldFormed">
+                                        <span class="material-name">Cold-Formed Steel</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                            <fieldset class="form-group material-fieldset">
+                                <legend class="form-label">Exterior Finish</legend>
+                                <div class="material-grid" role="radiogroup" aria-label="Exterior Finish">
+                                    <label class="material-card" data-category="exterior" data-material="vinyl">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="vinyl">
+                                        <span class="material-name">Vinyl</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="brick">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="brick">
+                                        <span class="material-name">Brick Veneer</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="stucco">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="stucco">
+                                        <span class="material-name">Stucco</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="stone">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="stone">
+                                        <span class="material-name">Stone Veneer</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="fiberCement">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="fiberCement">
+                                        <span class="material-name">Fiber Cement</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="curtainWall">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="curtainWall">
+                                        <span class="material-name">Curtain Wall</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                </div>
+                            </fieldset>
                             <button type="submit" class="btn btn-primary w-full"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>Generate Pricing</button>
                         </form>
                     </div>
@@ -614,6 +705,26 @@
 
     <!-- Toast Container -->
     <div id="toastContainer"></div>
+
+    <div class="modal" id="takeoffLabelModal" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="takeoffLabelForm" class="modal-form" novalidate>
+                <div class="modal-header">
+                    <h2 class="modal-title">Name Measurement</h2>
+                    <button type="button" class="modal-close" id="closeTakeoffLabelModal" aria-label="Close measurement name dialog">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label" for="takeoffLabelInput">Measurement name</label>
+                    <input id="takeoffLabelInput" class="form-input" type="text" required>
+                    <p class="form-help">Provide a descriptive label to keep your takeoff organized.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelTakeoffLabelModal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="confirmTakeoffLabelModal">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script type="module" src="app.js"></script>
     <div id="takeoffPdfModal" class="takeoff-pdf-modal" aria-hidden="true">
