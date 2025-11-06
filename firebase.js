@@ -56,13 +56,19 @@ async function loadFirebaseModules() {
 }
 
 function getFirebaseConfig() {
-    if (typeof window === 'undefined') return DEFAULT_FIREBASE_CONFIG;
-    return window.FIREBASE_CONFIG || DEFAULT_FIREBASE_CONFIG;
+    if (typeof window !== 'undefined' && window.FIREBASE_CONFIG) {
+        return sanitizeConfig(window.FIREBASE_CONFIG);
+    }
+    const metaConfig = resolveMetaConfig();
+    if (metaConfig) {
+        return metaConfig;
+    }
+    return ENVIRONMENT_FALLBACK_CONFIG;
 }
 
 export function isFirebaseConfigured() {
     const config = getFirebaseConfig();
-    return Boolean(config && config.apiKey && config.projectId && config.appId && config.authDomain);
+    return Boolean(config && CONFIG_KEYS.every((key) => Boolean(config[key])));
 }
 
 function requireFirebaseApi() {

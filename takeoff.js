@@ -1,14 +1,51 @@
+import { LifecycleManager } from './services/lifecycle-manager.js';
+import { Validator, ValidationError } from './utils/validator.js';
+
 const pdfjsLib =
     typeof window !== 'undefined'
         ? window.pdfjsLib || window['pdfjs-dist/build/pdf'] || null
         : null;
 
+class OptimizedCanvas {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.offscreen = canvas ? document.createElement('canvas') : null;
+        this.offscreenCtx = this.offscreen ? this.offscreen.getContext('2d', { alpha: true }) : null;
+    }
+
+    render(drawFn) {
+        if (!this.canvas || !this.offscreen || !this.offscreenCtx) return;
+        const { width, height } = this.canvas;
+        this.offscreen.width = width;
+        this.offscreen.height = height;
+        const ctx = this.offscreenCtx;
+        ctx.clearRect(0, 0, width, height);
+        drawFn(ctx);
+        const main = this.canvas.getContext('2d');
+        if (!main) return;
+        main.clearRect(0, 0, width, height);
+        main.drawImage(this.offscreen, 0, 0);
+    }
+
+    clear() {
+        if (!this.canvas) return;
+        const main = this.canvas.getContext('2d');
+        if (main) {
+            main.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+        if (this.offscreenCtx) {
+            this.offscreenCtx.clearRect(0, 0, this.offscreen.width, this.offscreen.height);
+        }
+    }
+}
+
 export class TakeoffManager {
-    constructor(options = {}) {
-        this.options = {
-            onPushToEstimate: () => {},
-            showToast: () => {},
-            ...options
+    constructor({ toastService, estimateService, storageService, pdfService } = {}) {
+        this.services = {
+            toastService: toastService || ((message, type) => console.info(`[${type || 'info'}] ${message}`)),
+            estimateService: estimateService || { push: () => {} },
+            storageService: storageService || null,
+            pdfService: pdfService || {},
         };
 
         this.state = {
@@ -31,6 +68,8 @@ export class TakeoffManager {
 
         this.elements = {};
         this.canvasContext = null;
+        this.canvasRenderer = null;
+        this.lifecycle = new LifecycleManager();
         this.pdfWorkerConfigured = false;
         this.zoomLimits = { min: 0.5, max: 3 };
         this.pdfSources = new Map();
@@ -116,37 +155,38 @@ export class TakeoffManager {
         };
 
         if (this.elements.canvas) {
+            this.canvasRenderer = new OptimizedCanvas(this.elements.canvas);
             this.canvasContext = this.elements.canvas.getContext('2d');
         }
     }
 
     bindEvents() {
-        this.elements.drawingInput?.addEventListener('change', (event) => this.handleDrawingUpload(event));
-        this.elements.sortSelect?.addEventListener('change', (event) => {
+        this.lifecycle.addEventListener(this.elements.drawingInput, 'change', (event) => this.handleDrawingUpload(event));
+        this.lifecycle.addEventListener(this.elements.sortSelect, 'change', (event) => {
             this.state.sortBy = event.target.value;
             this.renderDrawingList();
         });
-        this.elements.sortDirection?.addEventListener('click', () => {
+        this.lifecycle.addEventListener(this.elements.sortDirection, 'click', () => {
             this.toggleSortDirection();
             this.renderDrawingList();
         });
-        this.elements.searchInput?.addEventListener('input', (event) => {
+        this.lifecycle.addEventListener(this.elements.searchInput, 'input', (event) => {
             this.state.filter = event.target.value.trim().toLowerCase();
             this.renderDrawingList();
         });
-        this.elements.drawingTableBody?.addEventListener('click', (event) => this.handleDrawingTableClick(event));
-        this.elements.drawingTableBody?.addEventListener('input', (event) => this.handleDrawingTableInput(event));
+        this.lifecycle.addEventListener(this.elements.drawingTableBody, 'click', (event) => this.handleDrawingTableClick(event));
+        this.lifecycle.addEventListener(this.elements.drawingTableBody, 'input', (event) => this.handleDrawingTableInput(event));
 
-        this.elements.modeSelect?.addEventListener('change', (event) => this.updateMode(event.target.value));
-        this.elements.scaleInput?.addEventListener('input', (event) => this.updateScale(event.target.value));
+        this.lifecycle.addEventListener(this.elements.modeSelect, 'change', (event) => this.updateMode(event.target.value));
+        this.lifecycle.addEventListener(this.elements.scaleInput, 'input', (event) => this.updateScale(event.target.value));
 
-        this.elements.zoomInBtn?.addEventListener('click', () => this.stepZoom(0.1));
-        this.elements.zoomOutBtn?.addEventListener('click', () => this.stepZoom(-0.1));
-        this.elements.zoomResetBtn?.addEventListener('click', () => this.resetZoom());
+        this.lifecycle.addEventListener(this.elements.zoomInBtn, 'click', () => this.stepZoom(0.1));
+        this.lifecycle.addEventListener(this.elements.zoomOutBtn, 'click', () => this.stepZoom(-0.1));
+        this.lifecycle.addEventListener(this.elements.zoomResetBtn, 'click', () => this.resetZoom());
 
-        this.elements.pdfPrevBtn?.addEventListener('click', () => this.navigatePdfPage(-1));
-        this.elements.pdfNextBtn?.addEventListener('click', () => this.navigatePdfPage(1));
-        this.elements.pdfPageInput?.addEventListener('change', (event) => {
+        this.lifecycle.addEventListener(this.elements.pdfPrevBtn, 'click', () => this.navigatePdfPage(-1));
+        this.lifecycle.addEventListener(this.elements.pdfNextBtn, 'click', () => this.navigatePdfPage(1));
+        this.lifecycle.addEventListener(this.elements.pdfPageInput, 'change', (event) => {
             const value = parseInt(event.target.value, 10);
             if (Number.isFinite(value)) {
                 this.jumpToPdfPage(value);
@@ -154,42 +194,42 @@ export class TakeoffManager {
                 this.updatePdfToolbar(this.getActiveDrawing());
             }
         });
-        this.elements.pdfOpenBtn?.addEventListener('click', () => this.openActivePdfInViewer());
-        this.elements.pdfDownloadBtn?.addEventListener('click', () => this.downloadActivePdf());
+        this.lifecycle.addEventListener(this.elements.pdfOpenBtn, 'click', () => this.openActivePdfInViewer());
+        this.lifecycle.addEventListener(this.elements.pdfDownloadBtn, 'click', () => this.downloadActivePdf());
 
         const handleColorChange = (event) => this.updateCountColor(event.target.value);
-        this.elements.countColorInput?.addEventListener('input', handleColorChange);
-        this.elements.countColorInput?.addEventListener('change', handleColorChange);
-        this.elements.countShapeSelect?.addEventListener('change', (event) => this.updateCountShape(event.target.value));
-        this.elements.countLabelInput?.addEventListener('input', (event) => this.updateCountLabel(event.target.value));
+        this.lifecycle.addEventListener(this.elements.countColorInput, 'input', handleColorChange);
+        this.lifecycle.addEventListener(this.elements.countColorInput, 'change', handleColorChange);
+        this.lifecycle.addEventListener(this.elements.countShapeSelect, 'change', (event) => this.updateCountShape(event.target.value));
+        this.lifecycle.addEventListener(this.elements.countLabelInput, 'input', (event) => this.updateCountLabel(event.target.value));
 
-        this.elements.fullscreenBtn?.addEventListener('click', () => this.toggleFullscreen());
-        this.elements.fullScreenToggle?.addEventListener('click', () => this.toggleFullscreen());
+        this.lifecycle.addEventListener(this.elements.fullscreenBtn, 'click', () => this.toggleFullscreen());
+        this.lifecycle.addEventListener(this.elements.fullScreenToggle, 'click', () => this.toggleFullscreen());
 
         if (typeof document !== 'undefined') {
-            document.addEventListener('keydown', (event) => this.handleDocumentKeydown(event));
-            document.addEventListener('fullscreenchange', this.handleDocumentFullscreenChange);
-            document.addEventListener('webkitfullscreenchange', this.handleDocumentFullscreenChange);
+            this.lifecycle.addEventListener(document, 'keydown', (event) => this.handleDocumentKeydown(event));
+            this.lifecycle.addEventListener(document, 'fullscreenchange', this.handleDocumentFullscreenChange);
+            this.lifecycle.addEventListener(document, 'webkitfullscreenchange', this.handleDocumentFullscreenChange);
         }
-        this.elements.clearBtn?.addEventListener('click', () => this.clearMeasurements());
-        this.elements.exportBtn?.addEventListener('click', () => this.exportCsv());
-        this.elements.pushBtn?.addEventListener('click', () => this.pushToEstimate());
+        this.lifecycle.addEventListener(this.elements.clearBtn, 'click', () => this.clearMeasurements());
+        this.lifecycle.addEventListener(this.elements.exportBtn, 'click', () => this.exportCsv());
+        this.lifecycle.addEventListener(this.elements.pushBtn, 'click', () => this.pushToEstimate());
 
-        this.elements.canvas?.addEventListener('click', (event) => this.handleCanvasClick(event));
-        this.elements.canvas?.addEventListener('mousemove', (event) => this.handleCanvasMove(event));
-        this.elements.canvas?.addEventListener('mouseleave', () => this.handleCanvasLeave());
-        this.elements.canvas?.addEventListener('dblclick', () => this.handleCanvasDoubleClick());
+        this.lifecycle.addEventListener(this.elements.canvas, 'click', (event) => this.handleCanvasClick(event));
+        this.lifecycle.addEventListener(this.elements.canvas, 'mousemove', (event) => this.handleCanvasMove(event));
+        this.lifecycle.addEventListener(this.elements.canvas, 'mouseleave', () => this.handleCanvasLeave());
+        this.lifecycle.addEventListener(this.elements.canvas, 'dblclick', () => this.handleCanvasDoubleClick());
 
-        this.elements.measurementTableBody?.addEventListener('input', (event) => this.handleMeasurementInput(event));
-        this.elements.measurementTableBody?.addEventListener('click', (event) => this.handleMeasurementClick(event));
+        this.lifecycle.addEventListener(this.elements.measurementTableBody, 'input', (event) => this.handleMeasurementInput(event));
+        this.lifecycle.addEventListener(this.elements.measurementTableBody, 'click', (event) => this.handleMeasurementClick(event));
 
-        this.elements.quickShapeSelect?.addEventListener('change', () => this.updateQuickShapeInputs());
-        this.elements.quickBtn?.addEventListener('click', () => this.calculateQuickArea());
+        this.lifecycle.addEventListener(this.elements.quickShapeSelect, 'change', () => this.updateQuickShapeInputs());
+        this.lifecycle.addEventListener(this.elements.quickBtn, 'click', () => this.calculateQuickArea());
 
-        this.elements.openPdfBtn?.addEventListener('click', () => this.openActivePdf());
-        this.elements.pdfModalClose?.addEventListener('click', () => this.closePdfViewer());
-        this.elements.pdfModalOverlay?.addEventListener('click', () => this.closePdfViewer());
-        this.elements.pdfModal?.addEventListener('click', (event) => {
+        this.lifecycle.addEventListener(this.elements.openPdfBtn, 'click', () => this.openActivePdf());
+        this.lifecycle.addEventListener(this.elements.pdfModalClose, 'click', () => this.closePdfViewer());
+        this.lifecycle.addEventListener(this.elements.pdfModalOverlay, 'click', () => this.closePdfViewer());
+        this.lifecycle.addEventListener(this.elements.pdfModal, 'click', (event) => {
             if (event.target === this.elements.pdfModal) {
                 this.closePdfViewer();
             }
@@ -277,7 +317,7 @@ export class TakeoffManager {
 
     toggleFullscreen() {
         if (!this.getActiveDrawing()) {
-            this.options.showToast('Select a drawing before using full screen.', 'warning');
+            this.services.toastService('Select a drawing before using full screen.', 'warning');
             return;
         }
         const shouldEnable = !this.state.isFullscreen;
@@ -352,7 +392,7 @@ export class TakeoffManager {
                 file.name.toLowerCase().endsWith('.pdf');
             if (isPdf) {
                 if (!pdfjsLib) {
-                    this.options.showToast('PDF support is unavailable.', 'error');
+                    this.services.toastService('PDF support is unavailable.', 'error');
                     return;
                 }
                 await this.processPdfFile(file);
@@ -367,7 +407,7 @@ export class TakeoffManager {
             }
         } catch (error) {
             console.error('Error processing drawing file:', error);
-            this.options.showToast('Unable to load drawing file.', 'error');
+            this.services.toastService('Unable to load drawing file.', 'error');
         }
     }
 
@@ -421,7 +461,7 @@ export class TakeoffManager {
             }
         } catch (error) {
             console.error('Error rendering PDF:', error);
-            this.options.showToast('Unable to render PDF drawing.', 'error');
+            this.services.toastService('Unable to render PDF drawing.', 'error');
             if (pdfDocId) {
                 const meta = this.pdfDocuments.get(pdfDocId);
                 if (meta && meta.refCount === 0) {
@@ -760,7 +800,7 @@ export class TakeoffManager {
     openActivePdf() {
         const drawing = this.getActiveDrawing();
         if (!drawing) {
-            this.options.showToast('Select a drawing before opening the PDF reader.', 'warning');
+            this.services.toastService('Select a drawing before opening the PDF reader.', 'warning');
             return;
         }
         this.openPdfViewer(drawing);
@@ -769,11 +809,11 @@ export class TakeoffManager {
     openPdfViewer(drawing) {
         const source = this.getPdfSource(drawing);
         if (!source) {
-            this.options.showToast('Original PDF data is unavailable for this drawing.', 'error');
+            this.services.toastService('Original PDF data is unavailable for this drawing.', 'error');
             return;
         }
         if (!this.elements.pdfModal || !this.elements.pdfFrame) {
-            this.options.showToast('PDF reader is not available.', 'error');
+            this.services.toastService('PDF reader is not available.', 'error');
             return;
         }
 
@@ -799,7 +839,7 @@ export class TakeoffManager {
             this.elements.pdfModalClose?.focus?.();
         } catch (error) {
             console.error('Error opening PDF viewer:', error);
-            this.options.showToast('Unable to open the PDF reader.', 'error');
+            this.services.toastService('Unable to open the PDF reader.', 'error');
             this.closePdfViewer();
         }
     }
@@ -830,8 +870,8 @@ export class TakeoffManager {
     }
 
     clearCanvas() {
-        if (!this.elements.canvas || !this.canvasContext) return;
-        this.canvasContext.clearRect(0, 0, this.elements.canvas.width, this.elements.canvas.height);
+        if (!this.elements.canvas) return;
+        this.canvasRenderer?.clear();
         this.elements.canvas.style.width = '';
         this.elements.canvas.style.height = '';
         if (this.elements.planPreview) {
@@ -864,22 +904,25 @@ export class TakeoffManager {
     updateScale(value) {
         const drawing = this.getActiveDrawing();
         if (!drawing) return;
-        let parsed = parseFloat(value);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-            parsed = 1;
+        try {
+            const parsed = Validator.number(value, { min: 0.0001, fieldName: 'Scale' });
+            drawing.scale = parsed;
+            if (this.elements.scaleInput && this.elements.scaleInput.value !== String(parsed)) {
+                this.elements.scaleInput.value = String(parsed);
+            }
+            this.renderMeasurementTable();
+            this.drawMeasurements();
+        } catch (error) {
+            if (error instanceof ValidationError) {
+                this.services.toastService(error.message, 'warning');
+            }
         }
-        drawing.scale = parsed;
-        if (this.elements.scaleInput && this.elements.scaleInput.value !== String(parsed)) {
-            this.elements.scaleInput.value = String(parsed);
-        }
-        this.renderMeasurementTable();
-        this.drawMeasurements();
     }
 
     handleCanvasClick(event) {
         const drawing = this.getActiveDrawing();
         if (!drawing) {
-            this.options.showToast('Select a drawing before measuring.', 'warning');
+            this.services.toastService('Select a drawing before measuring.', 'warning');
             return;
         }
         if (!this.elements.canvas) return;
@@ -1085,34 +1128,44 @@ export class TakeoffManager {
     }
 
     drawMeasurements() {
-        if (!this.canvasContext || !this.elements.canvas) return;
-        this.canvasContext.clearRect(0, 0, this.elements.canvas.width, this.elements.canvas.height);
+        if (!this.elements.canvas || !this.canvasRenderer) return;
         const drawing = this.getActiveDrawing();
-        if (!drawing) return;
-
-        drawing.measurements.forEach((measurement) => this.drawMeasurement(measurement, drawing));
-
-        if (this.state.points.length) {
-            this.canvasContext.save();
-            this.canvasContext.strokeStyle = '#f97316';
-            this.canvasContext.lineWidth = 2;
-            this.canvasContext.setLineDash([6, 4]);
-            this.canvasContext.beginPath();
-            this.canvasContext.moveTo(this.state.points[0].x, this.state.points[0].y);
-            for (let i = 1; i < this.state.points.length; i++) {
-                this.canvasContext.lineTo(this.state.points[i].x, this.state.points[i].y);
-            }
-            if (this.state.previewPoint) {
-                this.canvasContext.lineTo(this.state.previewPoint.x, this.state.previewPoint.y);
-            }
-            this.canvasContext.stroke();
-            this.canvasContext.setLineDash([]);
-            this.state.points.forEach((point) => this.drawHandle(point));
-            if (this.state.previewPoint) {
-                this.drawHandle(this.state.previewPoint, true);
-            }
-            this.canvasContext.restore();
+        if (!drawing) {
+            this.canvasRenderer.clear();
+            return;
         }
+
+        this.canvasRenderer.render((ctx) => {
+            const previous = this.canvasContext;
+            this.canvasContext = ctx;
+            ctx.save();
+            ctx.clearRect(0, 0, this.elements.canvas.width, this.elements.canvas.height);
+            drawing.measurements.forEach((measurement) => this.drawMeasurement(measurement, drawing));
+
+            if (this.state.points.length) {
+                ctx.save();
+                ctx.strokeStyle = '#f97316';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 4]);
+                ctx.beginPath();
+                ctx.moveTo(this.state.points[0].x, this.state.points[0].y);
+                for (let i = 1; i < this.state.points.length; i += 1) {
+                    ctx.lineTo(this.state.points[i].x, this.state.points[i].y);
+                }
+                if (this.state.previewPoint) {
+                    ctx.lineTo(this.state.previewPoint.x, this.state.previewPoint.y);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+                this.state.points.forEach((point) => this.drawHandle(point));
+                if (this.state.previewPoint) {
+                    this.drawHandle(this.state.previewPoint, true);
+                }
+                ctx.restore();
+            }
+            ctx.restore();
+            this.canvasContext = previous;
+        });
     }
 
     drawMeasurement(measurement, drawing) {
@@ -1368,7 +1421,7 @@ export class TakeoffManager {
     exportCsv() {
         const rows = this.buildExportRows();
         if (!rows.length) {
-            this.options.showToast('No takeoff data available to export.', 'warning');
+            this.services.toastService('No takeoff data available to export.', 'warning');
             return;
         }
         const header = ['Drawing', 'Item', 'Mode', 'Quantity', 'Units', 'Details'];
@@ -1384,16 +1437,16 @@ export class TakeoffManager {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
-        this.options.showToast('Takeoff CSV exported!', 'success');
+        this.services.toastService('Takeoff CSV exported!', 'success');
     }
 
     pushToEstimate() {
         const rows = this.buildExportRows();
         if (!rows.length) {
-            this.options.showToast('No takeoff data to send to the estimate.', 'warning');
+            this.services.toastService('No takeoff data to send to the estimate.', 'warning');
             return;
         }
-        this.options.onPushToEstimate(rows);
+        this.services.estimateService?.push?.(rows);
     }
 
     buildExportRows() {
@@ -1643,6 +1696,17 @@ export class TakeoffManager {
         }
     }
 
+    destroy() {
+        if (this.isPdfViewerOpen()) {
+            this.closePdfViewer({ returnFocus: false });
+        }
+        this.lifecycle.cleanup();
+        this.canvasRenderer?.clear();
+        this.pdfSources.clear();
+        this.pdfDocuments.forEach((doc) => doc?.destroy?.());
+        this.pdfDocuments.clear();
+    }
+
     jumpToPdfPage(pageNumber) {
         const current = this.getActiveDrawing();
         if (!current || current.type !== 'pdf' || !current.pdfDocId) {
@@ -1661,7 +1725,7 @@ export class TakeoffManager {
         if (target) {
             this.setCurrentDrawing(target.id);
         } else {
-            this.options.showToast('Page not found in this PDF.', 'warning');
+            this.services.toastService('Page not found in this PDF.', 'warning');
             this.updatePdfToolbar(current);
         }
     }
@@ -1671,11 +1735,11 @@ export class TakeoffManager {
         if (!drawing || drawing.type !== 'pdf') return;
         const meta = this.getPdfDocumentMeta(drawing.pdfDocId);
         if (!meta || !meta.url) {
-            this.options.showToast('PDF source not available.', 'error');
+            this.services.toastService('PDF source not available.', 'error');
             return;
         }
         if (typeof window === 'undefined' || typeof window.open !== 'function') {
-            this.options.showToast('Opening PDFs is not supported in this environment.', 'warning');
+            this.services.toastService('Opening PDFs is not supported in this environment.', 'warning');
             return;
         }
         window.open(meta.url, '_blank', 'noopener');
@@ -1686,11 +1750,11 @@ export class TakeoffManager {
         if (!drawing || drawing.type !== 'pdf') return;
         const meta = this.getPdfDocumentMeta(drawing.pdfDocId);
         if (!meta || !meta.url) {
-            this.options.showToast('PDF source not available.', 'error');
+            this.services.toastService('PDF source not available.', 'error');
             return;
         }
         if (typeof document === 'undefined') {
-            this.options.showToast('Downloading is not supported in this environment.', 'warning');
+            this.services.toastService('Downloading is not supported in this environment.', 'warning');
             return;
         }
         const link = document.createElement('a');
@@ -1699,6 +1763,7 @@ export class TakeoffManager {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        this.services.toastService('PDF downloaded.', 'success');
     }
 
     releaseDrawingResources(drawing) {
