@@ -40,6 +40,8 @@ export class TakeoffManager {
             objectUrl: null,
             initialPage: 1
         };
+
+        this.handleDocumentFullscreenChange = this.handleDocumentFullscreenChange.bind(this);
     }
 
     init() {
@@ -223,6 +225,56 @@ export class TakeoffManager {
         }
     }
 
+    requestNativeFullscreen() {
+        if (typeof document === 'undefined') return;
+        const container = this.elements.planContainer;
+        if (!container) return;
+        const request =
+            container.requestFullscreen ||
+            container.webkitRequestFullscreen ||
+            container.msRequestFullscreen ||
+            container.mozRequestFullScreen;
+        if (!request) return;
+        try {
+            const result = request.call(container);
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => {});
+            }
+        } catch (error) {
+            console.warn('Unable to enter fullscreen mode:', error);
+        }
+    }
+
+    exitNativeFullscreen() {
+        if (typeof document === 'undefined') return;
+        const exit =
+            document.exitFullscreen ||
+            document.webkitExitFullscreen ||
+            document.msExitFullscreen ||
+            document.mozCancelFullScreen;
+        if (!exit) return;
+        try {
+            const result = exit.call(document);
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => {});
+            }
+        } catch (error) {
+            console.warn('Unable to exit fullscreen mode:', error);
+        }
+    }
+
+    handleDocumentFullscreenChange() {
+        if (typeof document === 'undefined') return;
+        const fullscreenElement =
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.msFullscreenElement ||
+            document.mozFullScreenElement ||
+            null;
+        const isFullscreenActive = Boolean(fullscreenElement);
+        this.setFullscreen(isFullscreenActive, { syncNative: false });
+    }
+
     toggleFullscreen() {
         if (!this.getActiveDrawing()) {
             this.options.showToast('Select a drawing before using full screen.', 'warning');
@@ -326,13 +378,14 @@ export class TakeoffManager {
             this.ensurePdfWorker();
             const arrayBuffer = await file.arrayBuffer();
             const pdfData = new Uint8Array(arrayBuffer);
+            const pdfBytes = pdfData.slice();
             const pdfId = this.createId('pdf');
             const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
             pdfDocId = this.createId('pdfDoc');
-            const blob = new Blob([pdfData], { type: 'application/pdf' });
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
             objectUrl = URL.createObjectURL(blob);
             this.pdfSources.set(pdfId, {
-                data: pdfData,
+                data: pdfBytes,
                 name: file.name,
                 totalPages: pdf.numPages
             });
@@ -1443,6 +1496,11 @@ export class TakeoffManager {
             this.closePdfViewer();
             return;
         }
+        const activeElement =
+            typeof document !== 'undefined' ? document.activeElement : null;
+        const isTargetActive =
+            !!(this.elements.planStage &&
+            (activeElement === this.elements.planStage || this.elements.planStage.contains(activeElement)));
         if (this.state.isFullscreen) {
             this.setFullscreen(false);
         } else if (isTargetActive && !this.state.isFullscreen) {
