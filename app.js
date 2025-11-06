@@ -102,6 +102,8 @@ import {
         let unsubscribeCloud = null;
         let applyingRemoteProjects = false;
         let firebaseReady = false;
+        let lastScreenIsMobile = window.matchMedia('(max-width: 1024px)').matches;
+        let wasSidebarCollapsedDesktop = false;
 
         async function loadDatabase() {
             try {
@@ -1619,6 +1621,10 @@ import {
         // --- EVENT LISTENERS ---
         function setupEventListeners() {
             document.getElementById('menuToggle')?.addEventListener('click', toggleSidebar);
+            document.getElementById('sidebarCollapseBtn')?.addEventListener('click', (event) => {
+                event.preventDefault();
+                toggleSidebar();
+            });
             document.getElementById('estimatorForm')?.addEventListener('submit', handleEstimatorSubmit);
             document.getElementById('laborCost')?.addEventListener('input', handleLaborMultiplierChange);
             document.querySelectorAll('.material-card').forEach(card => card.addEventListener('click', handleMaterialSelection));
@@ -1703,6 +1709,7 @@ import {
             worksheetBody?.addEventListener('input', handleWorksheetInput);
 
             window.addEventListener('resize', handleSidebarResize);
+            updateSidebarToggleState();
 
             // Calculator
             document.getElementById('calculatorGrid')?.addEventListener('click', handleCalculatorClick);
@@ -1753,52 +1760,82 @@ import {
                 pageTitleEl.textContent = navLabel.trim() || 'Dashboard';
             }
 
-            if (window.innerWidth <= 1024) {
-                document.getElementById('sidebar')?.classList.remove('open');
-                setMenuToggleExpanded(false);
-            }
+            closeSidebarOnMobile();
         }
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const menuToggle = document.getElementById('menuToggle');
-            if (!sidebar || !menuToggle) return;
+            if (!sidebar) return false;
 
-            if (window.innerWidth <= 1024) {
-                const isOpen = sidebar.classList.toggle('open');
-                setMenuToggleExpanded(isOpen);
-                return;
+            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+            if (isMobile) {
+                const shouldOpen = !sidebar.classList.contains('open');
+                sidebar.classList.toggle('open', shouldOpen);
+            } else {
+                const shouldCollapse = !document.body.classList.contains('sidebar-collapsed');
+                document.body.classList.toggle('sidebar-collapsed', shouldCollapse);
+                wasSidebarCollapsedDesktop = shouldCollapse;
             }
 
-            const shouldCollapse = !document.body.classList.contains('sidebar-collapsed');
-            document.body.classList.toggle('sidebar-collapsed', shouldCollapse);
-            setMenuToggleExpanded(!shouldCollapse);
+            updateSidebarToggleState();
+            return isSidebarCollapsed();
+        }
 
-            try {
-                localStorage.setItem('sidebarCollapsed', shouldCollapse ? '1' : '0');
-            } catch (error) {
-                console.warn('Unable to persist sidebar preference', error);
+        function closeSidebarOnMobile() {
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar) return;
+            if (window.matchMedia('(max-width: 1024px)').matches) {
+                sidebar.classList.remove('open');
+                updateSidebarToggleState();
             }
         }
 
-        function setMenuToggleExpanded(isExpanded) {
-            const menuToggle = document.getElementById('menuToggle');
-            if (!menuToggle) return;
-            menuToggle.setAttribute('aria-expanded', Boolean(isExpanded).toString());
+        function isSidebarCollapsed() {
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar) return false;
+            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+            return isMobile ? !sidebar.classList.contains('open') : document.body.classList.contains('sidebar-collapsed');
+        }
+
+        function updateSidebarToggleState() {
+            const button = document.getElementById('sidebarCollapseBtn');
+            const sidebar = document.getElementById('sidebar');
+            if (!button || !sidebar) return;
+
+            const collapsed = isSidebarCollapsed();
+            const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
+
+            button.classList.toggle('collapsed', collapsed);
+            button.setAttribute('aria-label', label);
+            button.setAttribute('aria-expanded', String(!collapsed));
+            button.setAttribute('title', label);
+
+            const textEl = button.querySelector('[data-toggle-label]');
+            if (textEl) {
+                textEl.textContent = label;
+            }
         }
 
         function handleSidebarResize() {
             const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return;
+            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
 
-            if (window.innerWidth > 1024) {
-                sidebar.classList.remove('open');
-                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                setMenuToggleExpanded(!isCollapsed);
-            } else {
-                const isOpen = sidebar.classList.contains('open');
-                setMenuToggleExpanded(isOpen);
+            if (isMobile !== lastScreenIsMobile) {
+                if (isMobile) {
+                    wasSidebarCollapsedDesktop = document.body.classList.contains('sidebar-collapsed');
+                    document.body.classList.remove('sidebar-collapsed');
+                } else {
+                    if (wasSidebarCollapsedDesktop) {
+                        document.body.classList.add('sidebar-collapsed');
+                    } else {
+                        document.body.classList.remove('sidebar-collapsed');
+                    }
+                    sidebar?.classList.remove('open');
+                }
+                lastScreenIsMobile = isMobile;
             }
+
+            updateSidebarToggleState();
         }
 
         function toggleTheme() {
@@ -3061,163 +3098,228 @@ import {
 
         function importProjects(e) {
             const input = e.target;
-            const file = input?.files?.[0];
-            if (input) input.value = '';
+            const file = input.files?.[0];
             if (!file) return;
 
             const extension = (file.name.split('.').pop() || '').toLowerCase();
 
             if (extension === 'json') {
                 const reader = new FileReader();
-                reader.onload = () => handleImportedProjects(reader.result, 'json');
-                reader.onerror = () => showToast('Unable to read file.', 'error');
+                reader.onload = async () => {
+                    try {
+                        const projects = JSON.parse(reader.result);
+                        if (Array.isArray(projects)) {
+                            await applyImportedProjects(projects);
+                            showToast(projects.length ? 'Projects imported!' : 'No projects found in file.', projects.length ? 'success' : 'warning');
+                        } else {
+                            showToast('Invalid project file.', 'error');
+                        }
+                    } catch (err) {
+                        console.error('Failed to import projects:', err);
+                        showToast('Invalid project file.', 'error');
+                    } finally {
+                        input.value = '';
+                    }
+                };
                 reader.readAsText(file);
                 return;
             }
 
-            if (extension === 'csv') {
+            if (['xlsx', 'xls', 'csv'].includes(extension)) {
                 const reader = new FileReader();
-                reader.onload = () => handleImportedProjects(reader.result, 'csv');
-                reader.onerror = () => showToast('Unable to read CSV file.', 'error');
-                reader.readAsText(file);
-                return;
-            }
-
-            if (extension === 'xlsx' || extension === 'xls') {
-                const reader = new FileReader();
-                reader.onload = (event) => handleImportedProjects(event.target.result, 'excel');
-                reader.onerror = () => showToast('Unable to read Excel file.', 'error');
+                reader.onload = async (event) => {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const projects = parseProjectsFromWorkbook(workbook);
+                        if (projects.length) {
+                            await applyImportedProjects(projects);
+                            showToast('Projects imported!', 'success');
+                        } else {
+                            showToast('No projects found in file.', 'warning');
+                        }
+                    } catch (err) {
+                        console.error('Failed to import spreadsheet:', err);
+                        showToast('Unable to import spreadsheet. Confirm the template and try again.', 'error');
+                    } finally {
+                        input.value = '';
+                    }
+                };
                 reader.readAsArrayBuffer(file);
                 return;
             }
 
-            showToast('Unsupported file type. Please import JSON, CSV, or Excel files.', 'error');
+            showToast('Unsupported file format. Use JSON, CSV, or Excel files.', 'warning');
+            input.value = '';
         }
 
-        async function handleImportedProjects(rawData, type) {
-            try {
-                let projects = [];
-                if (type === 'json') {
-                    const parsed = JSON.parse(rawData);
-                    if (Array.isArray(parsed)) {
-                        projects = parsed;
-                    }
-                } else {
-                    const rows = extractRowsFromSpreadsheet(rawData, type);
-                    projects = normalizeImportedProjects(rows);
-                }
-
-                if (!Array.isArray(projects) || projects.length === 0) {
-                    showToast('No projects found in file.', 'warning');
-                    return;
-                }
-
-                state.savedProjects = projects;
-                persistLocalProjects();
-                await syncAllProjectsToCloud(state.savedProjects);
-                loadProjects();
-                updateDashboard();
-                showToast('Projects imported!', 'success');
-            } catch (error) {
-                console.error('Project import failed:', error);
-                showToast('Invalid project file.', 'error');
-            }
+        async function applyImportedProjects(projects) {
+            state.savedProjects = projects;
+            persistLocalProjects();
+            await syncAllProjectsToCloud(state.savedProjects);
+            loadProjects();
+            updateDashboard();
         }
 
-        function extractRowsFromSpreadsheet(rawData, type) {
-            if (typeof XLSX === 'undefined') return [];
-            let workbook = null;
-            if (type === 'excel') {
-                const data = new Uint8Array(rawData);
-                workbook = XLSX.read(data, { type: 'array' });
-            } else {
-                workbook = XLSX.read(rawData, { type: 'string' });
-            }
+        function parseProjectsFromWorkbook(workbook) {
             if (!workbook?.SheetNames?.length) return [];
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets?.[sheetName];
             if (!sheet) return [];
-            return XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        }
 
-        function normalizeImportedProjects(rows) {
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
             if (!Array.isArray(rows)) return [];
-            const now = Date.now();
+
             return rows
-                .map((row, index) => normalizeImportedProject(row, index, now))
+                .map((row, index) => normalizeImportedProjectRow(row, index))
                 .filter(Boolean);
         }
 
-        function normalizeImportedProject(row, index, timestampBase) {
+        function normalizeImportedProjectRow(row, index) {
             if (!row || typeof row !== 'object') return null;
 
-            const name = extractProjectField(row, ['name', 'Name', 'project', 'Project', 'Project Name']);
+            const normalized = {};
+            Object.entries(row).forEach(([key, value]) => {
+                if (!key) return;
+                normalized[String(key).trim().toLowerCase()] = value;
+            });
+
+            const name = getFirstValue(normalized, ['name', 'project name', 'title']);
             if (!name) return null;
 
-            const type = extractProjectField(row, ['type', 'Type', 'Project Type']);
-            const sqft = parseNumericField(extractProjectField(row, ['sqft', 'Sqft', 'Square Footage', 'SquareFootage']));
-            const floors = parseNumericField(extractProjectField(row, ['floors', 'Floors'])) || 1;
-            const laborMultiplier = parseNumericField(extractProjectField(row, ['laborMultiplier', 'LaborMultiplier', 'Labor Multiplier'])) ?? 1.5;
-            const total = parseNumericField(extractProjectField(row, ['total', 'Total', 'Amount', 'Bid Total'])) || 0;
-            const status = normalizeProjectStatus(extractProjectField(row, ['status', 'Status']));
-            const estimateType = normalizeEstimateType(extractProjectField(row, ['estimateType', 'EstimateType', 'Mode']));
-            const dateValue = extractProjectField(row, ['date', 'Date', 'Created', 'Updated']);
-            const parsedDate = dateValue ? new Date(dateValue) : new Date();
-            const safeDate = Number.isNaN(parsedDate.valueOf()) ? new Date() : parsedDate;
+            const type = getFirstValue(normalized, ['type', 'project type', 'category']) || '';
+            const sqft = parseNumeric(getFirstValue(normalized, ['square footage', 'sqft', 'square feet', 'area']));
+            const floors = parseNumeric(getFirstValue(normalized, ['floors', 'stories', 'levels']));
+            const laborMultiplier = parseNumeric(getFirstValue(normalized, ['labor multiplier', 'labor factor']));
+            const total = parseNumeric(getFirstValue(normalized, ['total', 'total bid', 'project total', 'value']));
+            const statusRaw = (getFirstValue(normalized, ['status', 'stage']) || '').toString().toLowerCase();
+            const allowedStatuses = new Set(['review', 'won', 'lost']);
+            const status = allowedStatuses.has(statusRaw) ? statusRaw : 'review';
 
-            const idField = extractProjectField(row, ['id', 'ID', 'Id']);
-            const id = idField || `import-${timestampBase}-${index}`;
+            const estimateTypeRaw = (getFirstValue(normalized, ['estimate type', 'mode', 'workflow']) || '').toString().toLowerCase();
+            const estimateType = estimateTypeRaw === 'detailed' ? 'detailed' : 'quick';
 
-            const effectiveLaborMultiplier = Number.isFinite(laborMultiplier) && laborMultiplier > 0 ? laborMultiplier : 0;
-            const materialTotal = effectiveLaborMultiplier > 0 ? total / (1 + effectiveLaborMultiplier) : total;
-            const laborTotal = total - materialTotal;
+            const recordDateValue = getFirstValue(normalized, ['date', 'created', 'saved on', 'updated']);
+            const recordDate = parseImportedDate(recordDateValue) || new Date();
+            const isoDate = recordDate.toISOString();
+
+            const idValue = getFirstValue(normalized, ['id', 'project id']);
+            const id = idValue ? String(idValue) : `import-${Date.now()}-${index}`;
+
+            if (estimateType === 'detailed') {
+                const bidDateValue = getFirstValue(normalized, ['bid date', 'proposal date']);
+                const bidDate = parseImportedDate(bidDateValue);
+                const clientName = getFirstValue(normalized, ['client name', 'client']) || '';
+                const completionDays = getFirstValue(normalized, ['completion days', 'duration', 'schedule days']) || '';
+                const overheadPercent = parseNumeric(getFirstValue(normalized, ['overhead percent', 'overhead %', 'overhead']));
+                const profitPercent = parseNumeric(getFirstValue(normalized, ['profit percent', 'profit %', 'profit']));
+                const contingencyPercent = parseNumeric(getFirstValue(normalized, ['contingency percent', 'contingency %']));
+                const subtotal = parseNumeric(getFirstValue(normalized, ['subtotal']));
+                const markup = parseNumeric(getFirstValue(normalized, ['markup']));
+                const contingencyAmount = parseNumeric(getFirstValue(normalized, ['contingency amount', 'contingency total', 'contingency value']));
+                const safeSubtotal = Number.isFinite(subtotal) ? subtotal : 0;
+                const safeMarkup = Number.isFinite(markup) ? markup : 0;
+                const safeContingency = Number.isFinite(contingencyAmount) ? contingencyAmount : 0;
+                const safeTotal = Number.isFinite(total) ? total : safeSubtotal + safeMarkup + safeContingency;
+
+                return {
+                    id,
+                    estimateType: 'detailed',
+                    name: String(name),
+                    clientName: clientName ? String(clientName) : '',
+                    bidDate: bidDate ? formatDateForInput(bidDate) : '',
+                    completionDays: completionDays ? String(completionDays) : '',
+                    lineItems: [],
+                    overheadPercent: Number.isFinite(overheadPercent) ? overheadPercent : 0,
+                    profitPercent: Number.isFinite(profitPercent) ? profitPercent : 0,
+                    contingencyPercent: Number.isFinite(contingencyPercent) ? contingencyPercent : 0,
+                    subtotal: safeSubtotal,
+                    markup: safeMarkup,
+                    contingency: safeContingency,
+                    total: safeTotal,
+                    date: isoDate,
+                    status,
+                };
+            }
+
+            const sqftValue = Number.isFinite(sqft) ? sqft : 0;
+            const floorsValue = Number.isFinite(floors) && floors > 0 ? Math.round(floors) : 1;
+            const laborMultiplierValue = Number.isFinite(laborMultiplier) ? laborMultiplier : 1.5;
+            const materialTotal = parseNumeric(getFirstValue(normalized, ['material total', 'materials total', 'materials']));
+            const laborTotal = parseNumeric(getFirstValue(normalized, ['labor total', 'labor']));
+            const safeMaterialTotal = Number.isFinite(materialTotal) ? materialTotal : 0;
+            const safeLaborTotal = Number.isFinite(laborTotal) ? laborTotal : safeMaterialTotal * laborMultiplierValue;
+            const safeTotal = Number.isFinite(total) ? total : safeMaterialTotal + safeLaborTotal;
 
             return {
                 id,
-                estimateType,
-                name: String(name).trim(),
-                type: type ? String(type).trim() : '',
-                sqft: Number.isFinite(sqft) ? sqft : undefined,
-                floors: Number.isFinite(floors) ? floors : 1,
-                laborMultiplier: Number.isFinite(laborMultiplier) ? laborMultiplier : 1.5,
+                estimateType: 'quick',
+                name: String(name),
+                type: type ? String(type) : '',
+                sqft: sqftValue,
+                floors: floorsValue,
+                laborMultiplier: laborMultiplierValue,
+                selected: {},
                 worksheet: [],
                 costs: {},
-                materialTotal,
-                laborTotal,
-                total,
+                materialTotal: safeMaterialTotal,
+                laborTotal: safeLaborTotal,
+                total: safeTotal,
+                date: isoDate,
+                lastGenerated: isoDate,
                 status,
-                date: safeDate.toISOString(),
-                lastGenerated: safeDate.toISOString(),
             };
         }
 
-        function extractProjectField(row, keys) {
+        function getFirstValue(row, keys) {
             for (const key of keys) {
-                if (Object.prototype.hasOwnProperty.call(row, key)) {
+                if (key in row) {
                     const value = row[key];
-                    if (value !== undefined && value !== null && String(value).trim() !== '') {
+                    if (value !== undefined && value !== null && value !== '') {
                         return value;
                     }
                 }
             }
-            return '';
+            return undefined;
         }
 
-        function parseNumericField(value) {
-            if (value === '' || value === null || value === undefined) return null;
-            const number = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.-]/g, ''));
-            return Number.isFinite(number) ? number : null;
+        function parseNumeric(value) {
+            if (value === undefined || value === null || value === '') return NaN;
+            if (typeof value === 'number') {
+                return Number.isFinite(value) ? value : NaN;
+            }
+            if (value instanceof Date) {
+                return NaN;
+            }
+            const normalized = String(value).replace(/[^0-9+\-.]/g, '');
+            if (!normalized) return NaN;
+            const parsed = parseFloat(normalized);
+            return Number.isFinite(parsed) ? parsed : NaN;
         }
 
-        function normalizeProjectStatus(status) {
-            const normalized = String(status || '').toLowerCase();
-            if (normalized === 'won' || normalized === 'lost') return normalized;
-            if (normalized === 'pending' || normalized === 'in progress' || normalized === 'in-progress') return 'review';
-            return 'review';
+        function parseImportedDate(value) {
+            if (value === undefined || value === null || value === '') return null;
+            if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                return value;
+            }
+            if (typeof value === 'number') {
+                if (XLSX?.SSF?.parse_date_code) {
+                    const parsed = XLSX.SSF.parse_date_code(value);
+                    if (parsed) {
+                        return new Date(Date.UTC(parsed.y, (parsed.m || 1) - 1, parsed.d || 1, parsed.H || 0, parsed.M || 0, parsed.S || 0));
+                    }
+                }
+                const excelEpoch = Date.UTC(1899, 11, 30);
+                const result = new Date(excelEpoch + value * 86400000);
+                return Number.isNaN(result.getTime()) ? null : result;
+            }
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
         }
 
-        function normalizeEstimateType(type) {
-            const normalized = String(type || '').toLowerCase();
-            return normalized === 'detailed' ? 'detailed' : 'quick';
+        function formatDateForInput(date) {
+            if (!date || Number.isNaN(date.getTime?.())) return '';
+            return date.toISOString().split('T')[0];
         }
 
         function updateDashboard() {
