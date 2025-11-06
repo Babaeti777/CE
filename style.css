@@ -68,6 +68,26 @@
             overflow-y: auto;
             z-index: 100;
             transition: transform 0.3s ease;
+            transform: translateX(0);
+        }
+
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: var(--gray-100);
+            transition: margin-left 0.3s ease;
+        }
+
+        body.sidebar-collapsed .sidebar {
+            transform: translateX(-100%);
+        }
+
+        body.sidebar-collapsed .main-content {
+            margin-left: 0;
+        }
+
+        body.sidebar-collapsed .menu-toggle {
+            left: 1.5rem;
         }
 
         .main-content {
@@ -216,6 +236,21 @@
             width: 20px;
             height: 20px;
             opacity: 0.9;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: var(--gray-100);
+        }
+
+        body.sidebar-collapsed .sidebar {
+            transform: translateX(-100%);
+        }
+
+        body.sidebar-collapsed .main-content {
+            margin-left: 0;
         }
 
         .header {
@@ -1670,6 +1705,57 @@
             grid-template-columns: repeat(4, 1fr);
             gap: 1rem;
         }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        #sidebarCollapseBtn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-toggle-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        #sidebarCollapseBtn .icon-collapsed {
+            display: none;
+        }
+
+        #sidebarCollapseBtn.collapsed .icon-expanded {
+            display: none;
+        }
+
+        #sidebarCollapseBtn.collapsed .icon-collapsed {
+            display: inline;
+        }
+
+        .menu-toggle {
+            display: flex;
+            position: fixed;
+            top: 1.5rem;
+            left: 300px;
+            z-index: 200;
+            width: 48px;
+            height: 48px;
+            background: var(--primary);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            color: white;
+            font-size: 1.5rem;
+            box-shadow: var(--shadow-lg);
+        }
 
         .space-y-3 > * + * {
             margin-top: 1rem;
@@ -2058,10 +2144,11 @@
                 margin-left: 0;
             }
 
-            .global-toggle-cluster {
-                top: 1rem;
-                left: 1rem;
-                flex-direction: row;
+            .menu-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                left: 1.5rem;
             }
 
             .header {

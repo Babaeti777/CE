@@ -21,18 +21,12 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="global-toggle-cluster" role="region" aria-label="Interface toggles">
-        <button class="global-toggle menu-toggle" id="menuToggle" aria-controls="sidebar" aria-expanded="true" title="Toggle navigation">
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-        </button>
-        <button class="global-toggle theme-toggle" id="themeToggle" aria-label="Toggle Theme" title="Toggle theme">
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
-            </svg>
-        </button>
-    </div>
+    <!-- Mobile Menu Toggle -->
+    <button class="menu-toggle" id="menuToggle" aria-controls="sidebar" aria-expanded="true" title="Toggle navigation">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+    </button>
 
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar" role="navigation">
@@ -79,6 +73,15 @@
         <header class="header">
             <h1 class="page-title" id="pageTitle">Dashboard</h1>
             <div class="header-actions">
+                <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Hide sidebar" aria-expanded="true">
+                    <svg class="sidebar-toggle-icon icon-expanded" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                    <svg class="sidebar-toggle-icon icon-collapsed" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    <span class="sr-only" data-toggle-label>Hide sidebar</span>
+                </button>
                 <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
                     <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                 </button>
@@ -262,7 +265,7 @@
                         <input type="search" class="form-input" id="projectSearch" placeholder="Search projects..." style="max-width: 200px;">
                         <button class="btn btn-secondary" id="exportProjectsBtn">Export</button>
                         <button class="btn btn-secondary" id="importProjectsBtn">Import</button>
-                        <input type="file" id="importProjectsInput" style="display:none" accept=".json,.csv,.xlsx,.xls">
+                        <input type="file" id="importProjectsInput" accept=".json,.csv,.xlsx,.xls" style="display:none">
                     </div>
                     <div id="projectsList" style="margin-top: 2rem;"></div>
                 </div>
