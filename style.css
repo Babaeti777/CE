@@ -71,6 +71,25 @@
             transform: translateX(0);
         }
 
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: var(--gray-100);
+            transition: margin-left 0.3s ease;
+        }
+
+        body.sidebar-collapsed .sidebar {
+            transform: translateX(-100%);
+        }
+
+        body.sidebar-collapsed .main-content {
+            margin-left: 0;
+        }
+
+        body.sidebar-collapsed .menu-toggle {
+            left: 1.5rem;
+        }
+
         .logo-container {
             display: flex;
             align-items: center;
@@ -1653,10 +1672,10 @@
         }
 
         .menu-toggle {
-            display: none;
+            display: flex;
             position: fixed;
             top: 1.5rem;
-            left: 1.5rem;
+            left: 300px;
             z-index: 200;
             width: 48px;
             height: 48px;
@@ -2060,6 +2079,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                left: 1.5rem;
             }
 
             .header {

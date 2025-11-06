@@ -1270,6 +1270,10 @@ import {
                 if (frequencySelect) frequencySelect.value = state.updateFrequency;
                 const theme = localStorage.getItem('darkMode');
                 if (theme === 'on') document.body.classList.add('dark-mode');
+                const storedSidebarState = localStorage.getItem('sidebarCollapsed');
+                const isSidebarCollapsed = storedSidebarState === '1';
+                document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
+                setMenuToggleExpanded(!isSidebarCollapsed);
                 ensureSyncProfileId();
             } catch (e) {
                 console.error('Error loading saved data:', e);
@@ -1718,6 +1722,8 @@ import {
             document.addEventListener('keydown', handleCalculatorKeydown);
             updateCalcMode(state.calcMode);
             updateLineItemEmptyState();
+
+            handleSidebarResize();
         }
 
         // --- NAVIGATION & UI ---
