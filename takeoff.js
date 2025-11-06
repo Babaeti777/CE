@@ -378,13 +378,14 @@ export class TakeoffManager {
             this.ensurePdfWorker();
             const arrayBuffer = await file.arrayBuffer();
             const pdfData = new Uint8Array(arrayBuffer);
+            const pdfBytes = pdfData.slice();
             const pdfId = this.createId('pdf');
             const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
             pdfDocId = this.createId('pdfDoc');
-            const blob = new Blob([pdfData], { type: 'application/pdf' });
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
             objectUrl = URL.createObjectURL(blob);
             this.pdfSources.set(pdfId, {
-                data: pdfData,
+                data: pdfBytes,
                 name: file.name,
                 totalPages: pdf.numPages
             });
