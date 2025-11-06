@@ -515,6 +515,14 @@
                     <h3 class="card-title mb-lg">Cloud Sync</h3>
                     <p class="card-subtitle mb-lg">Connect Firebase to sync your projects across browsers and devices.</p>
                     <div class="form-group">
+                        <label class="form-label">Google Account</label>
+                        <div class="sync-id-row">
+                            <button class="btn btn-primary" id="googleSignInBtn" type="button">Sign in with Google</button>
+                            <button class="btn btn-secondary is-hidden" id="googleSignOutBtn" type="button">Sign out</button>
+                        </div>
+                        <p class="form-hint" id="authUserDisplay">Not signed in.</p>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label" for="currentSyncId">Current Sync ID</label>
                         <div class="sync-id-row">
                             <input type="text" class="form-input" id="currentSyncId" readonly>
