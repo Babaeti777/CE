@@ -3064,53 +3064,53 @@ import {
         }
 
         function updateCalcMode(mode) {
-            state.calcMode = mode;
+            const nextMode = mode === 'engineering' ? 'engineering' : 'basic';
+            state.calcMode = nextMode;
 
             const calculatorGrid = document.getElementById('calculatorGrid');
             const engineeringBtns = document.getElementById('engineeringBtns');
             const modeBasicBtn = document.getElementById('modeBasic');
             const modeEngineeringBtn = document.getElementById('modeEngineering');
 
-            if (calculatorGrid) {
-                calculatorGrid.classList.remove('is-hidden');
-                calculatorGrid.style.display = '';
-                calculatorGrid.setAttribute('aria-hidden', 'false');
-            }
-
             if (engineeringBtns) {
-                const showEngineering = mode === 'engineering';
-                engineeringBtns.classList.toggle('is-hidden', !showEngineering);
-                engineeringBtns.style.display = showEngineering ? 'grid' : '';
-                engineeringBtns.setAttribute('aria-hidden', String(!showEngineering));
+                engineeringBtns.classList.toggle('is-hidden', nextMode !== 'engineering');
+                engineeringBtns.setAttribute('aria-hidden', nextMode === 'engineering' ? 'false' : 'true');
             }
 
-            modeBasicBtn?.classList.toggle('active', mode === 'basic');
-            modeEngineeringBtn?.classList.toggle('active', mode === 'engineering');
+            if (calculatorGrid) {
+                calculatorGrid.classList.toggle('calculator-grid--engineering', nextMode === 'engineering');
+            }
+
+            modeBasicBtn?.classList.toggle('active', nextMode === 'basic');
+            modeEngineeringBtn?.classList.toggle('active', nextMode === 'engineering');
+            modeBasicBtn?.setAttribute('aria-pressed', nextMode === 'basic' ? 'true' : 'false');
+            modeEngineeringBtn?.setAttribute('aria-pressed', nextMode === 'engineering' ? 'true' : 'false');
         }
 
         function handleTakeoffPush(rows) {
-            if (!Array.isArray(rows) || !rows.length) {
+            if (!Array.isArray(rows) || rows.length === 0) {
                 showToast('No takeoff data to send to the estimate.', 'warning');
                 return;
             }
 
             ensureTakeoffCategory(rows);
             rows.forEach((row) => {
-                const quantity = parseFloat(row.quantity) || 0;
-                const baseDescription = row.drawing ? `${row.label} (${row.drawing})` : row.label;
-                const detailText = typeof row.details === 'string' && row.details.trim()
-                    ? ` – ${row.details.trim()}`
-                    : '';
+                const label = (row?.label || '').trim() || 'Measurement';
+                const drawingSuffix = row?.drawing ? ` (${row.drawing})` : '';
+                const notes = (row?.details || '').trim();
+                const description = notes ? `${label}${drawingSuffix} – ${notes}` : `${label}${drawingSuffix}`;
+                const quantity = Number.parseFloat(row?.quantity) || 0;
 
                 addLineItem({
                     category: 'Takeoff Measurements',
-                    description: `${baseDescription}${detailText}`,
+                    description,
                     quantity,
-                    unit: row.unit || '',
+                    unit: row?.unit || '',
                     rate: 0,
                     total: 0
                 });
             });
+
             updateBidTotal();
             showToast('Takeoff measurements added to the detailed estimate.', 'success');
             switchTab('detailed');
@@ -3122,15 +3122,16 @@ import {
             }
             const category = state.lineItemCategories['Takeoff Measurements'];
             rows.forEach((row) => {
-                const existing = category.find((item) => item.name === row.label);
+                const label = (row?.label || '').trim() || 'Measurement';
+                const existing = category.find((item) => item.name === label);
                 if (!existing) {
                     category.push({
-                        name: row.label,
-                        unit: row.unit,
+                        name: label,
+                        unit: row?.unit || '',
                         rate: 0
                     });
                 } else {
-                    existing.unit = row.unit;
+                    existing.unit = row?.unit || existing.unit || '';
                 }
             });
         }

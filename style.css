@@ -405,8 +405,11 @@ body.sidebar-collapsed .main-content {
 }
 
 .chart-sm {
+    display: block;
     width: 100%;
     max-height: 220px;
+    min-height: 220px;
+    height: 220px;
 }
 
 .grid-4,
@@ -1076,6 +1079,10 @@ textarea.form-input:focus {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-sm);
+}
+
+.calculator-grid--engineering {
+    margin-bottom: var(--space-md);
 }
 
 .calculator-grid .btn {
