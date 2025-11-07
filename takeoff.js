@@ -1724,6 +1724,66 @@ export class TakeoffManager {
         this.elements.sortDirection.textContent = this.state.sortDir === 'asc' ? '▲' : '▼';
     }
 
+    updatePdfControls() {
+        const {
+            pdfControls,
+            pdfPrevBtn,
+            pdfNextBtn,
+            pdfPageInput,
+            pdfPageTotal,
+            pdfOpenBtn,
+            pdfDownloadBtn,
+            openPdfBtn
+        } = this.elements;
+
+        const pdfSupported = Boolean(pdfjsLib && typeof pdfjsLib.getDocument === 'function');
+
+        if (pdfControls) {
+            pdfControls.classList.toggle('is-hidden', !pdfSupported);
+            pdfControls.setAttribute('aria-hidden', pdfSupported ? 'false' : 'true');
+        }
+
+        const toggleControl = (control, disableAttr = true) => {
+            if (!control) return;
+            const disableControl = !pdfSupported;
+            if ('disabled' in control) {
+                control.disabled = disableControl;
+            }
+            if (disableAttr) {
+                control.setAttribute('aria-disabled', disableControl ? 'true' : 'false');
+            }
+        };
+
+        toggleControl(pdfPrevBtn);
+        toggleControl(pdfNextBtn);
+        toggleControl(pdfOpenBtn);
+        toggleControl(pdfDownloadBtn);
+
+        if (pdfPageInput) {
+            pdfPageInput.disabled = !pdfSupported;
+            pdfPageInput.setAttribute('aria-disabled', pdfSupported ? 'false' : 'true');
+        }
+
+        if (pdfPageTotal) {
+            pdfPageTotal.setAttribute('aria-hidden', pdfSupported ? 'false' : 'true');
+        }
+
+        if (!pdfSupported && openPdfBtn) {
+            openPdfBtn.classList.remove('is-visible');
+            openPdfBtn.disabled = true;
+            openPdfBtn.setAttribute('aria-hidden', 'true');
+            openPdfBtn.setAttribute('aria-disabled', 'true');
+            openPdfBtn.setAttribute('tabindex', '-1');
+        }
+
+        if (pdfSupported) {
+            const activeDrawing = this.getActiveDrawing();
+            if (activeDrawing) {
+                this.updatePdfToolbar(activeDrawing);
+            }
+        }
+    }
+
     updatePdfToolbar(drawing) {
         const controls = this.elements.pdfControls;
         if (!controls) return;

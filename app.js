@@ -3066,13 +3066,24 @@ import {
         function updateCalcMode(mode) {
             state.calcMode = mode;
 
-            const basicTools = document.getElementById('basicTools');
+            const calculatorGrid = document.getElementById('calculatorGrid');
             const engineeringBtns = document.getElementById('engineeringBtns');
             const modeBasicBtn = document.getElementById('modeBasic');
             const modeEngineeringBtn = document.getElementById('modeEngineering');
 
-            if (basicTools) basicTools.style.display = mode === 'basic' ? 'block' : 'none';
-            if (engineeringBtns) engineeringBtns.style.display = mode === 'engineering' ? 'grid' : 'none';
+            if (calculatorGrid) {
+                calculatorGrid.classList.remove('is-hidden');
+                calculatorGrid.style.display = '';
+                calculatorGrid.setAttribute('aria-hidden', 'false');
+            }
+
+            if (engineeringBtns) {
+                const showEngineering = mode === 'engineering';
+                engineeringBtns.classList.toggle('is-hidden', !showEngineering);
+                engineeringBtns.style.display = showEngineering ? 'grid' : '';
+                engineeringBtns.setAttribute('aria-hidden', String(!showEngineering));
+            }
+
             modeBasicBtn?.classList.toggle('active', mode === 'basic');
             modeEngineeringBtn?.classList.toggle('active', mode === 'engineering');
         }
@@ -3086,28 +3097,18 @@ import {
             ensureTakeoffCategory(rows);
             rows.forEach((row) => {
                 const quantity = parseFloat(row.quantity) || 0;
+                const baseDescription = row.drawing ? `${row.label} (${row.drawing})` : row.label;
+                const detailText = typeof row.details === 'string' && row.details.trim()
+                    ? ` – ${row.details.trim()}`
+                    : '';
+
                 addLineItem({
                     category: 'Takeoff Measurements',
-                    description: row.drawing ? `${row.label} (${row.drawing})` : row.label,
+                    description: `${baseDescription}${detailText}`,
                     quantity,
-                    unit: row.unit,
+                    unit: row.unit || '',
                     rate: 0,
                     total: 0
-                });
-
-                measurement.subItems.forEach(subItem => {
-                    const subDescription = subItem.label && subItem.label.trim()
-                        ? `${description} - ${subItem.label.trim()}`
-                        : `${description} - Sub-item`;
-                    const subNotes = subItem.notes && subItem.notes.trim() ? ` (${subItem.notes.trim()})` : '';
-                    addLineItem({
-                        category: 'Takeoff Measurements',
-                        description: `${subDescription}${subNotes}`,
-                        quantity: typeof subItem.quantity === 'number' && !Number.isNaN(subItem.quantity) ? subItem.quantity : 0,
-                        unit: subItem.unit || '',
-                        rate: 0,
-                        total: 0
-                    });
                 });
             });
             updateBidTotal();
