@@ -4,10 +4,28 @@ function createScopedKey(prefix, key) {
     return prefix ? `${prefix}:${key}` : key;
 }
 
+function isLocalStorageUsable() {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+        return false;
+    }
+
+    try {
+        const testKey = '__ce_storage_test__';
+        window.localStorage.setItem(testKey, '1');
+        window.localStorage.removeItem(testKey);
+        return true;
+    } catch (error) {
+        console.warn('localStorage is not accessible, falling back to in-memory storage.', error);
+        return false;
+    }
+}
+
 export function createStorageService({ prefix = 'ce' } = {}) {
     const availableDrivers = [];
-    const persistenceAllowed = typeof window !== 'undefined' && window?.__CE_ALLOW_PERSISTENCE === true;
-    if (persistenceAllowed && typeof window.localStorage !== 'undefined') {
+    const persistencePreference = typeof window !== 'undefined' ? window?.__CE_ALLOW_PERSISTENCE : undefined;
+    const persistenceAllowed = persistencePreference !== false && isLocalStorageUsable();
+
+    if (persistenceAllowed) {
         availableDrivers.push(window.localStorage);
     }
 
