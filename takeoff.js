@@ -58,8 +58,7 @@ export class TakeoffManager {
             sortDir: 'asc',
             currentDrawingId: null,
             zoom: 1,
-            isFullscreen: false,
-            toolbarLocation: 'workspace'
+            isFullscreen: false
         };
 
         this.elements = {};
@@ -95,8 +94,6 @@ export class TakeoffManager {
             drawingTableBody: byId('takeoffDrawingTableBody'),
             drawingEmpty: byId('takeoffDrawingEmpty'),
             planContainer: byId('takeoffPlanContainer'),
-            toolbarMount: byId('takeoffToolbarMount'),
-            toolbar: byId('takeoffToolbar'),
             planInner: byId('takeoffPlanInner'),
             planPreview: byId('takeoffPlanPreview'),
             canvas: byId('takeoffCanvas'),
@@ -118,34 +115,9 @@ export class TakeoffManager {
             pdfModalOverlay: byId('takeoffPdfModalOverlay'),
             pdfModalClose: byId('takeoffPdfModalClose'),
             pdfFrame: byId('takeoffPdfFrame'),
-            pdfModalTools: byId('takeoffPdfModalTools'),
             fullscreenBtn: byId('takeoffFullscreenBtn'),
             fullScreenToggle: byId('takeoffFullScreenToggle')
         };
-    }
-
-    moveToolbarToModal() {
-        const { toolbar, pdfModalTools } = this.elements;
-        if (!toolbar || !pdfModalTools) {
-            return;
-        }
-        if (pdfModalTools.contains(toolbar)) {
-            return;
-        }
-        pdfModalTools.classList.remove('is-hidden');
-        pdfModalTools.appendChild(toolbar);
-        this.state.toolbarLocation = 'modal';
-    }
-
-    restoreToolbarToWorkspace() {
-        const { toolbar, toolbarMount, pdfModalTools } = this.elements;
-        if (toolbar && toolbarMount && !toolbarMount.contains(toolbar)) {
-            toolbarMount.appendChild(toolbar);
-        }
-        if (pdfModalTools) {
-            pdfModalTools.classList.add('is-hidden');
-        }
-        this.state.toolbarLocation = 'workspace';
     }
 
     bindEvents() {
@@ -667,9 +639,8 @@ export class TakeoffManager {
             this.services.toast('Select a PDF drawing first.', 'warning');
             return;
         }
-        const { pdfModal, pdfFrame, pdfModalTools } = this.elements;
-        if (!pdfModal || !pdfFrame || !pdfModalTools) return;
-        this.moveToolbarToModal();
+        const { pdfModal, pdfFrame } = this.elements;
+        if (!pdfModal || !pdfFrame) return;
         const page = drawing.currentPage || 1;
         pdfFrame.src = `${drawing.objectUrl}#page=${page}`;
         pdfModal.setAttribute('aria-hidden', 'false');
@@ -677,7 +648,6 @@ export class TakeoffManager {
     }
 
     closePdfViewer({ silent = false } = {}) {
-        this.restoreToolbarToWorkspace();
         const { pdfModal, pdfFrame } = this.elements;
         if (!pdfModal || !pdfFrame) return;
         pdfModal.setAttribute('aria-hidden', 'true');
