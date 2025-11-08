@@ -410,11 +410,12 @@
                                 </div>
                             </div>
                             <div id="takeoffPlanContainer" class="takeoff-plan is-hidden">
-                                <div class="takeoff-plan-toolbar" id="takeoffToolbar">
-                                    <div class="takeoff-toolbar-group">
-                                        <div class="form-group">
-                                            <label class="form-label" for="takeoffModeSelect">Mode</label>
-                                            <select id="takeoffModeSelect" class="form-select">
+                                <div id="takeoffToolbarMount">
+                                    <div class="takeoff-plan-toolbar" id="takeoffToolbar">
+                                        <div class="takeoff-toolbar-group">
+                                            <div class="form-group">
+                                                <label class="form-label" for="takeoffModeSelect">Mode</label>
+                                                <select id="takeoffModeSelect" class="form-select">
                                                 <option value="length">Length</option>
                                                 <option value="area">Area</option>
                                                 <option value="count">Count</option>
@@ -466,6 +467,7 @@
                                             <input type="text" id="takeoffCountLabel" class="form-input" placeholder="Custom label">
                                         </label>
                                     </div>
+                                </div>
                                 </div>
                                 <div class="takeoff-plan-stage" id="takeoffPlanStage" tabindex="0">
                                     <div class="takeoff-plan-inner" id="takeoffPlanInner">
@@ -734,6 +736,7 @@
                 <h2 id="takeoffPdfModalTitle">PDF Reader</h2>
                 <button type="button" class="btn btn-ghost takeoff-pdf-modal-close" id="takeoffPdfModalClose" aria-label="Close PDF reader">×</button>
             </div>
+            <div class="takeoff-pdf-modal-tools is-hidden" id="takeoffPdfModalTools" aria-label="Takeoff tools"></div>
             <iframe id="takeoffPdfFrame" title="PDF reader" loading="lazy"></iframe>
             <p class="takeoff-pdf-modal-hint">Use the built-in PDF controls for search, download, zoom, and printing.</p>
         </div>

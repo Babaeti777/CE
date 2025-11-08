@@ -1,5 +1,4 @@
 import { LifecycleManager } from './services/lifecycle-manager.js';
-import { Validator, ValidationError } from './utils/validator.js';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
 if (pdfjsLib?.GlobalWorkerOptions) {
@@ -59,21 +58,12 @@ export class TakeoffManager {
             sortDir: 'asc',
             currentDrawingId: null,
             zoom: 1,
-            isFullscreen: false,
-            mode: 'length',
-            points: [],
-            previewPoint: null,
-            countSettings: {
-                color: '#ef4444',
-                shape: 'circle',
-                label: ''
-            }
+            isFullscreen: false
         };
 
         this.elements = {};
         this.lifecycle = new LifecycleManager();
         this.previewToken = 0;
-        this.canvasContext = null;
     }
 
     init() {
@@ -85,11 +75,6 @@ export class TakeoffManager {
         this.updateZoomIndicator();
         this.updatePdfControls();
         this.updateFullscreenButton();
-        this.updateMode(this.state.mode);
-        this.syncCountControls();
-        this.updateCountToolbarVisibility();
-        this.renderMeasurementTable();
-        this.updateQuickShapeInputs();
         this.updateStatus('Upload plan files to start measuring.');
     }
 
@@ -109,12 +94,9 @@ export class TakeoffManager {
             drawingTableBody: byId('takeoffDrawingTableBody'),
             drawingEmpty: byId('takeoffDrawingEmpty'),
             planContainer: byId('takeoffPlanContainer'),
-            planStage: byId('takeoffPlanStage'),
             planInner: byId('takeoffPlanInner'),
             planPreview: byId('takeoffPlanPreview'),
             canvas: byId('takeoffCanvas'),
-            modeSelect: byId('takeoffModeSelect'),
-            scaleInput: byId('takeoffScaleInput'),
             zoomOutBtn: byId('takeoffZoomOutBtn'),
             zoomInBtn: byId('takeoffZoomInBtn'),
             zoomResetBtn: byId('takeoffZoomResetBtn'),
@@ -134,27 +116,8 @@ export class TakeoffManager {
             pdfModalClose: byId('takeoffPdfModalClose'),
             pdfFrame: byId('takeoffPdfFrame'),
             fullscreenBtn: byId('takeoffFullscreenBtn'),
-            fullScreenToggle: byId('takeoffFullScreenToggle'),
-            measurementTableBody: byId('takeoffMeasurementTableBody'),
-            measurementEmpty: byId('takeoffMeasurementEmpty'),
-            clearBtn: byId('takeoffClearBtn'),
-            exportBtn: byId('takeoffExportCsvBtn'),
-            pushBtn: byId('takeoffPushBtn'),
-            countToolbar: byId('takeoffCountToolbar'),
-            countColorInput: byId('takeoffCountColor'),
-            countShapeSelect: byId('takeoffCountShape'),
-            countLabelInput: byId('takeoffCountLabel'),
-            quickShapeSelect: byId('takeoffShapeSelect'),
-            quickDim1: byId('takeoffDim1'),
-            quickDim2: byId('takeoffDim2'),
-            quickDim2Group: byId('takeoffDim2Group'),
-            quickBtn: byId('takeoffQuickCalcBtn'),
-            quickResult: byId('takeoffQuickResult')
+            fullScreenToggle: byId('takeoffFullScreenToggle')
         };
-
-        if (this.elements.canvas) {
-            this.canvasContext = this.elements.canvas.getContext('2d');
-        }
     }
 
     bindEvents() {
@@ -176,19 +139,7 @@ export class TakeoffManager {
             pdfModalOverlay,
             pdfModalClose,
             fullscreenBtn,
-            fullScreenToggle,
-            modeSelect,
-            scaleInput,
-            canvas,
-            measurementTableBody,
-            clearBtn,
-            exportBtn,
-            pushBtn,
-            countColorInput,
-            countShapeSelect,
-            countLabelInput,
-            quickShapeSelect,
-            quickBtn
+            fullScreenToggle
         } = this.elements;
 
         this.lifecycle.addEventListener(drawingInput, 'change', (event) => this.handleDrawingUpload(event));
@@ -237,32 +188,6 @@ export class TakeoffManager {
                 this.setFullscreen(false);
             }
         });
-
-        this.lifecycle.addEventListener(modeSelect, 'change', (event) => this.updateMode(event.target.value));
-        this.lifecycle.addEventListener(scaleInput, 'change', (event) => this.updateScale(event.target.value));
-        this.lifecycle.addEventListener(scaleInput, 'blur', (event) => this.updateScale(event.target.value));
-
-        this.lifecycle.addEventListener(canvas, 'click', (event) => this.handleCanvasClick(event));
-        this.lifecycle.addEventListener(canvas, 'dblclick', (event) => {
-            event.preventDefault();
-            this.handleCanvasDoubleClick();
-        });
-        this.lifecycle.addEventListener(canvas, 'mousemove', (event) => this.handleCanvasMove(event));
-        this.lifecycle.addEventListener(canvas, 'mouseleave', () => this.handleCanvasLeave());
-
-        this.lifecycle.addEventListener(measurementTableBody, 'click', (event) => this.handleMeasurementTableClick(event));
-        this.lifecycle.addEventListener(measurementTableBody, 'input', (event) => this.handleMeasurementTableInput(event));
-
-        this.lifecycle.addEventListener(clearBtn, 'click', () => this.clearMeasurements());
-        this.lifecycle.addEventListener(exportBtn, 'click', () => this.exportMeasurements());
-        this.lifecycle.addEventListener(pushBtn, 'click', () => this.pushToEstimate());
-
-        this.lifecycle.addEventListener(countColorInput, 'input', (event) => this.updateCountSetting('color', event.target.value));
-        this.lifecycle.addEventListener(countShapeSelect, 'change', (event) => this.updateCountSetting('shape', event.target.value));
-        this.lifecycle.addEventListener(countLabelInput, 'input', (event) => this.updateCountSetting('label', event.target.value));
-
-        this.lifecycle.addEventListener(quickShapeSelect, 'change', () => this.updateQuickShapeInputs());
-        this.lifecycle.addEventListener(quickBtn, 'click', () => this.calculateQuickArea());
     }
 
     cleanupDrawings() {
@@ -328,10 +253,7 @@ export class TakeoffManager {
             createdAt: Date.now(),
             type: SUPPORTED_IMAGE_TYPES.has(file.type) ? 'image' : 'pdf',
             objectUrl,
-            file,
-            scale: 1,
-            measurements: [],
-            counters: { length: 1, area: 1, count: 1, diameter: 1 }
+            file
         };
 
         if (base.type === 'image') {
@@ -490,8 +412,6 @@ export class TakeoffManager {
         }
         this.state.currentDrawingId = id;
         this.state.zoom = 1;
-        this.state.points = [];
-        this.state.previewPoint = null;
         this.renderDrawingList();
         this.updateZoomIndicator();
         this.updateActiveDrawingDisplay();
@@ -511,25 +431,8 @@ export class TakeoffManager {
         if (activeMeta) {
             activeMeta.textContent = formatMeta(drawing);
         }
-        if (this.elements.scaleInput) {
-            this.elements.scaleInput.value = drawing ? String(drawing.scale || 1) : '1';
-        }
-        if (!drawing) {
-            this.state.points = [];
-            this.state.previewPoint = null;
-            this.renderMeasurementTable();
-            this.updateCountToolbarVisibility();
-            this.syncCountControls();
-            this.drawMeasurements();
-            await this.updatePlanPreview(null);
-            this.updatePdfControls();
-            return;
-        }
         await this.updatePlanPreview(drawing);
         this.updatePdfControls(drawing);
-        this.renderMeasurementTable();
-        this.updateCountToolbarVisibility();
-        this.syncCountControls();
     }
 
     async updatePlanPreview(drawing) {
@@ -570,7 +473,6 @@ export class TakeoffManager {
                 drawing.naturalWidth = planPreview.naturalWidth;
                 drawing.naturalHeight = planPreview.naturalHeight;
                 this.sizeCanvasToDrawing(drawing);
-                this.drawMeasurements();
                 resolve();
             };
 
@@ -609,10 +511,10 @@ export class TakeoffManager {
             drawing.previewUrl = dataUrl;
             drawing.currentPage = pageNumber;
             planPreview.src = dataUrl;
-            drawing.naturalWidth = viewport.width;
-            drawing.naturalHeight = viewport.height;
-            this.sizeCanvasToDrawing(drawing);
-            this.drawMeasurements();
+            this.sizeCanvasToDrawing({
+                naturalWidth: viewport.width,
+                naturalHeight: viewport.height
+            });
             if (planInner) {
                 planInner.style.transform = `scale(${this.state.zoom})`;
             }
@@ -636,7 +538,6 @@ export class TakeoffManager {
             planInner.style.width = `${width}px`;
             planInner.style.height = `${height}px`;
         }
-        this.drawMeasurements();
     }
 
     updatePdfControls(drawing = this.getActiveDrawing()) {
@@ -662,657 +563,6 @@ export class TakeoffManager {
                 btn.classList.toggle('is-hidden', !isPdf && btn === openPdfBtn);
             }
         });
-    }
-
-    updateMode(mode) {
-        this.state.mode = mode || 'length';
-        if (this.elements.modeSelect && this.elements.modeSelect.value !== this.state.mode) {
-            this.elements.modeSelect.value = this.state.mode;
-        }
-        this.state.points = [];
-        this.state.previewPoint = null;
-        this.updateCountToolbarVisibility();
-        const drawing = this.getActiveDrawing();
-        if (drawing) {
-            const instructions = {
-                length: 'Click a start and end point to measure length.',
-                area: 'Click to add vertices, then double-click to finish the area.',
-                count: 'Click each item on the plan to add to the quantity.',
-                diameter: 'Click two points to measure the diameter.'
-            }[this.state.mode] || 'Click on the plan to record measurements.';
-            this.updateStatus(instructions);
-        }
-        this.drawMeasurements();
-    }
-
-    updateScale(value) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing) {
-            return;
-        }
-        try {
-            const parsed = Validator.number(value, { min: 0.0001, fieldName: 'Scale' });
-            drawing.scale = parsed;
-            if (this.elements.scaleInput && this.elements.scaleInput.value !== String(parsed)) {
-                this.elements.scaleInput.value = String(parsed);
-            }
-            this.renderMeasurementTable();
-            this.drawMeasurements();
-        } catch (error) {
-            if (error instanceof ValidationError) {
-                this.services.toast(error.message, 'warning');
-            }
-        }
-    }
-
-    updateCountSetting(key, value) {
-        if (!(key in this.state.countSettings)) return;
-        this.state.countSettings[key] = value;
-    }
-
-    syncCountControls() {
-        const { countColorInput, countShapeSelect, countLabelInput } = this.elements;
-        if (countColorInput) {
-            countColorInput.value = this.state.countSettings.color;
-        }
-        if (countShapeSelect) {
-            countShapeSelect.value = this.state.countSettings.shape;
-        }
-        if (countLabelInput && countLabelInput.value !== this.state.countSettings.label) {
-            countLabelInput.value = this.state.countSettings.label;
-        }
-    }
-
-    updateCountToolbarVisibility() {
-        const { countToolbar } = this.elements;
-        if (!countToolbar) return;
-        countToolbar.classList.toggle('is-hidden', this.state.mode !== 'count');
-    }
-
-    getCanvasPoint(event) {
-        const { canvas } = this.elements;
-        if (!canvas) return null;
-        const rect = canvas.getBoundingClientRect();
-        if (!rect.width || !rect.height) return null;
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        return {
-            x: (event.clientX - rect.left) * scaleX,
-            y: (event.clientY - rect.top) * scaleY
-        };
-    }
-
-    async handleCanvasClick(event) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing) {
-            this.services.toast('Select a drawing before measuring.', 'warning');
-            return;
-        }
-        if (!this.elements.canvas) return;
-        const point = this.getCanvasPoint(event);
-        if (!point) return;
-
-        if (this.state.mode === 'count') {
-            const baseLabel = (this.state.countSettings.label || '').trim();
-            const defaultLabel = baseLabel || `Count ${drawing.counters.count}`;
-            const label = await this.promptForMeasurementLabel(defaultLabel);
-            drawing.counters.count += 1;
-            const measurement = {
-                id: createId('measurement'),
-                type: 'count',
-                label,
-                points: [point],
-                count: 1,
-                style: {
-                    color: this.state.countSettings.color,
-                    shape: this.state.countSettings.shape
-                }
-            };
-            drawing.measurements.push(measurement);
-            this.renderMeasurementTable();
-            this.drawMeasurements();
-            this.updateStatus(`${measurement.label} saved.`);
-            return;
-        }
-
-        this.state.points.push(point);
-
-        if (['length', 'diameter'].includes(this.state.mode) && this.state.points.length === 2) {
-            await this.finalizeLengthMeasurement(this.state.mode);
-        } else if (this.state.mode === 'area') {
-            this.updateStatus('Double-click to finish the area measurement.');
-            this.drawMeasurements();
-        } else if (['length', 'diameter'].includes(this.state.mode)) {
-            this.updateStatus('Select an end point to complete the measurement.');
-            this.drawMeasurements();
-        }
-    }
-
-    handleCanvasMove(event) {
-        if (!this.state.points.length) return;
-        const point = this.getCanvasPoint(event);
-        if (!point) return;
-        this.state.previewPoint = point;
-        this.drawMeasurements();
-    }
-
-    handleCanvasLeave() {
-        this.state.previewPoint = null;
-        this.drawMeasurements();
-    }
-
-    async handleCanvasDoubleClick() {
-        if (this.state.mode !== 'area' || this.state.points.length < 3) {
-            return;
-        }
-        await this.finalizeAreaMeasurement();
-    }
-
-    async finalizeLengthMeasurement(type) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing || this.state.points.length < 2) {
-            return;
-        }
-        const [start, end] = this.state.points;
-        const pixels = Math.hypot(end.x - start.x, end.y - start.y);
-        const defaultLabel = `${type === 'diameter' ? 'Diameter' : 'Length'} ${drawing.counters[type]++}`;
-        const label = await this.promptForMeasurementLabel(defaultLabel);
-        const measurement = {
-            id: createId('measurement'),
-            type,
-            label,
-            points: [start, end],
-            pixels
-        };
-        drawing.measurements.push(measurement);
-        this.state.points = [];
-        this.state.previewPoint = null;
-        this.renderMeasurementTable();
-        this.drawMeasurements();
-        const value = this.getMeasurementValue(measurement, drawing);
-        this.updateStatus(`${measurement.label} saved: ${value.toFixed(2)} ${this.getMeasurementUnits(measurement)}.`);
-    }
-
-    async finalizeAreaMeasurement() {
-        const drawing = this.getActiveDrawing();
-        if (!drawing || this.state.points.length < 3) {
-            return;
-        }
-        const points = [...this.state.points];
-        const defaultLabel = `Area ${drawing.counters.area++}`;
-        const label = await this.promptForMeasurementLabel(defaultLabel);
-        const measurement = {
-            id: createId('measurement'),
-            type: 'area',
-            label,
-            points,
-            pixelArea: this.calculatePolygonArea(points),
-            pixelPerimeter: this.calculatePolygonPerimeter(points)
-        };
-        drawing.measurements.push(measurement);
-        this.state.points = [];
-        this.state.previewPoint = null;
-        this.renderMeasurementTable();
-        this.drawMeasurements();
-        const area = this.getMeasurementValue(measurement, drawing);
-        this.updateStatus(`${measurement.label} saved: ${area.toFixed(2)} ${this.getMeasurementUnits(measurement)}.`);
-    }
-
-    drawMeasurements() {
-        const { canvas } = this.elements;
-        if (!canvas || !this.canvasContext) return;
-        const drawing = this.getActiveDrawing();
-        const ctx = this.canvasContext;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (!drawing) {
-            return;
-        }
-
-        drawing.measurements.forEach((measurement) => this.drawMeasurement(measurement, drawing));
-
-        if (this.state.points.length) {
-            ctx.save();
-            ctx.strokeStyle = '#f97316';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([6, 4]);
-            ctx.beginPath();
-            ctx.moveTo(this.state.points[0].x, this.state.points[0].y);
-            for (let i = 1; i < this.state.points.length; i += 1) {
-                ctx.lineTo(this.state.points[i].x, this.state.points[i].y);
-            }
-            if (this.state.previewPoint) {
-                ctx.lineTo(this.state.previewPoint.x, this.state.previewPoint.y);
-            }
-            if (this.state.mode === 'area') {
-                ctx.closePath();
-            }
-            ctx.stroke();
-            ctx.setLineDash([]);
-            this.state.points.forEach((point) => this.drawHandle(point));
-            if (this.state.previewPoint) {
-                this.drawHandle(this.state.previewPoint, true);
-            }
-            ctx.restore();
-        }
-    }
-
-    drawMeasurement(measurement, drawing) {
-        if (!this.canvasContext) return;
-        const ctx = this.canvasContext;
-        ctx.save();
-        if (measurement.type === 'length' || measurement.type === 'diameter') {
-            ctx.strokeStyle = measurement.type === 'diameter' ? '#0ea5e9' : '#6366f1';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(measurement.points[0].x, measurement.points[0].y);
-            ctx.lineTo(measurement.points[1].x, measurement.points[1].y);
-            ctx.stroke();
-            measurement.points.forEach((point) => this.drawHandle(point));
-            const midX = (measurement.points[0].x + measurement.points[1].x) / 2;
-            const midY = (measurement.points[0].y + measurement.points[1].y) / 2;
-            const label = `${this.getMeasurementValue(measurement, drawing).toFixed(2)} ${this.getMeasurementUnits(measurement)}`;
-            this.drawLabel(midX, midY, label);
-        } else if (measurement.type === 'area') {
-            ctx.strokeStyle = '#6366f1';
-            ctx.fillStyle = 'rgba(99, 102, 241, 0.2)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(measurement.points[0].x, measurement.points[0].y);
-            for (let i = 1; i < measurement.points.length; i += 1) {
-                ctx.lineTo(measurement.points[i].x, measurement.points[i].y);
-            }
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            measurement.points.forEach((point) => this.drawHandle(point));
-            const centroid = this.calculateCentroid(measurement.points);
-            const label = `${this.getMeasurementValue(measurement, drawing).toFixed(2)} ${this.getMeasurementUnits(measurement)}`;
-            this.drawLabel(centroid.x, centroid.y, label);
-        } else if (measurement.type === 'count') {
-            const point = measurement.points[0];
-            const style = this.getCountStyle(measurement);
-            this.drawCountMarker(point, style);
-            const background = this.hexToRgba(style.color, 0.9);
-            const textColor = this.getReadableTextColor(style.color);
-            this.drawLabel(point.x, point.y, measurement.label, { backgroundColor: background, textColor });
-        }
-        ctx.restore();
-    }
-
-    drawHandle(point, preview = false) {
-        if (!this.canvasContext) return;
-        this.canvasContext.save();
-        this.canvasContext.fillStyle = preview ? '#f97316' : '#1f2937';
-        this.canvasContext.beginPath();
-        this.canvasContext.arc(point.x, point.y, preview ? 5 : 4, 0, Math.PI * 2);
-        this.canvasContext.fill();
-        this.canvasContext.restore();
-    }
-
-    drawLabel(x, y, text, options = {}) {
-        if (!this.canvasContext || !this.elements.canvas) return;
-        const ctx = this.canvasContext;
-        const backgroundColor = options.backgroundColor || 'rgba(15, 23, 42, 0.85)';
-        const textColor = options.textColor || '#ffffff';
-        ctx.save();
-        ctx.font = '12px Inter, sans-serif';
-        ctx.textBaseline = 'top';
-        const padding = 4;
-        const metrics = ctx.measureText(text);
-        const textWidth = metrics.width;
-        const textHeight = (metrics.actualBoundingBoxAscent || 9) + (metrics.actualBoundingBoxDescent || 3);
-        let rectX = x + 8;
-        let rectY = y - textHeight - padding;
-        rectX = Math.min(Math.max(rectX, 0), this.elements.canvas.width - textWidth - padding * 2);
-        rectY = Math.min(Math.max(rectY, 0), this.elements.canvas.height - textHeight - padding);
-        rectY = Math.max(rectY, 0);
-        ctx.fillStyle = backgroundColor;
-        ctx.fillRect(rectX, rectY, textWidth + padding * 2, textHeight + padding);
-        ctx.fillStyle = textColor;
-        ctx.fillText(text, rectX + padding, rectY + padding / 2);
-        ctx.restore();
-    }
-
-    getCountStyle(measurement) {
-        return {
-            color: measurement?.style?.color || this.state.countSettings.color,
-            shape: measurement?.style?.shape || this.state.countSettings.shape
-        };
-    }
-
-    drawCountMarker(point, style) {
-        if (!this.canvasContext) return;
-        const size = 14;
-        const half = size / 2;
-        const ctx = this.canvasContext;
-        ctx.save();
-        ctx.fillStyle = style.color || '#ef4444';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        switch (style.shape) {
-            case 'square':
-                ctx.rect(point.x - half, point.y - half, size, size);
-                break;
-            case 'diamond':
-                ctx.moveTo(point.x, point.y - half);
-                ctx.lineTo(point.x + half, point.y);
-                ctx.lineTo(point.x, point.y + half);
-                ctx.lineTo(point.x - half, point.y);
-                ctx.closePath();
-                break;
-            case 'triangle':
-                ctx.moveTo(point.x, point.y - half);
-                ctx.lineTo(point.x + half, point.y + half);
-                ctx.lineTo(point.x - half, point.y + half);
-                ctx.closePath();
-                break;
-            default:
-                ctx.arc(point.x, point.y, size / 2.2, 0, Math.PI * 2);
-        }
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    hexToRgba(hex, alpha = 1) {
-        if (typeof hex !== 'string') {
-            return `rgba(15, 23, 42, ${alpha})`;
-        }
-        let normalized = hex.replace('#', '').trim();
-        if (normalized.length === 3) {
-            normalized = normalized.split('').map((char) => char + char).join('');
-        }
-        if (normalized.length !== 6 || /[^0-9a-f]/i.test(normalized)) {
-            return `rgba(15, 23, 42, ${alpha})`;
-        }
-        const int = Number.parseInt(normalized, 16);
-        if (Number.isNaN(int)) {
-            return `rgba(15, 23, 42, ${alpha})`;
-        }
-        const r = (int >> 16) & 255;
-        const g = (int >> 8) & 255;
-        const b = int & 255;
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    getReadableTextColor(hex) {
-        if (typeof hex !== 'string') {
-            return '#ffffff';
-        }
-        let normalized = hex.replace('#', '').trim();
-        if (normalized.length === 3) {
-            normalized = normalized.split('').map((char) => char + char).join('');
-        }
-        if (normalized.length !== 6 || /[^0-9a-f]/i.test(normalized)) {
-            return '#ffffff';
-        }
-        const int = Number.parseInt(normalized, 16);
-        if (Number.isNaN(int)) {
-            return '#ffffff';
-        }
-        const r = (int >> 16) & 255;
-        const g = (int >> 8) & 255;
-        const b = int & 255;
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        return luminance > 0.6 ? '#0f172a' : '#ffffff';
-    }
-
-    calculateCentroid(points) {
-        let area = 0;
-        let cx = 0;
-        let cy = 0;
-        for (let i = 0; i < points.length; i += 1) {
-            const j = (i + 1) % points.length;
-            const cross = points[i].x * points[j].y - points[j].x * points[i].y;
-            area += cross;
-            cx += (points[i].x + points[j].x) * cross;
-            cy += (points[i].y + points[j].y) * cross;
-        }
-        area *= 0.5;
-        if (Math.abs(area) < 1e-5) {
-            const avgX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
-            const avgY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-            return { x: avgX, y: avgY };
-        }
-        return { x: cx / (6 * area), y: cy / (6 * area) };
-    }
-
-    calculatePolygonArea(points) {
-        let area = 0;
-        for (let i = 0; i < points.length; i += 1) {
-            const j = (i + 1) % points.length;
-            area += points[i].x * points[j].y - points[j].x * points[i].y;
-        }
-        return Math.abs(area) / 2;
-    }
-
-    calculatePolygonPerimeter(points) {
-        let perimeter = 0;
-        for (let i = 0; i < points.length; i += 1) {
-            const j = (i + 1) % points.length;
-            perimeter += Math.hypot(points[j].x - points[i].x, points[j].y - points[i].y);
-        }
-        return perimeter;
-    }
-
-    getMeasurementValue(measurement, drawing) {
-        const scale = drawing?.scale > 0 ? drawing.scale : 1;
-        if (measurement.type === 'length' || measurement.type === 'diameter') {
-            return measurement.pixels / scale;
-        }
-        if (measurement.type === 'area') {
-            return measurement.pixelArea / (scale * scale);
-        }
-        if (measurement.type === 'count') {
-            return measurement.count || 1;
-        }
-        return 0;
-    }
-
-    getMeasurementUnits(measurement) {
-        if (measurement.type === 'length' || measurement.type === 'diameter') {
-            return 'ft';
-        }
-        if (measurement.type === 'area') {
-            return 'sq ft';
-        }
-        if (measurement.type === 'count') {
-            return 'ea';
-        }
-        return '';
-    }
-
-    formatModeLabel(type) {
-        const labels = {
-            length: 'Length',
-            area: 'Area',
-            count: 'Count',
-            diameter: 'Diameter'
-        };
-        return labels[type] || 'Measurement';
-    }
-
-    getMeasurementDetails(measurement, drawing) {
-        if (measurement.type === 'area') {
-            const perimeter = measurement.pixelPerimeter / (drawing.scale > 0 ? drawing.scale : 1);
-            return `Perimeter: ${perimeter.toFixed(2)} ft`;
-        }
-        if (measurement.type === 'count') {
-            const style = this.getCountStyle(measurement);
-            return `Marker: ${style.shape}`;
-        }
-        return '';
-    }
-
-    renderMeasurementTable() {
-        const { measurementTableBody, measurementEmpty } = this.elements;
-        const drawing = this.getActiveDrawing();
-        if (!measurementTableBody || !measurementEmpty) return;
-        measurementTableBody.innerHTML = '';
-
-        const measurements = drawing?.measurements || [];
-        if (!measurements.length) {
-            measurementEmpty.classList.remove('is-hidden');
-            return;
-        }
-
-        measurementEmpty.classList.add('is-hidden');
-        measurements.forEach((measurement) => {
-            const row = document.createElement('tr');
-            row.dataset.id = measurement.id;
-            const quantity = this.getMeasurementValue(measurement, drawing).toFixed(2);
-            row.innerHTML = `
-                <td>
-                    <input type="text" class="form-input takeoff-input" data-field="label" value="${measurement.label || ''}">
-                </td>
-                <td>${this.formatModeLabel(measurement.type)}</td>
-                <td>${quantity}</td>
-                <td>${this.getMeasurementUnits(measurement)}</td>
-                <td>${this.getMeasurementDetails(measurement, drawing)}</td>
-                <td class="takeoff-actions">
-                    <button type="button" class="btn btn-ghost btn-sm" data-action="remove" aria-label="Remove measurement">Remove</button>
-                </td>
-            `;
-            measurementTableBody.appendChild(row);
-        });
-    }
-
-    handleMeasurementTableClick(event) {
-        const button = event.target.closest('[data-action="remove"]');
-        if (!button) return;
-        const row = button.closest('tr[data-id]');
-        if (!row) return;
-        this.removeMeasurement(row.dataset.id);
-    }
-
-    handleMeasurementTableInput(event) {
-        const field = event.target.dataset.field;
-        if (!field) return;
-        const row = event.target.closest('tr[data-id]');
-        if (!row) return;
-        const drawing = this.getActiveDrawing();
-        if (!drawing) return;
-        const measurement = drawing.measurements.find((item) => item.id === row.dataset.id);
-        if (!measurement) return;
-        measurement[field] = event.target.value;
-    }
-
-    removeMeasurement(id) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing) return;
-        const before = drawing.measurements.length;
-        drawing.measurements = drawing.measurements.filter((item) => item.id !== id);
-        if (drawing.measurements.length !== before) {
-            this.renderMeasurementTable();
-            this.drawMeasurements();
-            this.updateStatus('Measurement removed.');
-        }
-    }
-
-    clearMeasurements() {
-        const drawing = this.getActiveDrawing();
-        if (!drawing) return;
-        drawing.measurements = [];
-        drawing.counters = { length: 1, area: 1, count: 1, diameter: 1 };
-        this.state.points = [];
-        this.state.previewPoint = null;
-        this.renderMeasurementTable();
-        this.drawMeasurements();
-        this.updateStatus('All measurements cleared.');
-    }
-
-    exportMeasurements() {
-        const rows = this.buildExportRows();
-        if (!rows.length) {
-            this.services.toast('No takeoff data to export.', 'warning');
-            return;
-        }
-        const header = ['Drawing', 'Name', 'Mode', 'Quantity', 'Units', 'Details'];
-        const lines = [header.join(',')];
-        rows.forEach((row) => {
-            lines.push([
-                row.drawing,
-                row.label,
-                row.mode,
-                row.quantity,
-                row.unit,
-                row.details
-            ].map((value) => `"${String(value || '').replace(/"/g, '""')}"`).join(','));
-        });
-        const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'takeoff-measurements.csv';
-        link.click();
-        URL.revokeObjectURL(link.href);
-        this.services.toast('Takeoff CSV exported!', 'success');
-    }
-
-    buildExportRows() {
-        return this.state.drawings.flatMap((drawing) => {
-            return drawing.measurements.map((measurement) => ({
-                drawing: drawing.name,
-                label: measurement.label,
-                mode: this.formatModeLabel(measurement.type),
-                quantity: this.getMeasurementValue(measurement, drawing).toFixed(2),
-                unit: this.getMeasurementUnits(measurement),
-                details: this.getMeasurementDetails(measurement, drawing)
-            }));
-        });
-    }
-
-    pushToEstimate() {
-        const rows = this.buildExportRows();
-        if (!rows.length) {
-            this.services.toast('No takeoff data to send to the estimate.', 'warning');
-            return;
-        }
-        this.services.estimate?.push?.(rows);
-        this.services.toast('Measurements sent to the estimate.', 'success');
-    }
-
-    async promptForMeasurementLabel(defaultLabel) {
-        if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
-            return defaultLabel;
-        }
-        const result = window.prompt('Measurement name', defaultLabel);
-        const value = (result || '').trim();
-        return value || defaultLabel;
-    }
-
-    updateQuickShapeInputs() {
-        const shape = this.elements.quickShapeSelect?.value || 'rectangle';
-        if (!this.elements.quickDim1 || !this.elements.quickDim2 || !this.elements.quickDim2Group) return;
-        if (shape === 'circle') {
-            this.elements.quickDim1.placeholder = 'Radius';
-            this.elements.quickDim2Group.style.display = 'none';
-        } else {
-            this.elements.quickDim2Group.style.display = 'block';
-            if (shape === 'triangle') {
-                this.elements.quickDim1.placeholder = 'Base';
-                this.elements.quickDim2.placeholder = 'Height';
-            } else {
-                this.elements.quickDim1.placeholder = 'Length';
-                this.elements.quickDim2.placeholder = 'Width';
-            }
-        }
-    }
-
-    calculateQuickArea() {
-        if (!this.elements.quickResult || !this.elements.quickDim1) return;
-        const shape = this.elements.quickShapeSelect?.value || 'rectangle';
-        const dim1 = parseFloat(this.elements.quickDim1.value || '0');
-        const dim2 = parseFloat(this.elements.quickDim2?.value || '0');
-        let area = 0;
-        if (shape === 'circle') {
-            area = Math.PI * (dim1 ** 2);
-        } else if (shape === 'triangle') {
-            area = 0.5 * dim1 * dim2;
-        } else {
-            area = dim1 * dim2;
-        }
-        this.elements.quickResult.textContent = `Area: ${Number.isFinite(area) ? area.toFixed(2) : '0.00'} sq ft`;
     }
 
     updateStatus(message) {
