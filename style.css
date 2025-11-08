@@ -826,6 +826,18 @@ textarea.form-input:focus {
     border-bottom: 1px solid var(--border);
 }
 
+.takeoff-pdf-modal-tools {
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-elevated);
+    overflow-x: auto;
+}
+
+.takeoff-pdf-modal-tools .takeoff-plan-toolbar {
+    width: max-content;
+    margin: 0 auto;
+}
+
 .takeoff-pdf-modal-window iframe {
     flex: 1;
     border: none;
