@@ -51,6 +51,8 @@ export class TakeoffManager {
             storage: storageService || null
         };
 
+        this.lifecycle = new LifecycleManager();
+        this.elements = {};
         this.state = {
             drawings: [],
             filter: '',
@@ -93,6 +95,11 @@ export class TakeoffManager {
         this.lifecycle?.cleanup?.();
         this.cleanupDrawings();
         this.closePdfViewer({ silent: true });
+    }
+
+    destroy() {
+        this.lifecycle?.cleanup?.();
+        this.cleanupDrawings();
     }
 
     cacheDom() {
@@ -198,7 +205,31 @@ export class TakeoffManager {
             if (event.key === 'Escape' && this.state.isFullscreen) {
                 this.setFullscreen(false);
             }
+            if (valueA === valueB) return 0;
+            return valueA > valueB ? dir : -dir;
         });
+
+        if (this.elements.drawingTableBody) {
+            this.elements.drawingTableBody.innerHTML = sorted.map((drawing) => {
+                const isActive = drawing.id === activeDrawingId;
+                return `
+                    <tr data-id="${drawing.id}" class="${isActive ? 'is-active' : ''}">
+                        <td>${escapeHtml(drawing.name)}</td>
+                        <td>${escapeHtml(drawing.trade || '—')}</td>
+                        <td>${escapeHtml(drawing.floor || '—')}</td>
+                        <td>${escapeHtml(drawing.page || '—')}</td>
+                        <td class="text-right">
+                            <button type="button" class="btn btn-ghost btn-sm" data-action="activate">${isActive ? 'Active' : 'Open'}</button>
+                            <button type="button" class="btn btn-ghost btn-sm" data-action="remove">Remove</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        if (this.elements.drawingEmpty) {
+            this.elements.drawingEmpty.classList.toggle('is-hidden', sorted.length > 0);
+        }
     }
 
     cleanupDrawings() {
@@ -382,6 +413,7 @@ export class TakeoffManager {
         if (row) {
             this.selectDrawing(row.dataset.id);
         }
+        this.drawMeasurements();
     }
 
     handleDrawingTableInput(event) {
@@ -395,6 +427,8 @@ export class TakeoffManager {
         if (field === 'trade' || field === 'floor' || field === 'page') {
             this.updateActiveDrawingDisplay();
         }
+        this.state.previewPoint = point || null;
+        this.drawMeasurements();
     }
 
     removeDrawing(id) {
