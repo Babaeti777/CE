@@ -61,6 +61,10 @@ export class TakeoffManager {
             isFullscreen: false
         };
 
+        this.measurements = new Map();
+        this.labelCounters = new Map();
+        this.previewToken = 0;
+        this.pointerSession = null;
         this.elements = {};
         this.lifecycle = new LifecycleManager();
         this.previewToken = 0;
@@ -76,6 +80,13 @@ export class TakeoffManager {
         this.updatePdfControls();
         this.updateFullscreenButton();
         this.updateStatus('Upload plan files to start measuring.');
+        window.addEventListener('resize', this.handlers.windowResize);
+    }
+
+    destroy() {
+        window.removeEventListener('resize', this.handlers.windowResize);
+        this.cleanupDrawings();
+        this.closePdfModal();
     }
 
     destroy() {
@@ -704,3 +715,4 @@ export class TakeoffManager {
         }
     }
 }
+
