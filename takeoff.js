@@ -20,13 +20,12 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.1;
 
-function createId(prefix = 'drawing') {
-    return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
-}
-
-function createId(prefix = 'drawing') {
-    return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
-}
+const MODE_LABELS = {
+    length: 'Length',
+    area: 'Area',
+    count: 'Count',
+    diameter: 'Diameter'
+};
 
 function createId(prefix = 'drawing') {
     return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -308,9 +307,6 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(drawingTableBody, 'input', (event) => this.handleDrawingTableInput(event));
         this.lifecycle.addEventListener(measurementTableBody, 'click', (event) => this.handleMeasurementTableClick(event));
 
-        this.lifecycle.addEventListener(modeSelect, 'change', (event) => this.updateMode(event.target.value));
-        this.lifecycle.addEventListener(scaleInput, 'change', (event) => this.handleScaleChange(event));
-
         this.lifecycle.addEventListener(zoomOutBtn, 'click', () => this.stepZoom(-ZOOM_STEP));
         this.lifecycle.addEventListener(zoomInBtn, 'click', () => this.stepZoom(ZOOM_STEP));
         this.lifecycle.addEventListener(zoomResetBtn, 'click', () => this.resetZoom());
@@ -374,44 +370,6 @@ export class TakeoffManager {
         });
     }
 
-    updateMode(mode) {
-        const allowed = new Set(Object.keys(MODE_LABELS));
-        const nextMode = allowed.has(mode) ? mode : 'length';
-        const changed = this.state.mode !== nextMode;
-        this.state.mode = nextMode;
-        const { modeSelect, planStage } = this.elements;
-        if (modeSelect && modeSelect.value !== nextMode) {
-            modeSelect.value = nextMode;
-        }
-        if (planStage) {
-            planStage.dataset.mode = nextMode;
-        }
-        this.updateCountToolbarVisibility();
-        if (changed) {
-            this.resetDraft();
-            this.updateStatus(`${MODE_LABELS[nextMode]} mode active.`);
-        }
-        this.drawMeasurements();
-    }
-
-    updateCountToolbarVisibility() {
-        const { countToolbar } = this.elements;
-        if (!countToolbar) {
-            return;
-        }
-        countToolbar.classList.toggle('is-hidden', this.state.mode !== 'count');
-    }
-
-    updateCountSetting(key, value) {
-        if (!(key in this.state.countSettings)) {
-            return;
-        }
-        this.state.countSettings[key] = value;
-        if (key !== 'label') {
-            this.drawMeasurements();
-        }
-    }
-
     createEmptyCounters() {
         return { length: 0, area: 0, count: 0, diameter: 0 };
     }
@@ -451,17 +409,6 @@ export class TakeoffManager {
         return `${MODE_LABELS[mode] || 'Measurement'} ${counters[mode]}`;
     }
 
-    getDrawingScale(drawing = this.getActiveDrawing()) {
-        if (!drawing) {
-            return this.state.scale || 1;
-        }
-        const value = Number(drawing.scale);
-        if (Number.isFinite(value) && value > 0) {
-            return value;
-        }
-        return this.state.scale || 1;
-    }
-
     updateScaleControls(drawing = this.getActiveDrawing()) {
         const { scaleInput } = this.elements;
         if (!scaleInput) {
@@ -475,24 +422,6 @@ export class TakeoffManager {
         scaleInput.disabled = false;
         const scale = this.getDrawingScale(drawing);
         scaleInput.value = Number.isFinite(scale) ? scale : '';
-    }
-
-    handleScaleChange(event) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing) {
-            event.target.value = '';
-            this.services.toast('Select a drawing before setting the scale.', 'warning');
-            return;
-        }
-        const value = Number(event?.target?.value);
-        if (!Number.isFinite(value) || value <= 0) {
-            this.services.toast('Enter a valid scale in pixels per foot.', 'error');
-            this.updateScaleControls(drawing);
-            return;
-        }
-        drawing.scale = value;
-        this.state.scale = value;
-        this.updateStatus(`Scale set to ${formatNumber(value)} px/ft.`);
     }
 
     getMeasurementStore(drawingId, { create = false } = {}) {
@@ -869,15 +798,18 @@ export class TakeoffManager {
     }
 
     updateCountSetting(field, value) {
-        if (!field) {
+        if (!field || !(field in this.state.countSettings)) {
             return;
         }
+        const nextValue = field === 'label'
+            ? value
+            : (value || this.state.countSettings[field]);
         this.state.countSettings = {
             ...this.state.countSettings,
-            [field]: field === 'label' ? value : value || this.state.countSettings[field]
+            [field]: nextValue
         };
         this.updateCountToolbarVisibility();
-        if (field === 'color') {
+        if (field !== 'label') {
             this.drawMeasurements();
         }
     }
@@ -890,20 +822,20 @@ export class TakeoffManager {
     }
 
     setMode(mode) {
-        if (!mode) {
-            return;
-        }
-        const normalized = MODE_LABELS[mode] ? mode : 'length';
+        const allowed = new Set(Object.keys(MODE_LABELS));
+        const normalized = allowed.has(mode) ? mode : 'length';
         if (this.state.mode === normalized) {
             return;
         }
         this.state.mode = normalized;
-        this.state.draftPoints = [];
-        this.state.previewPoint = null;
+        this.resetDraft();
         this.updateModeControls();
+        const { planStage } = this.elements;
+        if (planStage) {
+            planStage.dataset.mode = normalized;
+        }
         this.updateCountToolbarVisibility();
-        this.drawMeasurements();
-        this.updateStatus(`${MODE_LABELS[normalized]} mode selected.`);
+        this.updateStatus(`${MODE_LABELS[normalized]} mode active.`);
     }
 
     updateCountToolbarVisibility() {
@@ -947,10 +879,17 @@ export class TakeoffManager {
     }
 
     getDrawingScale(drawing = this.getActiveDrawing()) {
-        if (drawing && Number.isFinite(drawing.scale) && drawing.scale > 0) {
-            return drawing.scale;
+        if (drawing) {
+            const value = Number(drawing.scale);
+            if (Number.isFinite(value) && value > 0) {
+                return value;
+            }
         }
-        return this.state.scale > 0 ? this.state.scale : 1;
+        const fallback = Number(this.state.scale);
+        if (Number.isFinite(fallback) && fallback > 0) {
+            return fallback;
+        }
+        return 1;
     }
 
     updateCountCounters(drawingId, mode) {
@@ -1301,12 +1240,6 @@ export class TakeoffManager {
             return;
         }
 
-    renderDrawingList() {
-        const { drawingTableBody, drawingEmpty } = this.elements;
-        if (!drawingTableBody) {
-            return;
-        }
-
         const drawings = this.getFilteredDrawings();
         const activeDrawingId = this.state.currentDrawingId;
 
@@ -1380,25 +1313,10 @@ export class TakeoffManager {
             this.updateActiveDrawingDisplay();
         }
         const point = this.getPointerPosition(event);
-        if (!point) {
-            return;
-        }
-        this.state.previewPoint = point;
-        this.drawMeasurements();
-    }
-
-    handleDoubleClick(event) {
-        if (this.state.mode !== 'area') {
-            return;
-        }
-        const point = this.getPointerPosition(event);
         if (point) {
-            this.state.draftPoints = [...this.state.draftPoints, point];
+            this.state.previewPoint = point;
         }
-        if (this.state.draftPoints.length >= 3) {
-            this.finalizeMeasurement(this.state.draftPoints);
-        }
-        this.resetDraft();
+        this.drawMeasurements();
     }
 
     handleContextMenu(event) {
@@ -1651,9 +1569,60 @@ export class TakeoffManager {
         this.measurements.delete(id);
         this.measurementCounters.delete(id);
 
-        if (this.state.currentDrawingId === id) {
-            this.state.currentDrawingId = this.state.drawings[0]?.id || null;
+        let nextId = this.state.currentDrawingId;
+        if (nextId === id) {
+            nextId = this.state.drawings[0]?.id || null;
         }
+
+        this.state.currentDrawingId = null;
+        if (nextId) {
+            this.selectDrawing(nextId);
+        } else {
+            this.renderDrawingList();
+            this.updateActiveDrawingDisplay();
+            this.updatePlanVisibility();
+            this.refreshMeasurementTable();
+            this.drawMeasurements();
+            this.updatePdfControls();
+            this.updateScaleControls();
+            this.updateZoomIndicator();
+            this.updateCountToolbarVisibility();
+        }
+
+        this.updateStatus('Drawing removed.');
+    }
+
+    getPointerPosition(event) {
+        const { planInner, canvas, planContainer } = this.elements;
+        const target = planInner || canvas || planContainer;
+        if (!target || typeof target.getBoundingClientRect !== 'function') {
+            return null;
+        }
+
+        let clientX;
+        let clientY;
+        if (event && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+            clientX = event.clientX;
+            clientY = event.clientY;
+        } else if (event?.touches?.length) {
+            clientX = event.touches[0].clientX;
+            clientY = event.touches[0].clientY;
+        } else if (event?.changedTouches?.length) {
+            clientX = event.changedTouches[0].clientX;
+            clientY = event.changedTouches[0].clientY;
+        } else {
+            return null;
+        }
+
+        const rect = target.getBoundingClientRect();
+        const zoom = Number.isFinite(this.state.zoom) && this.state.zoom > 0 ? this.state.zoom : 1;
+        const x = (clientX - rect.left) / zoom;
+        const y = (clientY - rect.top) / zoom;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return null;
+        }
+        return { x, y };
+    }
 
     handlePointerMove(event) {
         const point = this.getPointerPosition(event);
