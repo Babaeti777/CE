@@ -35,10 +35,20 @@ describe('TakeoffManager measurements', () => {
             <input id="takeoffSearchInput" />
             <table><tbody id="takeoffDrawingTableBody"></tbody></table>
             <div id="takeoffDrawingEmpty"></div>
-            <div id="takeoffPlanContainer"></div>
-            <div id="takeoffPlanInner"></div>
-            <img id="takeoffPlanPreview" />
-            <canvas id="takeoffCanvas" width="200" height="200"></canvas>
+            <div class="card takeoff-plan-card">
+                <div id="takeoffPlanContainer" class="takeoff-plan">
+                    <div id="takeoffToolbarMount">
+                        <select id="takeoffModeSelect"></select>
+                        <input id="takeoffScaleInput" />
+                    </div>
+                    <div class="takeoff-plan-stage" id="takeoffPlanStage">
+                        <div id="takeoffPlanInner">
+                            <img id="takeoffPlanPreview" />
+                            <canvas id="takeoffCanvas" width="200" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <button id="takeoffZoomOutBtn"></button>
             <button id="takeoffZoomInBtn"></button>
             <button id="takeoffZoomResetBtn"></button>
@@ -52,13 +62,16 @@ describe('TakeoffManager measurements', () => {
             <span id="takeoffPdfPageTotal"></span>
             <button id="takeoffPdfOpen"></button>
             <button id="takeoffPdfDownload"></button>
-            <button id="takeoffOpenPdfBtn"></button>
             <div id="takeoffPdfModal"></div>
             <div id="takeoffPdfModalOverlay"></div>
             <button id="takeoffPdfModalClose"></button>
             <iframe id="takeoffPdfFrame"></iframe>
             <button id="takeoffFullscreenBtn"></button>
             <button id="takeoffFullScreenToggle"></button>
+            <div id="takeoffCountToolbar"></div>
+            <input id="takeoffCountColor" />
+            <select id="takeoffCountShape"></select>
+            <input id="takeoffCountLabel" />
             <div class="card">
                 <table><tbody id="takeoffMeasurementTableBody"></tbody></table>
                 <div id="takeoffMeasurementEmpty" class="takeoff-empty"></div>
