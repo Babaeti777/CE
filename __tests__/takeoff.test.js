@@ -126,7 +126,9 @@ describe('TakeoffManager measurements', () => {
     });
 
     afterEach(() => {
-        restoreGetContext.mockRestore();
+        if (restoreGetContext && typeof restoreGetContext.mockRestore === 'function') {
+            restoreGetContext.mockRestore();
+        }
     });
 
     test('refreshes measurement overlays when metadata changes', () => {
