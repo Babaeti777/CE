@@ -422,13 +422,22 @@ export class TakeoffManager {
             if (!Array.isArray(parsed)) {
                 return;
             }
-            this.state.drawings = parsed.map((item) => ({
-                ...item,
-                type: item.type || 'image',
-                annotations: Array.isArray(item.annotations) ? item.annotations : [],
-                notes: typeof item.notes === 'string' ? item.notes : '',
-                rotation: item.rotation || 0
-            }));
+            this.state.drawings = parsed.map((item) => {
+                const planNotes = Array.isArray(item.planNotes)
+                    ? item.planNotes
+                    : Array.isArray(item.notes)
+                        ? item.notes
+                        : [];
+
+                return {
+                    ...item,
+                    type: item.type || 'image',
+                    annotations: Array.isArray(item.annotations) ? item.annotations : [],
+                    notes: typeof item.notes === 'string' ? item.notes : '',
+                    planNotes,
+                    rotation: item.rotation || 0
+                };
+            });
             this.state.drawings.forEach((drawing) => {
                 if (Array.isArray(drawing.savedMeasurements) && drawing.savedMeasurements.length) {
                     this.setMeasurementItems(drawing.id, drawing.savedMeasurements);
@@ -460,6 +469,7 @@ export class TakeoffManager {
                 rotation: drawing.rotation || 0,
                 createdAt: drawing.createdAt,
                 annotations: Array.isArray(drawing.annotations) ? drawing.annotations : [],
+                planNotes: Array.isArray(drawing.planNotes) ? drawing.planNotes : [],
                 savedMeasurements: this.getMeasurementItems(drawing.id)
             }));
             storage.setItem(STORAGE_KEY, JSON.stringify(payload));
