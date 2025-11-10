@@ -24,8 +24,61 @@ function createId(prefix = 'drawing') {
     return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
 }
 
+function createId(prefix = 'drawing') {
+    return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
+}
+
+function distance(a, b) {
+    if (!a || !b) {
+        return 0;
+    }
+    const dx = (a.x ?? a[0] ?? 0) - (b.x ?? b[0] ?? 0);
+    const dy = (a.y ?? a[1] ?? 0) - (b.y ?? b[1] ?? 0);
+    return Math.sqrt((dx * dx) + (dy * dy));
+}
+
+function computePolygonArea(points) {
+    if (!Array.isArray(points) || points.length < 3) {
+        return 0;
+    }
+    let sum = 0;
+    for (let index = 0; index < points.length; index += 1) {
+        const current = points[index];
+        const next = points[(index + 1) % points.length];
+        sum += (current.x * next.y) - (next.x * current.y);
+    }
+    return Math.abs(sum) / 2;
+}
+
+function formatNumber(value, { maximumFractionDigits = 2 } = {}) {
+    if (!Number.isFinite(value)) {
+        return '0';
+    }
+    const digits = Math.abs(value) < 1 ? Math.min(maximumFractionDigits, 4) : maximumFractionDigits;
+    return value.toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: digits
+    });
+}
+
+function computeCentroid(points) {
+    if (!Array.isArray(points) || points.length === 0) {
+        return null;
+    }
+    let sumX = 0;
+    let sumY = 0;
+    points.forEach((point) => {
+        sumX += point.x;
+        sumY += point.y;
+    });
+    return {
+        x: sumX / points.length,
+        y: sumY / points.length
+    };
 }
 
 function escapeHtml(value) {
@@ -84,11 +137,20 @@ export class TakeoffManager {
             currentDrawingId: null,
             zoom: 1,
             isFullscreen: false,
-            previewPoint: null
+            previewPoint: null,
+            draftPoints: [],
+            mode: 'length',
+            scale: 1,
+            countSettings: {
+                color: '#ef4444',
+                shape: 'circle',
+                label: ''
+            }
         };
 
         this.measurements = new Map();
         this.labelCounters = new Map();
+        this.measurementCounters = new Map();
         this.previewToken = 0;
         this.resizeScheduled = false;
         this.pointerSession = null;
@@ -168,6 +230,10 @@ export class TakeoffManager {
             pdfFrame: byId('takeoffPdfFrame'),
             fullscreenBtn: byId('takeoffFullscreenBtn'),
             fullScreenToggle: byId('takeoffFullScreenToggle'),
+            countToolbar: byId('takeoffCountToolbar'),
+            countColor: byId('takeoffCountColor'),
+            countShape: byId('takeoffCountShape'),
+            countLabel: byId('takeoffCountLabel'),
             quickCalcBtn: byId('takeoffQuickCalcBtn'),
             shapeSelect: byId('takeoffShapeSelect'),
             dim1Input: byId('takeoffDim1'),
@@ -191,6 +257,9 @@ export class TakeoffManager {
             zoomOutBtn,
             zoomInBtn,
             zoomResetBtn,
+            planStage,
+            modeSelect,
+            scaleInput,
             pdfPrevBtn,
             pdfNextBtn,
             pdfPageInput,
@@ -201,6 +270,9 @@ export class TakeoffManager {
             pdfModalClose,
             fullscreenBtn,
             fullScreenToggle,
+            countColor,
+            countShape,
+            countLabel,
             quickCalcBtn,
             shapeSelect,
             dim1Input,
@@ -223,6 +295,8 @@ export class TakeoffManager {
             this.state.filter = event.target.value.toLowerCase();
             this.renderDrawingList();
         });
+        this.lifecycle.addEventListener(modeSelect, 'change', (event) => this.setMode(event.target.value));
+        this.lifecycle.addEventListener(scaleInput, 'change', (event) => this.handleScaleChange(event));
         this.lifecycle.addEventListener(drawingTableBody, 'click', (event) => this.handleDrawingTableClick(event));
         this.lifecycle.addEventListener(drawingTableBody, 'input', (event) => this.handleDrawingTableInput(event));
         this.lifecycle.addEventListener(measurementTableBody, 'click', (event) => this.handleMeasurementTableClick(event));
@@ -230,6 +304,12 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(zoomOutBtn, 'click', () => this.stepZoom(-ZOOM_STEP));
         this.lifecycle.addEventListener(zoomInBtn, 'click', () => this.stepZoom(ZOOM_STEP));
         this.lifecycle.addEventListener(zoomResetBtn, 'click', () => this.resetZoom());
+
+        this.lifecycle.addEventListener(planStage, 'pointerdown', (event) => this.handlePointerDown(event));
+        this.lifecycle.addEventListener(planStage, 'pointermove', (event) => this.handlePointerMove(event));
+        this.lifecycle.addEventListener(planStage, 'pointerleave', () => this.clearPreviewPoint());
+        this.lifecycle.addEventListener(planStage, 'dblclick', (event) => this.handleDoubleClick(event));
+        this.lifecycle.addEventListener(planStage, 'contextmenu', (event) => this.handleContextMenu(event));
 
         this.lifecycle.addEventListener(pdfPrevBtn, 'click', () => this.navigatePdfPage(-1));
         this.lifecycle.addEventListener(pdfNextBtn, 'click', () => this.navigatePdfPage(1));
@@ -257,6 +337,10 @@ export class TakeoffManager {
                 this.setFullscreen(false);
             }
         });
+
+        this.lifecycle.addEventListener(countColor, 'change', (event) => this.updateCountSetting('color', event.target.value));
+        this.lifecycle.addEventListener(countShape, 'change', (event) => this.updateCountSetting('shape', event.target.value));
+        this.lifecycle.addEventListener(countLabel, 'input', (event) => this.updateCountSetting('label', event.target.value));
 
         this.lifecycle.addEventListener(shapeSelect, 'change', () => this.handleQuickShapeChange());
         this.lifecycle.addEventListener(dim1Input, 'input', () => this.clearQuickResult());
@@ -356,6 +440,113 @@ export class TakeoffManager {
         return prepared;
     }
 
+    createMeasurement({ mode, points, quantity, units, details, color, shape, label, labelPosition, fill, closed }) {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            return null;
+        }
+        const drawingId = drawing.id;
+        const sequence = this.updateCountCounters(drawingId, mode || 'length');
+        const name = `${MODE_LABELS[mode] || 'Measurement'} ${sequence}`;
+        const payload = {
+            id: createId('measurement'),
+            name,
+            mode,
+            points: Array.isArray(points) ? points.map((point) => ({ ...point })) : [],
+            quantity,
+            units,
+            details,
+            color,
+            shape,
+            label,
+            labelPosition,
+            fill,
+            closed
+        };
+        return this.addMeasurement(drawingId, payload);
+    }
+
+    finalizeMeasurement(points) {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            return null;
+        }
+        const mode = this.state.mode;
+        const normalizedPoints = Array.isArray(points)
+            ? points.map((point) => ({
+                x: Number(point.x),
+                y: Number(point.y)
+            })).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+            : [];
+        if (!normalizedPoints.length) {
+            return null;
+        }
+
+        const scale = this.getDrawingScale(drawing);
+        let quantity = 0;
+        let units = '';
+        let details = '';
+        let label = '';
+        let labelPosition = null;
+        let color = undefined;
+        let fill = undefined;
+        let closed = false;
+
+        if (mode === 'length' || mode === 'diameter') {
+            if (normalizedPoints.length < 2) {
+                return null;
+            }
+            const start = normalizedPoints[0];
+            const end = normalizedPoints[normalizedPoints.length - 1];
+            const pixels = distance(start, end);
+            const feet = pixels / (scale || 1);
+            quantity = feet;
+            units = 'ft';
+            const formatted = formatNumber(feet);
+            details = `${formatted} ft`;
+            label = mode === 'diameter' ? `Ø ${formatted} ft` : `${formatted} ft`;
+            labelPosition = {
+                x: (start.x + end.x) / 2,
+                y: (start.y + end.y) / 2
+            };
+        } else if (mode === 'area') {
+            if (normalizedPoints.length < 3) {
+                return null;
+            }
+            const closedPoints = [...normalizedPoints, normalizedPoints[0]];
+            const pxArea = computePolygonArea(closedPoints);
+            const sqft = pxArea / ((scale || 1) ** 2);
+            quantity = sqft;
+            units = 'sq ft';
+            const formatted = formatNumber(sqft);
+            details = `${formatted} sq ft`;
+            label = `${formatted} sq ft`;
+            labelPosition = computeCentroid(normalizedPoints);
+            color = 'rgba(37, 99, 235, 0.85)';
+            fill = 'rgba(37, 99, 235, 0.15)';
+            closed = true;
+        } else {
+            return null;
+        }
+
+        const measurement = this.createMeasurement({
+            mode,
+            points: normalizedPoints,
+            quantity,
+            units,
+            details,
+            color,
+            fill,
+            closed,
+            label,
+            labelPosition
+        });
+        if (measurement) {
+            this.updateStatus(`${MODE_LABELS[mode]} measurement added.`);
+        }
+        return measurement;
+    }
+
     updateMeasurement(drawingId, measurementId, updates = {}) {
         if (!drawingId || !measurementId) {
             return null;
@@ -418,6 +609,7 @@ export class TakeoffManager {
         }
         this.drawMeasurements();
         this.updateStatus('Measurements cleared.');
+        this.measurementCounters.delete(drawingId);
     }
 
     refreshMeasurementTable(drawingId = this.state.currentDrawingId) {
@@ -536,6 +728,160 @@ export class TakeoffManager {
             return;
         }
         this.removeMeasurement(drawingId, measurementId);
+    }
+
+    updateCountSetting(field, value) {
+        if (!field) {
+            return;
+        }
+        this.state.countSettings = {
+            ...this.state.countSettings,
+            [field]: field === 'label' ? value : value || this.state.countSettings[field]
+        };
+        this.updateCountToolbarVisibility();
+        if (field === 'color') {
+            this.drawMeasurements();
+        }
+    }
+
+    updateModeControls() {
+        const { modeSelect } = this.elements;
+        if (modeSelect && modeSelect.value !== this.state.mode) {
+            modeSelect.value = this.state.mode;
+        }
+    }
+
+    setMode(mode) {
+        if (!mode) {
+            return;
+        }
+        const normalized = MODE_LABELS[mode] ? mode : 'length';
+        if (this.state.mode === normalized) {
+            return;
+        }
+        this.state.mode = normalized;
+        this.state.draftPoints = [];
+        this.state.previewPoint = null;
+        this.updateModeControls();
+        this.updateCountToolbarVisibility();
+        this.drawMeasurements();
+        this.updateStatus(`${MODE_LABELS[normalized]} mode selected.`);
+    }
+
+    updateCountToolbarVisibility() {
+        const { countToolbar } = this.elements;
+        if (countToolbar) {
+            countToolbar.classList.toggle('is-hidden', this.state.mode !== 'count');
+        }
+    }
+
+    handleScaleChange(event) {
+        const value = Number.parseFloat(event?.target?.value);
+        if (!Number.isFinite(value) || value <= 0) {
+            if (event?.target) {
+                event.target.value = this.state.scale;
+            }
+            this.services.toast('Enter a valid scale greater than 0.', 'warning');
+            return;
+        }
+        this.state.scale = value;
+        const drawing = this.getActiveDrawing();
+        if (drawing) {
+            drawing.scale = value;
+        }
+        this.updateStatus(`Scale set to ${formatNumber(value, { maximumFractionDigits: 4 })} px per ft.`);
+        if (drawing) {
+            this.recalculateMeasurementValues(drawing.id);
+            this.refreshMeasurementTable(drawing.id);
+        }
+        this.drawMeasurements();
+    }
+
+    updateScaleInput(drawing = this.getActiveDrawing()) {
+        const { scaleInput } = this.elements;
+        if (!scaleInput) {
+            return;
+        }
+        const scale = this.getDrawingScale(drawing);
+        if (Number.isFinite(scale) && scale > 0) {
+            scaleInput.value = scale;
+        }
+    }
+
+    getDrawingScale(drawing = this.getActiveDrawing()) {
+        if (drawing && Number.isFinite(drawing.scale) && drawing.scale > 0) {
+            return drawing.scale;
+        }
+        return this.state.scale > 0 ? this.state.scale : 1;
+    }
+
+    updateCountCounters(drawingId, mode) {
+        if (!drawingId) {
+            return 0;
+        }
+        const counters = this.measurementCounters.get(drawingId) || {
+            length: 0,
+            area: 0,
+            count: 0,
+            diameter: 0
+        };
+        counters[mode] = (counters[mode] || 0) + 1;
+        this.measurementCounters.set(drawingId, counters);
+        return counters[mode];
+    }
+
+    recalculateMeasurementValues(drawingId) {
+        if (!drawingId) {
+            return;
+        }
+        const drawing = this.state.drawings.find((item) => item.id === drawingId);
+        if (!drawing) {
+            return;
+        }
+        const scale = this.getDrawingScale(drawing);
+        const store = this.getMeasurementStore(drawingId);
+        const items = this.normalizeMeasurements(store);
+        items.forEach((measurement) => {
+            if (!measurement || !Array.isArray(measurement.points)) {
+                return;
+            }
+            if (measurement.mode === 'length' || measurement.mode === 'diameter') {
+                if (measurement.points.length < 2) {
+                    return;
+                }
+                const start = measurement.points[0];
+                const end = measurement.points[measurement.points.length - 1];
+                const px = distance(start, end);
+                const feet = px / (scale || 1);
+                const formatted = formatNumber(feet);
+                measurement.quantity = feet;
+                measurement.units = 'ft';
+                measurement.details = `${formatted} ft`;
+                measurement.label = measurement.mode === 'diameter'
+                    ? `Ø ${formatted} ft`
+                    : `${formatted} ft`;
+                measurement.labelPosition = {
+                    x: (start.x + end.x) / 2,
+                    y: (start.y + end.y) / 2
+                };
+            } else if (measurement.mode === 'area') {
+                if (measurement.points.length < 3) {
+                    return;
+                }
+                const closedPoints = [...measurement.points, measurement.points[0]];
+                const pxArea = computePolygonArea(closedPoints);
+                const sqft = pxArea / ((scale || 1) ** 2);
+                const formatted = formatNumber(sqft);
+                measurement.quantity = sqft;
+                measurement.units = 'sq ft';
+                measurement.details = `${formatted} sq ft`;
+                measurement.label = `${formatted} sq ft`;
+                measurement.labelPosition = computeCentroid(measurement.points);
+                measurement.closed = true;
+                measurement.fill = measurement.fill || 'rgba(37, 99, 235, 0.15)';
+                measurement.color = measurement.color || 'rgba(37, 99, 235, 0.85)';
+            }
+        });
     }
 
     clearQuickResult() {
@@ -706,6 +1052,7 @@ export class TakeoffManager {
         });
         this.state.drawings = [];
         this.measurements.clear();
+        this.measurementCounters.clear();
         this.refreshMeasurementTable();
         this.drawMeasurements();
     }
@@ -816,6 +1163,12 @@ export class TakeoffManager {
             return;
         }
 
+    renderDrawingList() {
+        const { drawingTableBody, drawingEmpty } = this.elements;
+        if (!drawingTableBody) {
+            return;
+        }
+
         const drawings = this.getFilteredDrawings();
         const activeDrawingId = this.state.currentDrawingId;
 
@@ -888,7 +1241,47 @@ export class TakeoffManager {
         if (field === 'trade' || field === 'floor' || field === 'page') {
             this.updateActiveDrawingDisplay();
         }
+        const point = this.getPointerPosition(event);
+        if (!point) {
+            return;
+        }
+        this.state.previewPoint = point;
         this.drawMeasurements();
+    }
+
+    handleDoubleClick(event) {
+        if (this.state.mode !== 'area') {
+            return;
+        }
+        const point = this.getPointerPosition(event);
+        if (point) {
+            this.state.draftPoints = [...this.state.draftPoints, point];
+        }
+        if (this.state.draftPoints.length >= 3) {
+            this.finalizeMeasurement(this.state.draftPoints);
+        }
+        this.resetDraft();
+    }
+
+    handleContextMenu(event) {
+        if (!this.state.draftPoints.length) {
+            return;
+        }
+        event.preventDefault();
+        this.resetDraft();
+    }
+
+    resetDraft() {
+        this.state.draftPoints = [];
+        this.state.previewPoint = null;
+        this.drawMeasurements();
+    }
+
+    clearPreviewPoint() {
+        if (this.state.previewPoint) {
+            this.state.previewPoint = null;
+            this.drawMeasurements();
+        }
     }
 
     drawMeasurements() {
@@ -913,11 +1306,15 @@ export class TakeoffManager {
 
         const overlay = this.measurements.get(drawing.id);
         const measurements = this.normalizeMeasurements(overlay);
-        if (!measurements.length) {
-            return;
+        measurements.forEach((measurement) => this.renderMeasurement(context, measurement));
+
+        if (this.state.mode === 'count' && this.state.previewPoint) {
+            this.renderCountMarker(context, this.state.previewPoint, this.state.countSettings.color, this.state.countSettings.shape, this.state.countSettings.label, this.state.zoom);
         }
 
-        measurements.forEach((measurement) => this.renderMeasurement(context, measurement));
+        if (this.state.draftPoints.length) {
+            this.renderDraft(context);
+        }
     }
 
     normalizeMeasurements(overlay) {
@@ -935,6 +1332,22 @@ export class TakeoffManager {
 
     renderMeasurement(context, measurement) {
         if (!measurement || typeof measurement !== 'object') {
+            return;
+        }
+
+        if (measurement.mode === 'count') {
+            const point = Array.isArray(measurement.points) ? measurement.points[0] : null;
+            if (!point) {
+                return;
+            }
+            this.renderCountMarker(
+                context,
+                point,
+                measurement.color || this.state.countSettings.color,
+                measurement.shape || this.state.countSettings.shape,
+                measurement.label || this.state.countSettings.label,
+                this.state.zoom
+            );
             return;
         }
 
@@ -1010,6 +1423,81 @@ export class TakeoffManager {
         return points[points.length - 1] || null;
     }
 
+    renderDraft(context) {
+        const zoom = Number.isFinite(this.state.zoom) ? this.state.zoom : 1;
+        const basePoints = [...this.state.draftPoints];
+        if (this.state.mode !== 'count' && this.state.previewPoint) {
+            basePoints.push(this.state.previewPoint);
+        }
+        const points = basePoints
+            .map((point) => this.toCanvasPoint(point, zoom))
+            .filter(Boolean);
+        if (points.length < 1) {
+            return;
+        }
+        context.save();
+        context.setLineDash([6, 4]);
+        context.lineWidth = 1;
+        context.strokeStyle = 'rgba(37, 99, 235, 0.7)';
+        context.beginPath();
+        context.moveTo(points[0].x, points[0].y);
+        for (let index = 1; index < points.length; index += 1) {
+            context.lineTo(points[index].x, points[index].y);
+        }
+        if (this.state.mode === 'area' && points.length > 2) {
+            context.closePath();
+        }
+        context.stroke();
+        context.restore();
+    }
+
+    renderCountMarker(context, point, color, shape, label, zoomValue = 1) {
+        const zoom = Number.isFinite(zoomValue) ? zoomValue : 1;
+        const scaledPoint = this.toCanvasPoint(point, zoom);
+        if (!scaledPoint) {
+            return;
+        }
+        const size = 12 * zoom;
+        const half = size / 2;
+        context.save();
+        context.strokeStyle = color || '#ef4444';
+        context.fillStyle = color || '#ef4444';
+        context.lineWidth = 2;
+        switch (shape) {
+            case 'square':
+                context.strokeRect(scaledPoint.x - half, scaledPoint.y - half, size, size);
+                break;
+            case 'diamond':
+                context.beginPath();
+                context.moveTo(scaledPoint.x, scaledPoint.y - half);
+                context.lineTo(scaledPoint.x + half, scaledPoint.y);
+                context.lineTo(scaledPoint.x, scaledPoint.y + half);
+                context.lineTo(scaledPoint.x - half, scaledPoint.y);
+                context.closePath();
+                context.stroke();
+                break;
+            case 'triangle':
+                context.beginPath();
+                context.moveTo(scaledPoint.x, scaledPoint.y - half);
+                context.lineTo(scaledPoint.x + half, scaledPoint.y + half);
+                context.lineTo(scaledPoint.x - half, scaledPoint.y + half);
+                context.closePath();
+                context.stroke();
+                break;
+            default:
+                context.beginPath();
+                context.arc(scaledPoint.x, scaledPoint.y, half, 0, Math.PI * 2);
+                context.stroke();
+                break;
+        }
+
+        if (label) {
+            context.font = `${Math.max(12 * zoom, 10)}px sans-serif`;
+            context.fillText(label, scaledPoint.x + half + 4, scaledPoint.y + 4);
+        }
+        context.restore();
+    }
+
     removeDrawing(id) {
         const index = this.state.drawings.findIndex((drawing) => drawing.id === id);
         if (index === -1) return;
@@ -1020,6 +1508,7 @@ export class TakeoffManager {
         }
         removed?.pdfDoc?.destroy?.();
         this.measurements.delete(id);
+        this.measurementCounters.delete(id);
 
         if (this.state.currentDrawingId === id) {
             this.state.currentDrawingId = this.state.drawings[0]?.id || null;
@@ -1039,6 +1528,12 @@ export class TakeoffManager {
         }
         this.state.currentDrawingId = id;
         this.state.zoom = 1;
+        const drawing = this.getActiveDrawing();
+        this.state.scale = this.getDrawingScale(drawing);
+        this.resetDraft();
+        this.updateScaleInput(drawing);
+        this.updateModeControls();
+        this.updateCountToolbarVisibility();
         this.renderDrawingList();
         this.updateZoomIndicator();
         this.updateActiveDrawingDisplay();
