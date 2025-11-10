@@ -22,7 +22,7 @@
 <body>
     <div class="app-shell">
         <!-- Mobile Menu Toggle -->
-        <button class="menu-toggle" id="menuToggle" aria-controls="sidebar" aria-expanded="true" title="Toggle navigation">
+        <button class="menu-toggle" id="menuToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" title="Open navigation">
             <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
             </svg>
@@ -354,70 +354,75 @@
 
             <!-- Detailed Bidding Tab -->
             <div id="detailedTab" class="tab-content">
-                 <div class="card bid-info-card" id="bidInfoCard">
-                    <div class="bid-info-header">
-                        <div>
-                            <h3 class="card-title">Bid Information</h3>
+                <div class="detailed-layout">
+                    <div class="detailed-main">
+                        <div class="card">
+                            <h3 class="card-title mb-md">Bid Information</h3>
                             <p class="card-subtitle">Capture client info and key dates so they're always part of the exported package.</p>
+                            <details id="bidInfoPanel" class="bid-info-panel" open>
+                                <summary id="bidInfoSummary" class="bid-info-summary">
+                                    <span class="bid-info-summary-label">Project overview</span>
+                                    <span class="bid-info-summary-text" id="bidInfoSummaryText" aria-live="polite">Add project details to build your summary.</span>
+                                    <span class="bid-info-summary-icon" aria-hidden="true">▾</span>
+                                </summary>
+                                <form id="detailedBidForm" class="bid-info-form">
+                                    <div class="grid-2 gap-md">
+                                        <div class="form-group"><label class="form-label" for="bidProjectName">Project Name</label><input type="text" class="form-input" id="bidProjectName" placeholder="Enter project name" required></div>
+                                        <div class="form-group"><label class="form-label" for="clientName">Client Name</label><input type="text" class="form-input" id="clientName" placeholder="Enter client name" required></div>
+                                        <div class="form-group"><label class="form-label" for="bidDate">Bid Date</label><input type="date" class="form-input" id="bidDate" required></div>
+                                        <div class="form-group"><label class="form-label" for="completionDays">Completion Timeline (Days)</label><input type="number" class="form-input" id="completionDays" placeholder="Enter days" required></div>
+                                    </div>
+                                </form>
+                            </details>
                         </div>
-                        <button type="button" class="btn btn-ghost bid-info-toggle" id="bidInfoToggle" aria-expanded="true">Hide details</button>
-                    </div>
-                    <p class="bid-info-summary" id="bidInfoSummary" aria-live="polite">Project: — • Client: — • Bid: — • Timeline: —</p>
-                    <div class="bid-info-body" id="bidInfoBody">
-                        <form id="detailedBidForm">
-                            <div class="grid-2 gap-md">
-                                <div class="form-group"><label class="form-label">Project Name</label><input type="text" class="form-input" id="bidProjectName" placeholder="Enter project name" required></div>
-                                <div class="form-group"><label class="form-label">Client Name</label><input type="text" class="form-input" id="clientName" placeholder="Enter client name" required></div>
-                                <div class="form-group"><label class="form-label">Bid Date</label><input type="date" class="form-input" id="bidDate" required></div>
-                                <div class="form-group"><label class="form-label">Completion Timeline (Days)</label><input type="number" class="form-input" id="completionDays" placeholder="Enter days" required></div>
+                        <div class="card mt-xl">
+                            <div class="card-header line-item-header">
+                                <div>
+                                    <h3 class="card-title">Line Items</h3>
+                                    <p class="card-subtitle">Build your bid with curated assemblies and custom entries.</p>
+                                </div>
+                                <div class="line-item-tools">
+                                    <input type="search" class="form-input" id="lineItemSearch" placeholder="Filter items..." aria-label="Filter line items">
+                                    <button class="btn btn-secondary" id="addLineItemBtn">+ Add Item</button>
+                                </div>
                             </div>
-                        </form>
-                    </div>
-                </div>
-                <div class="card mt-xl">
-                    <div class="card-header line-item-header">
-                        <div>
-                            <h3 class="card-title">Line Items</h3>
-                            <p class="card-subtitle">Build your bid with curated assemblies and custom entries.</p>
+                            <div class="line-item-table-wrapper">
+                                <div class="line-item-header-row">
+                                    <span>Category</span>
+                                    <span>Description</span>
+                                    <span>Quantity</span>
+                                    <span>Unit</span>
+                                    <span>Rate</span>
+                                    <span class="text-right">Subtotal</span>
+                                    <span class="sr-only">Actions</span>
+                                </div>
+                                <div id="lineItems" class="line-item-body"></div>
+                                <p class="line-item-empty" id="lineItemEmptyMessage">Add your first item to start building the bid.</p>
+                            </div>
                         </div>
-                        <div class="line-item-tools">
-                            <input type="search" class="form-input" id="lineItemSearch" placeholder="Filter items..." aria-label="Filter line items">
-                            <button class="btn btn-secondary" id="addLineItemBtn">+ Add Item</button>
+                        <div class="grid-3 mt-xl detailed-adjustments">
+                            <div class="card"><h4 class="section-subtitle">Overhead</h4><input type="number" class="form-input" id="overhead" value="10" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
+                            <div class="card"><h4 class="section-subtitle">Profit Margin</h4><input type="number" class="form-input" id="profit" value="15" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
+                            <div class="card"><h4 class="section-subtitle">Contingency</h4><input type="number" class="form-input" id="contingency" value="5" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
                         </div>
                     </div>
-                    <div class="line-item-table-wrapper">
-                        <div class="line-item-header-row">
-                            <span>Category</span>
-                            <span>Description</span>
-                            <span>Quantity</span>
-                            <span>Unit</span>
-                            <span>Rate</span>
-                            <span class="text-right">Subtotal</span>
-                            <span class="sr-only">Actions</span>
+                    <aside class="detailed-sidebar">
+                        <div class="summary-card">
+                            <h2 class="summary-title">Bid Summary</h2>
+                            <div class="summary-grid">
+                                <div class="summary-item"><div class="summary-label">Subtotal</div><div class="summary-value" id="bidSubtotal">$0</div></div>
+                                <div class="summary-item"><div class="summary-label">Markup</div><div class="summary-value" id="bidMarkup">$0</div></div>
+                                <div class="summary-item"><div class="summary-label">Contingency</div><div class="summary-value" id="bidContingency">$0</div></div>
+                                <div class="summary-item"><div class="summary-label">Total Bid</div><div class="summary-value" id="bidTotal">$0</div></div>
+                            </div>
+                            <div class="action-row wrap gap-lg mt-xl">
+                                <button class="btn btn-primary" id="exportPdfBtn">Export PDF</button>
+                                <button class="btn btn-primary" id="exportXlsxBtn">Export Excel</button>
+                                <button class="btn btn-primary" id="exportCsvBtn">Export CSV</button>
+                                <button class="btn btn-success ml-auto" id="saveBidBtn">Save Bid</button>
+                            </div>
                         </div>
-                        <div id="lineItems" class="line-item-body"></div>
-                        <p class="line-item-empty" id="lineItemEmptyMessage">Add your first item to start building the bid.</p>
-                    </div>
-                </div>
-                <div class="grid-3 mt-xl">
-                    <div class="card"><h4 class="section-subtitle">Overhead</h4><input type="number" class="form-input" id="overhead" value="10" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
-                    <div class="card"><h4 class="section-subtitle">Profit Margin</h4><input type="number" class="form-input" id="profit" value="15" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
-                    <div class="card"><h4 class="section-subtitle">Contingency</h4><input type="number" class="form-input" id="contingency" value="5" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
-                </div>
-                <div class="summary-card mt-xl">
-                    <h2 class="summary-title">Bid Summary</h2>
-                    <div class="summary-grid">
-                        <div class="summary-item"><div class="summary-label">Subtotal</div><div class="summary-value" id="bidSubtotal">$0</div></div>
-                        <div class="summary-item"><div class="summary-label">Markup</div><div class="summary-value" id="bidMarkup">$0</div></div>
-                        <div class="summary-item"><div class="summary-label">Contingency</div><div class="summary-value" id="bidContingency">$0</div></div>
-                        <div class="summary-item"><div class="summary-label">Total Bid</div><div class="summary-value" id="bidTotal">$0</div></div>
-                    </div>
-                    <div class="action-row wrap gap-lg mt-xl">
-                        <button class="btn btn-primary" id="exportPdfBtn">Export PDF</button>
-                        <button class="btn btn-primary" id="exportXlsxBtn">Export Excel</button>
-                        <button class="btn btn-primary" id="exportCsvBtn">Export CSV</button>
-                        <button class="btn btn-success ml-auto" id="saveBidBtn">Save Bid</button>
-                    </div>
+                    </aside>
                 </div>
             </div>
 
@@ -507,7 +512,6 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomInBtn" aria-label="Zoom in">+</button>
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
-                                        <button type="button" class="btn btn-secondary takeoff-open-pdf-btn" id="takeoffOpenPdfBtn" aria-hidden="true">Open PDF Reader</button>
                                     </div>
                                     <div class="takeoff-toolbar-group takeoff-pdf-controls is-hidden" id="takeoffPdfControls">
                                         <span class="takeoff-toolbar-label">PDF</span>
@@ -707,119 +711,116 @@
                     <div class="cloud-status" id="cloudSyncStatus">Cloud sync offline</div>
                 </div>
             </div>
-            </div>
         </div>
-    </div>
-
     </main>
 
-    </div>
+</div>
 
-    <!-- Modals -->
-    <div class="modal" id="updateModal">
-        <div class="modal-dialog">
-            <div class="modal-header"><h2 class="modal-title" id="updateTitle">Material Cost Update Available</h2><button class="modal-close" id="closeUpdateModal">&times;</button></div>
-            <p class="update-meta" id="updateMeta"></p>
-            <div class="update-badge">
-                <ul class="update-list" id="updateHighlights"></ul>
-            </div>
-            <p class="update-summary" id="updateSummary">Keep your estimates accurate with the latest market pricing feed.</p>
-            <div class="update-actions">
-                <button class="btn btn-primary" id="applyUpdateBtn">Apply Update</button>
-                <button class="btn btn-secondary" id="laterBtn">Remind Me Later</button>
-            </div>
+<!-- Modals -->
+<div class="modal" id="updateModal" role="dialog" aria-modal="true" aria-labelledby="updateTitle" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-header"><h2 class="modal-title" id="updateTitle">Material Cost Update Available</h2><button class="modal-close" id="closeUpdateModal" aria-label="Close update dialog">&times;</button></div>
+        <p class="update-meta" id="updateMeta"></p>
+        <div class="update-badge">
+            <ul class="update-list" id="updateHighlights"></ul>
+        </div>
+        <p class="update-summary" id="updateSummary">Keep your estimates accurate with the latest market pricing feed.</p>
+        <div class="update-actions">
+            <button class="btn btn-primary" id="applyUpdateBtn">Apply Update</button>
+            <button class="btn btn-secondary" id="laterBtn">Remind Me Later</button>
         </div>
     </div>
-    
-    <div class="modal" id="calculatorModal">
-        <div class="modal-dialog calculator-dialog">
-            <div class="modal-header"><h2 class="modal-title">Unit Calculator</h2><button class="modal-close" id="closeCalculatorModal">&times;</button></div>
-            <div class="calculator-display" id="calculatorDisplay">0</div>
-            <div class="mode-switch">
-                <button id="modeBasic" class="mode-btn active" data-mode="basic">Basic</button>
-                <button id="modeEngineering" class="mode-btn" data-mode="engineering">Engineering</button>
-            </div>
-            <div class="calculator-grid" id="calculatorGrid">
-                <button class="btn btn-secondary" data-value="clear">C</button>
-                <button class="btn btn-secondary" data-value="backspace">⌫</button>
-                <button class="btn btn-secondary" data-value="%">%</button>
-                <button class="btn btn-primary" data-value="/">&divide;</button>
-                <button class="btn" data-value="7">7</button>
-                <button class="btn" data-value="8">8</button>
-                <button class="btn" data-value="9">9</button>
-                <button class="btn btn-primary" data-value="*">&times;</button>
-                <button class="btn" data-value="4">4</button>
-                <button class="btn" data-value="5">5</button>
-                <button class="btn" data-value="6">6</button>
-                <button class="btn btn-primary" data-value="-">-</button>
-                <button class="btn" data-value="1">1</button>
-                <button class="btn" data-value="2">2</button>
-                <button class="btn" data-value="3">3</button>
-                <button class="btn btn-primary" data-value="+">+</button>
-                <button class="btn span-2" data-value="0">0</button>
-                <button class="btn" data-value=".">.</button>
-                <button class="btn btn-primary" data-value="=">=</button>
-            </div>
-            <div id="engineeringBtns" class="calculator-grid is-hidden mt-md">
-                <button class="btn" data-value="sin">sin</button>
-                <button class="btn" data-value="cos">cos</button>
-                <button class="btn" data-value="tan">tan</button>
-                <button class="btn" data-value="sqrt">√</button>
-            </div>
-            <div class="unit-converter">
-                <select id="unitFrom" class="form-select"><option value="ft">Feet</option><option value="in">Inches</option><option value="sqft">Sq. Ft.</option><option value="sqyd">Sq. Yd.</option></select>
-                <button class="btn btn-secondary" id="convertUnitBtn">&rarr;</button>
-                <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sqyd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
-            </div>
-            <button class="btn btn-success w-full mt-lg" id="useValueBtn">Use Value</button>
-        </div>
-    </div>
-    <div class="modal" id="newProjectModal">
-        <div class="modal-dialog">
-            <div class="modal-header"><h2 class="modal-title">Select Estimator Type</h2><button class="modal-close" id="closeNewProjectModal">&times;</button></div>
-            <div class="button-row justify-center gap-md mt-md">
-                <button class="btn btn-primary" id="startQuickBtn">Quick Estimator</button>
-                <button class="btn btn-secondary" id="startDetailedBtn">Detailed Bidding</button>
-            </div>
-        </div>
-        </main>
-    </div>
+</div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer"></div>
+<div class="modal" id="calculatorModal" role="dialog" aria-modal="true" aria-labelledby="calculatorModalTitle" aria-hidden="true">
+    <div class="modal-dialog calculator-dialog">
+        <div class="modal-header"><h2 class="modal-title" id="calculatorModalTitle">Unit Calculator</h2><button class="modal-close" id="closeCalculatorModal" aria-label="Close calculator">&times;</button></div>
+        <div class="calculator-display" id="calculatorDisplay">0</div>
+        <div class="mode-switch">
+            <button id="modeBasic" class="mode-btn active" data-mode="basic">Basic</button>
+            <button id="modeEngineering" class="mode-btn" data-mode="engineering">Engineering</button>
+        </div>
+        <div class="calculator-grid" id="calculatorGrid">
+            <button class="btn btn-secondary" data-value="clear">C</button>
+            <button class="btn btn-secondary" data-value="backspace">⌫</button>
+            <button class="btn btn-secondary" data-value="%">%</button>
+            <button class="btn btn-primary" data-value="/">&divide;</button>
+            <button class="btn" data-value="7">7</button>
+            <button class="btn" data-value="8">8</button>
+            <button class="btn" data-value="9">9</button>
+            <button class="btn btn-primary" data-value="*">&times;</button>
+            <button class="btn" data-value="4">4</button>
+            <button class="btn" data-value="5">5</button>
+            <button class="btn" data-value="6">6</button>
+            <button class="btn btn-primary" data-value="-">-</button>
+            <button class="btn" data-value="1">1</button>
+            <button class="btn" data-value="2">2</button>
+            <button class="btn" data-value="3">3</button>
+            <button class="btn btn-primary" data-value="+">+</button>
+            <button class="btn span-2" data-value="0">0</button>
+            <button class="btn" data-value=".">.</button>
+            <button class="btn btn-primary" data-value="=">=</button>
+        </div>
+        <div id="engineeringBtns" class="calculator-grid is-hidden mt-md">
+            <button class="btn" data-value="sin">sin</button>
+            <button class="btn" data-value="cos">cos</button>
+            <button class="btn" data-value="tan">tan</button>
+            <button class="btn" data-value="sqrt">√</button>
+        </div>
+        <div class="unit-converter">
+            <select id="unitFrom" class="form-select"><option value="ft">Feet</option><option value="in">Inches</option><option value="sqft">Sq. Ft.</option><option value="sqyd">Sq. Yd.</option></select>
+            <button class="btn btn-secondary" id="convertUnitBtn">&rarr;</button>
+            <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sqyd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
+        </div>
+        <button class="btn btn-success w-full mt-lg" id="useValueBtn">Use Value</button>
+    </div>
+</div>
 
-    <div class="modal" id="takeoffLabelModal" aria-hidden="true">
-        <div class="modal-dialog">
-            <form id="takeoffLabelForm" class="modal-form" novalidate>
-                <div class="modal-header">
-                    <h2 class="modal-title">Name Measurement</h2>
-                    <button type="button" class="modal-close" id="closeTakeoffLabelModal" aria-label="Close measurement name dialog">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <label class="form-label" for="takeoffLabelInput">Measurement name</label>
-                    <input id="takeoffLabelInput" class="form-input" type="text" required>
-                    <p class="form-help">Provide a descriptive label to keep your takeoff organized.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="cancelTakeoffLabelModal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="confirmTakeoffLabelModal">Save</button>
-                </div>
-            </form>
+<div class="modal" id="newProjectModal" role="dialog" aria-modal="true" aria-labelledby="newProjectModalTitle" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-header"><h2 class="modal-title" id="newProjectModalTitle">Select Estimator Type</h2><button class="modal-close" id="closeNewProjectModal" aria-label="Close new project dialog">&times;</button></div>
+        <div class="button-row justify-center gap-md mt-md">
+            <button class="btn btn-primary" id="startQuickBtn">Quick Estimator</button>
+            <button class="btn btn-secondary" id="startDetailedBtn">Detailed Bidding</button>
         </div>
     </div>
+</div>
 
-    <script type="module" src="app.js"></script>
-    <div id="takeoffPdfModal" class="takeoff-pdf-modal" aria-hidden="true">
-        <div class="takeoff-pdf-modal-overlay" id="takeoffPdfModalOverlay"></div>
-        <div class="takeoff-pdf-modal-window" role="dialog" aria-modal="true" aria-labelledby="takeoffPdfModalTitle">
-            <div class="takeoff-pdf-modal-header">
-                <h2 id="takeoffPdfModalTitle">PDF Reader</h2>
-                <button type="button" class="btn btn-ghost takeoff-pdf-modal-close" id="takeoffPdfModalClose" aria-label="Close PDF reader">×</button>
+<!-- Toast Container -->
+<div id="toastContainer"></div>
+
+<div class="modal" id="takeoffLabelModal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-dialog">
+        <form id="takeoffLabelForm" class="modal-form" novalidate>
+            <div class="modal-header">
+                <h2 class="modal-title">Name Measurement</h2>
+                <button type="button" class="modal-close" id="closeTakeoffLabelModal" aria-label="Close measurement name dialog">&times;</button>
             </div>
-            <div class="takeoff-pdf-modal-tools is-hidden" id="takeoffPdfModalTools" aria-label="Takeoff tools"></div>
-            <iframe id="takeoffPdfFrame" title="PDF reader" loading="lazy"></iframe>
-            <p class="takeoff-pdf-modal-hint">Use the built-in PDF controls for search, download, zoom, and printing.</p>
-        </div>
+            <div class="modal-body">
+                <label class="form-label" for="takeoffLabelInput">Measurement name</label>
+                <input id="takeoffLabelInput" class="form-input" type="text" required>
+                <p class="form-help">Provide a descriptive label to keep your takeoff organized.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelTakeoffLabelModal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="confirmTakeoffLabelModal">Save</button>
+            </div>
+        </form>
     </div>
+</div>
+
+<script type="module" src="app.js"></script>
+<div id="takeoffPdfModal" class="takeoff-pdf-modal" aria-hidden="true">
+    <div class="takeoff-pdf-modal-overlay" id="takeoffPdfModalOverlay"></div>
+    <div class="takeoff-pdf-modal-window" role="dialog" aria-modal="true" aria-labelledby="takeoffPdfModalTitle">
+        <div class="takeoff-pdf-modal-header">
+            <h2 id="takeoffPdfModalTitle">PDF Reader</h2>
+            <button type="button" class="btn btn-ghost takeoff-pdf-modal-close" id="takeoffPdfModalClose" aria-label="Close PDF reader">×</button>
+        </div>
+        <div class="takeoff-pdf-modal-tools is-hidden" id="takeoffPdfModalTools" aria-label="Takeoff tools"></div>
+        <iframe id="takeoffPdfFrame" title="PDF reader" loading="lazy"></iframe>
+        <p class="takeoff-pdf-modal-hint">Use the built-in PDF controls for search, download, zoom, and printing.</p>
+    </div>
+</div>
 </body>
 </html>

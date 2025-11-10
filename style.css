@@ -813,10 +813,11 @@ fieldset.material-fieldset {
     gap: var(--space-sm);
 }
 
+
 .line-item-header-row,
 .line-item-body > div {
     display: grid;
-    grid-template-columns: 1.1fr 2fr repeat(4, 1fr);
+    grid-template-columns: 1.2fr 2fr repeat(4, 1fr);
     gap: var(--space-xs);
     align-items: center;
 }
@@ -828,22 +829,18 @@ fieldset.material-fieldset {
 }
 
 .line-item-body > div {
-    padding: calc(var(--space-xs) * 0.75) 0;
+    padding: 0.35rem 0;
     border-bottom: 1px solid var(--border);
 }
 
-.line-item-row .form-input,
-.line-item-row .form-select {
-    padding: 0.4rem 0.5rem;
-    font-size: 0.95rem;
+.line-item-body .form-input,
+.line-item-body .form-select {
+    padding: 0.4rem 0.55rem;
+    font-size: 0.9rem;
 }
 
-.line-item-row .remove-line-item {
-    justify-self: end;
-    width: 2rem;
-    height: 2rem;
-    line-height: 1;
-    padding: 0.35rem;
+.line-item-body .remove-line-item {
+    padding: 0.25rem 0.45rem;
 }
 
 .takeoff-layout {
@@ -857,6 +854,95 @@ fieldset.material-fieldset {
     display: flex;
     flex-direction: column;
     gap: var(--space-xl);
+}
+
+.detailed-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+}
+
+.detailed-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+}
+
+.detailed-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+}
+
+@media (min-width: 1100px) {
+    .detailed-layout {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .detailed-main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .detailed-sidebar {
+        width: min(360px, 100%);
+        flex-shrink: 0;
+        position: sticky;
+        top: 6rem;
+    }
+}
+
+.bid-info-panel {
+    margin-top: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-alt);
+}
+
+.bid-info-panel[open] {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.08);
+}
+
+.bid-info-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    list-style: none;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.bid-info-summary::-webkit-details-marker {
+    display: none;
+}
+
+.bid-info-summary-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.bid-info-summary-text {
+    flex: 1;
+    font-size: 0.95rem;
+}
+
+.bid-info-summary-icon {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.bid-info-panel[open] .bid-info-summary-icon {
+    transform: rotate(180deg);
+}
+
+.bid-info-form {
+    margin-top: var(--space-md);
 }
 
 .takeoff-drawings,
@@ -888,32 +974,79 @@ fieldset.material-fieldset {
     padding: var(--space-md) 0;
 }
 
+.takeoff-plan-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.takeoff-plan {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
 .takeoff-plan-stage {
     position: relative;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    min-height: 320px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: var(--gray-100);
     overflow: auto;
-    background: rgba(148, 163, 184, 0.12);
-    padding: var(--space-md);
+    min-height: 360px;
+    padding: var(--space-sm);
 }
 
 .takeoff-plan-inner {
     position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: var(--space-md);
+    display: inline-block;
+    min-width: 100%;
+    min-height: 100%;
 }
 
-.takeoff-plan-inner canvas,
-.takeoff-plan-inner img {
-    max-width: 100%;
+.takeoff-plan-inner img,
+.takeoff-plan-inner canvas {
+    display: block;
+    max-width: none;
+}
+
+.takeoff-plan-inner canvas {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+body.takeoff-fullscreen-active {
+    overflow: hidden;
+}
+
+.takeoff-plan-card.takeoff-plan-card--fullscreen {
+    position: fixed;
+    top: clamp(0.75rem, 2vw, 2rem);
+    right: clamp(0.75rem, 2vw, 2rem);
+    bottom: clamp(0.75rem, 2vw, 2rem);
+    left: clamp(0.75rem, 2vw, 2rem);
+    z-index: 5000;
+    max-width: none;
+    margin: 0;
+    box-shadow: 0 40px 90px rgba(15, 23, 42, 0.2);
+}
+
+.takeoff-plan-card.takeoff-plan-card--fullscreen .takeoff-plan {
+    flex: 1;
+}
+
+.takeoff-plan-card.takeoff-plan-card--fullscreen .takeoff-plan-stage {
+    flex: 1;
+    min-height: 0;
+}
+
+@media (max-width: 768px) {
+    .takeoff-plan-card.takeoff-plan-card--fullscreen {
+        top: 0.75rem;
+        right: 0.75rem;
+        bottom: 0.75rem;
+        left: 0.75rem;
+    }
 }
 
 .takeoff-plan.takeoff-plan-fullscreen {
@@ -1041,6 +1174,7 @@ body.takeoff-fullscreen-active {
     z-index: 100;
 }
 
+.modal.active,
 .modal.show {
     display: flex;
 }

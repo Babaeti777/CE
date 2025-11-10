@@ -198,6 +198,9 @@ export class TakeoffManager {
         }
         this.lifecycle?.cleanup?.();
         this.closePdfViewer({ silent: true });
+        if (this.state.isFullscreen) {
+            this.setFullscreen(false);
+        }
         this.cleanupDrawings();
     }
 
@@ -219,6 +222,7 @@ export class TakeoffManager {
             planStage: byId('takeoffPlanStage'),
             modeSelect: byId('takeoffModeSelect'),
             scaleInput: byId('takeoffScaleInput'),
+            planCard: document.querySelector('.takeoff-plan-card'),
             zoomOutBtn: byId('takeoffZoomOutBtn'),
             zoomInBtn: byId('takeoffZoomInBtn'),
             zoomResetBtn: byId('takeoffZoomResetBtn'),
@@ -232,7 +236,6 @@ export class TakeoffManager {
             pdfPageTotal: byId('takeoffPdfPageTotal'),
             pdfOpenBtn: byId('takeoffPdfOpen'),
             pdfDownloadBtn: byId('takeoffPdfDownload'),
-            openPdfBtn: byId('takeoffOpenPdfBtn'),
             pdfModal: byId('takeoffPdfModal'),
             pdfModalOverlay: byId('takeoffPdfModalOverlay'),
             pdfModalClose: byId('takeoffPdfModalClose'),
@@ -274,7 +277,6 @@ export class TakeoffManager {
             pdfPageInput,
             pdfOpenBtn,
             pdfDownloadBtn,
-            openPdfBtn,
             pdfModalOverlay,
             pdfModalClose,
             fullscreenBtn,
@@ -330,8 +332,8 @@ export class TakeoffManager {
                 this.updatePdfToolbar(this.getActiveDrawing());
             }
         });
-        this.lifecycle.addEventListener(pdfOpenBtn, 'click', () => this.openActivePdfInNewTab());
-        this.lifecycle.addEventListener(openPdfBtn, 'click', () => this.openActivePdfInViewer());
+        const openPdfHandler = () => this.openActivePdfInViewer();
+        this.lifecycle.addEventListener(pdfOpenBtn, 'click', openPdfHandler);
         this.lifecycle.addEventListener(pdfDownloadBtn, 'click', () => this.downloadActivePdf());
 
         const closeModalHandler = () => this.closePdfViewer();
@@ -1911,7 +1913,7 @@ export class TakeoffManager {
     }
 
     updatePdfControls(drawing = this.getActiveDrawing()) {
-        const { pdfControls, pdfPageInput, pdfPageTotal, pdfDownloadBtn, pdfOpenBtn, openPdfBtn } = this.elements;
+        const { pdfControls, pdfPageInput, pdfPageTotal, pdfDownloadBtn, pdfOpenBtn } = this.elements;
         const isPdf = Boolean(drawing && drawing.type === 'pdf');
         const totalPages = drawing?.totalPages || 1;
         if (pdfControls) {
@@ -1925,12 +1927,12 @@ export class TakeoffManager {
         if (pdfPageTotal) {
             pdfPageTotal.textContent = `of ${totalPages}`;
         }
-        const buttons = [pdfDownloadBtn, pdfOpenBtn, openPdfBtn];
+        const buttons = [pdfDownloadBtn, pdfOpenBtn];
         buttons.forEach((btn) => {
             if (btn) {
                 btn.toggleAttribute('aria-hidden', !isPdf);
                 btn.disabled = !isPdf;
-                btn.classList.toggle('is-hidden', !isPdf && btn === openPdfBtn);
+                btn.classList.toggle('is-hidden', !isPdf && btn === pdfOpenBtn);
             }
         });
     }
@@ -2064,10 +2066,13 @@ export class TakeoffManager {
     }
 
     setFullscreen(enabled) {
-        const { planContainer, fullScreenToggle, fullscreenBtn } = this.elements;
+        const { planCard, fullScreenToggle, fullscreenBtn } = this.elements;
         this.state.isFullscreen = Boolean(enabled);
-        if (planContainer) {
-            planContainer.classList.toggle('takeoff-plan-fullscreen', this.state.isFullscreen);
+        if (planCard) {
+            planCard.classList.toggle('takeoff-plan-card--fullscreen', this.state.isFullscreen);
+        }
+        if (typeof document !== 'undefined') {
+            document.body?.classList.toggle('takeoff-fullscreen-active', this.state.isFullscreen);
         }
         if (fullScreenToggle) {
             fullScreenToggle.textContent = this.state.isFullscreen ? 'Exit Full View' : 'Full View';
@@ -2082,6 +2087,7 @@ export class TakeoffManager {
         if (!this.state.isFullscreen && document.fullscreenElement) {
             document.exitFullscreen?.();
         }
+        this.applyZoom();
     }
 
     updateFullscreenButton() {

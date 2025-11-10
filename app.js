@@ -1372,6 +1372,7 @@ import {
                 const bidDateInput = document.getElementById('bidDate');
                 if (bidDateInput) {
                     bidDateInput.value = new Date().toISOString().split('T')[0];
+                    updateBidInfoSummary();
                 }
 
                 await safeInitCloudSync();
@@ -1970,6 +1971,13 @@ import {
             ['overhead', 'profit', 'contingency'].forEach(id => {
                 document.getElementById(id)?.addEventListener('input', updateBidTotal);
             });
+
+            ['bidProjectName', 'clientName', 'completionDays'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', updateBidInfoSummary);
+            });
+            const bidDateEl = document.getElementById('bidDate');
+            bidDateEl?.addEventListener('input', updateBidInfoSummary);
+            bidDateEl?.addEventListener('change', updateBidInfoSummary);
             
             const lineItemsContainer = document.getElementById('lineItems');
             if (lineItemsContainer) {
@@ -2130,21 +2138,31 @@ import {
         }
 
         function updateSidebarToggleState() {
-            const button = document.getElementById('sidebarCollapseBtn');
+            const collapseButton = document.getElementById('sidebarCollapseBtn');
+            const menuToggle = document.getElementById('menuToggle');
             const sidebar = document.getElementById('sidebar');
-            if (!button || !sidebar) return;
+            if (!sidebar) return;
 
             const collapsed = isSidebarCollapsed();
             const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
 
-            button.classList.toggle('collapsed', collapsed);
-            button.setAttribute('aria-label', label);
-            button.setAttribute('aria-expanded', String(!collapsed));
-            button.setAttribute('title', label);
+            if (collapseButton) {
+                collapseButton.classList.toggle('collapsed', collapsed);
+                collapseButton.setAttribute('aria-label', label);
+                collapseButton.setAttribute('aria-expanded', String(!collapsed));
+                collapseButton.setAttribute('title', label);
 
-            const textEl = button.querySelector('[data-toggle-label]');
-            if (textEl) {
-                textEl.textContent = label;
+                const textEl = collapseButton.querySelector('[data-toggle-label]');
+                if (textEl) {
+                    textEl.textContent = label;
+                }
+            }
+
+            if (menuToggle) {
+                const mobileLabel = collapsed ? 'Open navigation' : 'Close navigation';
+                menuToggle.setAttribute('aria-expanded', String(!collapsed));
+                menuToggle.setAttribute('aria-label', mobileLabel);
+                menuToggle.setAttribute('title', mobileLabel);
             }
         }
 
@@ -2243,11 +2261,17 @@ import {
         }
         
         function openModal(modalId) {
-            document.getElementById(modalId)?.classList.add('active');
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.add('active');
+            modal.setAttribute('aria-hidden', 'false');
         }
-        
+
         function closeModal(modalId) {
-            document.getElementById(modalId)?.classList.remove('active');
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
         }
 
         // --- QUICK ESTIMATOR ---
@@ -2663,7 +2687,6 @@ import {
             bid.lineItems.forEach(item => addLineItem(item, { position: 'bottom' }));
             updateBidTotal();
             updateBidInfoSummary();
-            setBidInfoCollapsed(false);
             switchTab('detailed');
         }
 
@@ -2964,6 +2987,54 @@ import {
             document.getElementById('bidMarkup').textContent = formatCurrency(markup);
             document.getElementById('bidContingency').textContent = formatCurrency(contingency);
             document.getElementById('bidTotal').textContent = formatCurrency(total);
+        }
+
+        function updateBidInfoSummary() {
+            const summaryEl = document.getElementById('bidInfoSummaryText');
+            if (!summaryEl) {
+                return;
+            }
+
+            const projectNameField = document.getElementById('bidProjectName');
+            const clientNameField = document.getElementById('clientName');
+            const bidDateField = document.getElementById('bidDate');
+            const completionField = document.getElementById('completionDays');
+
+            const projectName = projectNameField?.value?.trim() || '';
+            const clientName = clientNameField?.value?.trim() || '';
+            const bidDateValue = bidDateField?.value || '';
+            const completionRaw = completionField?.value?.trim() || '';
+
+            const hasDetails = Boolean(projectName || clientName || bidDateValue || completionRaw);
+            if (!hasDetails) {
+                summaryEl.textContent = 'Add project details to build your summary.';
+                return;
+            }
+
+            let bidDateText = 'Date TBD';
+            if (bidDateValue) {
+                const parsed = new Date(bidDateValue);
+                bidDateText = Number.isFinite(parsed.getTime())
+                    ? parsed.toLocaleDateString()
+                    : bidDateValue;
+            }
+
+            const completionNumber = Number.parseInt(completionRaw, 10);
+            let timelineText = 'TBD';
+            if (Number.isFinite(completionNumber) && completionNumber > 0) {
+                timelineText = `${completionNumber} day${completionNumber === 1 ? '' : 's'}`;
+            } else if (completionRaw) {
+                timelineText = completionRaw;
+            }
+
+            const parts = [
+                projectName || 'Untitled project',
+                clientName ? `Client: ${clientName}` : 'Client: TBD',
+                `Bid: ${bidDateText}`,
+                `Duration: ${timelineText}`
+            ];
+
+            summaryEl.textContent = parts.join(' • ');
         }
         
         async function saveBid() {
