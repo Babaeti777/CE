@@ -1529,7 +1529,6 @@ export class TakeoffManager {
             this.updatePlanVisibility();
             this.refreshMeasurementTable();
             this.drawMeasurements();
-            this.updatePdfControls();
             this.updateScaleControls();
             this.updateZoomIndicator();
             this.updateCountToolbarVisibility();
@@ -1746,7 +1745,6 @@ export class TakeoffManager {
             activeMeta.textContent = formatMeta(drawing);
         }
         await this.updatePlanPreview(drawing);
-        this.updatePdfControls(drawing);
     }
 
         async updatePlanPreview(drawing) {
