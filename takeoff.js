@@ -1999,8 +1999,15 @@ export class TakeoffManager {
         }
 
         const noteId = item.getAttribute('data-note-id');
-        drawing.notes = (drawing.notes || []).filter((note) => note.id !== noteId);
+        const notes = Array.isArray(drawing.notes) ? drawing.notes : [];
+        const nextNotes = notes.filter((note) => note.id !== noteId);
+        if (nextNotes.length === notes.length) {
+            return;
+        }
+
+        drawing.notes = nextNotes;
         this.renderNotes(drawing);
+        this.persistState();
         this.showToast('Note removed.', 'info');
     }
 
