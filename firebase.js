@@ -1,3 +1,6 @@
+const CONFIG_STORAGE_KEY = 'ce:firebase-config';
+const REQUIRED_CONFIG_KEYS = ['apiKey', 'authDomain', 'projectId', 'appId'];
+
 let appInstance = null;
 let firestoreInstance = null;
 let authInstance = null;
@@ -43,6 +46,7 @@ async function loadFirebaseModules() {
                 deleteDoc: firestoreModule.deleteDoc,
                 onSnapshot: firestoreModule.onSnapshot,
                 getDoc: firestoreModule.getDoc,
+                writeBatch: firestoreModule.writeBatch,
                 getAuth: authModule.getAuth,
                 GoogleAuthProvider: authModule.GoogleAuthProvider,
                 signInWithPopup: authModule.signInWithPopup,
@@ -108,6 +112,8 @@ export async function initializeFirebase() {
     if (!options) {
         throw new Error('Firebase configuration is missing. Add your web app credentials in the settings panel.');
     }
+
+    manualConfig = normalizeConfig(options);
 
     const api = await loadFirebaseModules();
 
@@ -220,23 +226,38 @@ export function signOutFromGoogle() {
 export async function saveCompanyInfo(profileId, companyInfo) {
     const { setDoc } = requireFirebaseApi();
     const docRef = profileDoc(profileId);
-    const payload = {
-        companyInfo: companyInfo || {},
-        updatedAt: new Date().toISOString(),
-    };
-    await setDoc(docRef, payload, { merge: true });
+    await setDoc(docRef, { companyInfo, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
 export async function loadCompanyInfo(profileId) {
     const { getDoc } = requireFirebaseApi();
-    const docRef = profileDoc(profileId);
-    const snapshot = await getDoc(docRef);
-    if (!snapshot.exists()) return null;
-    const data = snapshot.data();
-    return data?.companyInfo || null;
+    const docSnap = await getDoc(profileDoc(profileId));
+    if (!docSnap.exists()) return null;
+    return docSnap.data()?.companyInfo || null;
 }
 
 export async function replaceAllProjects(profileId, projects = []) {
-    const ops = projects.map(project => saveProject(profileId, project));
-    await Promise.all(ops);
+    const db = requireFirestore();
+    const { doc, setDoc, deleteDoc } = requireFirebaseApi();
+    const batch = firebaseApi.writeBatch ? firebaseApi.writeBatch(db) : null;
+
+    if (batch) {
+        const collectionRef = projectCollection(profileId);
+        const existing = await firebaseApi.getDocs(collectionRef);
+        existing.forEach(docSnap => batch.delete(docSnap.ref));
+        projects.forEach(project => {
+            const docRef = doc(collectionRef, String(project.id));
+            batch.set(docRef, project, { merge: true });
+        });
+        await batch.commit();
+        return;
+    }
+
+    const collectionRef = projectCollection(profileId);
+    const existing = await firebaseApi.getDocs(collectionRef);
+    await Promise.all(existing.docs.map(docSnap => deleteDoc(docSnap.ref)));
+    await Promise.all(projects.map(project => {
+        const docRef = doc(collectionRef, String(project.id));
+        return setDoc(docRef, project, { merge: true });
+    }));
 }

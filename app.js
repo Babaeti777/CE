@@ -1401,6 +1401,7 @@ import {
                 } else {
                     populateCompanyInfoFields();
                 }
+                populateFirebaseConfigFields();
                 const settings = loadSettingsFromStorage();
                 state.autoUpdate = settings.autoUpdate || state.autoUpdate;
                 state.updateFrequency = settings.updateFrequency || state.updateFrequency;
@@ -2157,8 +2158,6 @@ import {
             const worksheetBody = document.getElementById('estimateWorksheetBody');
             worksheetBody?.addEventListener('input', handleWorksheetInput);
 
-            lifecycle.addEventListener(window, 'resize', handleSidebarResize);
-            updateSidebarToggleState();
 
             // Calculator
             document.getElementById('calculatorGrid')?.addEventListener('click', handleCalculatorClick);
@@ -2176,19 +2175,48 @@ import {
             updateBidInfoSummary();
             setBidInfoCollapsed(false);
 
-            handleSidebarResize();
+            updateNavToggle();
         }
 
         // --- NAVIGATION & UI ---
         function setupNavigation() {
-            document.querySelectorAll('.nav-item').forEach(item => {
+            document.querySelectorAll('.topnav-item').forEach(item => {
                 item.addEventListener('click', function() {
                     const tab = this.getAttribute('data-tab');
                     if (tab) switchTab(tab);
                 });
             });
 
+            const navToggle = document.getElementById('navToggle');
+            if (navToggle) {
+                navToggle.addEventListener('click', toggleNavMenu);
+            }
+
+            lifecycle.addEventListener(window, 'resize', () => updateNavToggle());
             switchTab(state.currentTab || 'dashboard');
+            updateNavToggle();
+        }
+
+        function toggleNavMenu() {
+            const navToggle = document.getElementById('navToggle');
+            const isOpen = document.body.classList.toggle('nav-open');
+            navToggle?.setAttribute('aria-expanded', String(isOpen));
+        }
+
+        function closeNavMenu() {
+            if (!document.body.classList.contains('nav-open')) return;
+            document.body.classList.remove('nav-open');
+            const navToggle = document.getElementById('navToggle');
+            navToggle?.setAttribute('aria-expanded', 'false');
+        }
+
+        function updateNavToggle() {
+            const navToggle = document.getElementById('navToggle');
+            if (!navToggle) return;
+            if (window.matchMedia('(min-width: 1025px)').matches) {
+                document.body.classList.remove('nav-open');
+                navToggle.setAttribute('aria-expanded', 'false');
+            }
         }
 
         function switchTab(tabId) {
@@ -2200,7 +2228,7 @@ import {
                 tab.setAttribute('aria-hidden', String(!isActive));
             });
 
-            document.querySelectorAll('.nav-item').forEach(item => {
+            document.querySelectorAll('.topnav-item').forEach(item => {
                 const isActive = item.getAttribute('data-tab') === tabId;
                 item.classList.toggle('active', isActive);
                 item.setAttribute('aria-selected', String(isActive));
@@ -2966,6 +2994,54 @@ import {
             return div;
         }
         
+        function handleManualLineItemSubmit(event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            if (!form) return;
+
+            const category = form.querySelector('#manualCategoryInput')?.value.trim();
+            const description = form.querySelector('#manualDescriptionInput')?.value.trim();
+            const quantityRaw = parseFloat(form.querySelector('#manualQuantityInput')?.value || '0');
+            const unit = form.querySelector('#manualUnitInput')?.value.trim() || '';
+            const rateRaw = parseFloat(form.querySelector('#manualRateInput')?.value || '0');
+
+            if (!category || !description) {
+                showToast('Add a category and description to create a manual item.', 'error');
+                return;
+            }
+
+            const quantity = Number.isFinite(quantityRaw) ? quantityRaw : 0;
+            const rate = Number.isFinite(rateRaw) ? rateRaw : 0;
+
+            if (!state.lineItemCategories[category]) {
+                state.lineItemCategories[category] = [];
+            }
+
+            if (!state.lineItemCategories[category].some(item => item.name === description)) {
+                state.lineItemCategories[category].push({ name: description, unit, rate });
+                state.lineItemCategories[category].sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            const newRow = addLineItem({
+                category,
+                description,
+                quantity: quantity || 0,
+                unit,
+                rate,
+                total: (quantity || 0) * (rate || 0)
+            }, { position: 'top' });
+
+            refreshLineItemCategoryOptions();
+            if (newRow) {
+                updateLineItemTotal(newRow);
+            }
+            form.reset();
+            const quantityInput = form.querySelector('#manualQuantityInput');
+            if (quantityInput) quantityInput.value = '1';
+            form.querySelector('#manualCategoryInput')?.focus();
+            showToast('Manual line item added to the bid.', 'success');
+        }
+
         function updateItemSelectionOptions(row, { preserveExisting = false, previousDescription } = {}) {
             const categorySelect = row.querySelector('[data-field="category"]');
             const descriptionSelect = row.querySelector('[data-field="description"]');

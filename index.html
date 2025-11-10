@@ -358,6 +358,14 @@
                                         <button type="submit" class="btn btn-primary manual-submit">Add Manual Item</button>
                                     </form>
                                 </div>
+                                <form id="manualLineItemForm" class="line-item-quick-add">
+                                    <input type="text" class="form-input" id="manualCategoryInput" placeholder="Category" required>
+                                    <input type="text" class="form-input" id="manualDescriptionInput" placeholder="Description" required>
+                                    <input type="number" class="form-input" id="manualQuantityInput" placeholder="Qty" min="0" step="0.01" value="1" required>
+                                    <input type="text" class="form-input" id="manualUnitInput" placeholder="Unit" required>
+                                    <input type="number" class="form-input" id="manualRateInput" placeholder="Rate" min="0" step="0.01" required>
+                                    <button class="btn btn-primary" type="submit">Add Manual Item</button>
+                                </form>
                             </div>
                             <div class="line-item-table-wrapper">
                                 <div class="line-item-header-row">
@@ -424,17 +432,26 @@
                                 <input type="file" id="takeoffDrawingInput" accept="image/*" multiple class="hidden-input">
                                 </label>
                             </div>
-                        <div class="takeoff-filters">
-                            <input type="search" class="form-input" id="takeoffSearchInput" placeholder="Filter by name, trade, floor...">
-                            <div class="takeoff-sort-group">
-                                <select id="takeoffSortSelect" class="form-select">
-                                    <option value="trade">Sort by Trade</option>
-                                    <option value="floor">Sort by Floor</option>
-                                    <option value="page">Sort by Page</option>
-                                    <option value="name">Sort by Name</option>
-                                </select>
-                                <button type="button" class="btn btn-ghost" id="takeoffSortDirection" aria-label="Toggle sort direction">▲</button>
+                            <button class="btn btn-secondary" id="takeoffAddDrawingBtn" type="button">Add Drawing</button>
+                        </div>
+                        <form id="takeoffDrawingForm" class="takeoff-form">
+                            <div class="takeoff-form-row">
+                                <input type="text" class="form-input" id="takeoffDrawingName" placeholder="Sheet name (e.g. A1.01)" required>
+                                <input type="text" class="form-input" id="takeoffDrawingTrade" placeholder="Trade">
                             </div>
+                            <div class="takeoff-form-row">
+                                <input type="text" class="form-input" id="takeoffDrawingFloor" placeholder="Level">
+                                <input type="text" class="form-input" id="takeoffDrawingNotes" placeholder="Notes">
+                                <button class="btn btn-primary" type="submit">Save</button>
+                            </div>
+                        </form>
+                        <div class="takeoff-filters">
+                            <input type="search" class="form-input" id="takeoffSearchInput" placeholder="Filter drawings...">
+                            <select id="takeoffSortSelect" class="form-select">
+                                <option value="name">Sort by Name</option>
+                                <option value="trade">Sort by Trade</option>
+                                <option value="floor">Sort by Level</option>
+                            </select>
                         </div>
                         <div class="takeoff-drawing-table">
                             <table class="takeoff-table">
@@ -442,22 +459,22 @@
                                     <tr>
                                         <th scope="col">Drawing</th>
                                         <th scope="col">Trade</th>
-                                        <th scope="col">Floor</th>
-                                        <th scope="col">Page</th>
+                                        <th scope="col">Level</th>
+                                        <th scope="col">Notes</th>
                                         <th scope="col"></th>
                                     </tr>
                                 </thead>
                                 <tbody id="takeoffDrawingTableBody"></tbody>
                             </table>
-                            <p id="takeoffDrawingEmpty" class="takeoff-empty">Upload plan files to begin building your takeoff.</p>
+                            <p id="takeoffDrawingEmpty" class="takeoff-empty">Add your first drawing to begin tracking takeoffs.</p>
                         </div>
-                    </div>
-                    <div class="takeoff-workspace">
+                    </section>
+                    <section class="takeoff-workspace">
                         <div class="card takeoff-plan-card">
                             <div class="card-header">
                                 <div>
-                                    <h3 class="card-title">Active Drawing</h3>
-                                    <p id="takeoffActiveMeta" class="takeoff-meta"></p>
+                                    <h3 class="card-title">Measurement Toolkit</h3>
+                                    <p id="takeoffActiveMeta" class="takeoff-meta">Select a drawing to begin capturing measurements.</p>
                                 </div>
                             </div>
                             <div id="takeoffPlanContainer" class="takeoff-plan is-hidden">
@@ -552,20 +569,18 @@
                                         <option value="circle">Circle</option>
                                         <option value="triangle">Triangle</option>
                                     </select>
+                                    <input type="number" class="form-input" id="measurementValueInput" placeholder="Value" min="0" step="0.01" required>
+                                    <input type="text" class="form-input" id="measurementUnitInput" placeholder="Unit (sq ft, lf, ea)" required>
+                                    <button class="btn btn-primary" type="submit">Add</button>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label" for="takeoffDim1">Dimension 1</label>
-                                    <input type="number" id="takeoffDim1" class="form-input" placeholder="Length" min="0" step="0.01">
-                                </div>
-                                <div class="form-group" id="takeoffDim2Group">
-                                    <label class="form-label" for="takeoffDim2">Dimension 2</label>
-                                    <input type="number" id="takeoffDim2" class="form-input" placeholder="Width" min="0" step="0.01">
-                                </div>
-                            </div>
-                                <button class="btn btn-secondary mt-md" id="takeoffQuickCalcBtn">Calculate Area</button>
-                                <p id="takeoffQuickResult" class="takeoff-status mt-sm"></p>
+                            </form>
+                            <div id="takeoffMeasurementList" class="takeoff-measurements"></div>
                         </div>
-                    </div>
+                        <div class="card takeoff-summary-card">
+                            <h3 class="card-title">Totals</h3>
+                            <div id="takeoffSummary" class="takeoff-summary"></div>
+                        </div>
+                    </section>
                 </div>
             </div>
 
@@ -632,6 +647,19 @@
                             <div class="form-group"><label class="form-label">Default Tax Rate (%)</label><input type="number" class="form-input" value="8.5" step="0.1"></div>
                         </div>
                     </div>
+                </div>
+                <div class="card mt-xl">
+                    <h3 class="card-title mb-lg">Firebase Configuration</h3>
+                    <p class="card-subtitle mb-lg">Paste the Firebase web app keys from your console to enable Google sign-in.</p>
+                    <div class="grid-2 gap-md firebase-config-grid">
+                        <div class="form-group"><label class="form-label" for="firebaseApiKey">API Key</label><input type="text" class="form-input" id="firebaseApiKey" autocomplete="off"></div>
+                        <div class="form-group"><label class="form-label" for="firebaseAuthDomain">Auth Domain</label><input type="text" class="form-input" id="firebaseAuthDomain" autocomplete="off"></div>
+                        <div class="form-group"><label class="form-label" for="firebaseProjectId">Project ID</label><input type="text" class="form-input" id="firebaseProjectId" autocomplete="off"></div>
+                        <div class="form-group"><label class="form-label" for="firebaseStorageBucket">Storage Bucket</label><input type="text" class="form-input" id="firebaseStorageBucket" autocomplete="off"></div>
+                        <div class="form-group"><label class="form-label" for="firebaseMessagingSenderId">Messaging Sender ID</label><input type="text" class="form-input" id="firebaseMessagingSenderId" autocomplete="off"></div>
+                        <div class="form-group"><label class="form-label" for="firebaseAppId">App ID</label><input type="text" class="form-input" id="firebaseAppId" autocomplete="off"></div>
+                    </div>
+                    <button class="btn btn-primary mt-md" id="saveFirebaseConfigBtn" type="button">Save Firebase Settings</button>
                 </div>
                 <div class="card mt-xl">
                     <h3 class="card-title mb-lg">Company Information</h3>
