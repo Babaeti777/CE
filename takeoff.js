@@ -18,6 +18,7 @@ const DEFAULT_PDF_SCALE = 1.5;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.1;
+const ROTATION_INCREMENT = 90;
 
 const STORAGE_KEY = 'ce.takeoff.drawings';
 
@@ -27,6 +28,33 @@ const MODE_LABELS = {
     count: 'Count',
     diameter: 'Diameter'
 };
+
+const STORAGE_KEY = 'takeoff::drawings';
+
+const DEFAULT_COUNT_SETTINGS = {
+    color: '#ef4444',
+    shape: 'circle',
+    label: ''
+};
+
+function byId(id) {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+    return document.getElementById(id);
+}
+
+function clamp(value, min, max) {
+    const numericValue = Number.isFinite(value) ? value : min;
+    return Math.min(Math.max(numericValue, min), max);
+}
+
+function normalizeString(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value).trim().toLowerCase();
+}
 
 function createId(prefix = 'drawing') {
     return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -127,6 +155,18 @@ function formatMeta(drawing) {
     if (drawing.floor) parts.push(`Floor ${drawing.floor}`);
     if (drawing.page) parts.push(`Page ${drawing.page}`);
     return parts.filter(Boolean).join(' • ');
+}
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 export class TakeoffManager {
@@ -239,6 +279,9 @@ export class TakeoffManager {
             activeMeta: byId('takeoffActiveMeta'),
             fullscreenBtn: byId('takeoffFullscreenBtn'),
             fullScreenToggle: byId('takeoffFullScreenToggle'),
+            rotateLeftBtn: byId('takeoffRotateLeftBtn'),
+            rotateRightBtn: byId('takeoffRotateRightBtn'),
+            openDocumentBtn: byId('takeoffOpenDocumentBtn'),
             countToolbar: byId('takeoffCountToolbar'),
             countColor: byId('takeoffCountColor'),
             countShape: byId('takeoffCountShape'),
@@ -276,6 +319,9 @@ export class TakeoffManager {
             scaleInput,
             fullscreenBtn,
             fullScreenToggle,
+            rotateLeftBtn,
+            rotateRightBtn,
+            openDocumentBtn,
             countColor,
             countShape,
             countLabel,
@@ -1303,6 +1349,108 @@ export class TakeoffManager {
             naturalWidth: canvas.width,
             naturalHeight: canvas.height
         };
+
+        try {
+            if (SUPPORTED_IMAGE_TYPES.has(file.type) || extension.match(/\.(png|jpe?g|webp|gif|svg)$/)) {
+                drawing.type = 'image';
+                await this.prepareImagePreview(drawing, { rotation: 0 });
+                return drawing;
+            }
+
+            if (SUPPORTED_PDF_TYPES.has(file.type) || extension.endsWith('.pdf')) {
+                drawing.type = 'pdf';
+                await this.preparePdfPreview(drawing, { rotation: 0 });
+                return drawing;
+            }
+        } catch (error) {
+            URL.revokeObjectURL(objectUrl);
+            throw error;
+        }
+
+        URL.revokeObjectURL(objectUrl);
+        throw new Error('Unsupported file type. Upload PDF, PNG, JPG, GIF, or WebP plans.');
+    }
+
+    async prepareImagePreview(drawing, { rotation = 0 } = {}) {
+        if (!drawing) return;
+        if (!drawing.sourceDataUrl) {
+            drawing.sourceDataUrl = await this.readFileAsDataURL(drawing.file);
+        }
+
+        const image = await this.loadImage(drawing.sourceDataUrl);
+        drawing.originalWidth = image.naturalWidth;
+        drawing.originalHeight = image.naturalHeight;
+        drawing.rotation = ((rotation % 360) + 360) % 360;
+
+        const { dataUrl, width, height } = await this.renderImageWithRotation(image, drawing.rotation);
+        drawing.previewUrl = dataUrl;
+        drawing.naturalWidth = width;
+        drawing.naturalHeight = height;
+    }
+
+    async preparePdfPreview(drawing, { rotation = 0 } = {}) {
+        if (typeof window === 'undefined' || !window.pdfjsLib) {
+            throw new Error('PDF preview support is not available.');
+        }
+
+        const loadingTask = window.pdfjsLib.getDocument({ url: drawing.objectUrl });
+        const pdf = await loadingTask.promise;
+        try {
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 1.5, rotation: ((rotation % 360) + 360) % 360 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = Math.ceil(viewport.width);
+            canvas.height = Math.ceil(viewport.height);
+            await page.render({ canvasContext: context, viewport }).promise;
+
+            drawing.previewUrl = canvas.toDataURL('image/png');
+            drawing.naturalWidth = canvas.width;
+            drawing.naturalHeight = canvas.height;
+            drawing.rotation = ((rotation % 360) + 360) % 360;
+            drawing.pageCount = pdf.numPages;
+        } finally {
+            pdf.cleanup?.();
+            pdf.destroy?.();
+        }
+    }
+
+    async readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Unable to read file.'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.decoding = 'async';
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('Unable to load image.'));
+            img.src = src;
+        });
+    }
+
+    async renderImageWithRotation(image, rotation) {
+        const angle = ((rotation % 360) + 360) % 360;
+        const needsSwap = angle === 90 || angle === 270;
+        const width = needsSwap ? image.naturalHeight : image.naturalWidth;
+        const height = needsSwap ? image.naturalWidth : image.naturalHeight;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = Math.max(Math.round(width), 1);
+        canvas.height = Math.max(Math.round(height), 1);
+        context.translate(canvas.width / 2, canvas.height / 2);
+        context.rotate((angle * Math.PI) / 180);
+        context.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+        return {
+            dataUrl: canvas.toDataURL('image/png'),
+            width: canvas.width,
+            height: canvas.height
+        };
     }
 
     async ensurePdfWorker() {
@@ -1463,6 +1611,120 @@ export class TakeoffManager {
         }
     }
 
+    renderNotes(drawing) {
+        const { noteList } = this.elements;
+        if (!noteList) {
+            return;
+        }
+
+        if (!drawing) {
+            noteList.innerHTML = '<li class="takeoff-note-item takeoff-note-empty">Select a drawing to capture plan notes.</li>';
+            return;
+        }
+
+        const notes = Array.isArray(drawing.notes) ? drawing.notes : [];
+        if (!notes.length) {
+            noteList.innerHTML = '<li class="takeoff-note-item takeoff-note-empty">No notes yet. Add context before sharing takeoffs.</li>';
+            return;
+        }
+
+        noteList.innerHTML = notes.map((note) => {
+            const timestamp = note.createdAt ? new Date(note.createdAt).toLocaleString() : '';
+            return `
+                <li class="takeoff-note-item" data-note-id="${escapeHtml(note.id)}">
+                    <div class="takeoff-note-text">${escapeHtml(note.text)}</div>
+                    <div class="takeoff-note-meta">
+                        ${escapeHtml(timestamp)}
+                        <button type="button" class="btn btn-ghost takeoff-note-remove" data-action="remove-note" aria-label="Remove note">Remove</button>
+                    </div>
+                </li>
+            `;
+        }).join('');
+    }
+
+    handleAddNote() {
+        const { noteInput } = this.elements;
+        const drawing = this.getActiveDrawing();
+        if (!drawing || !noteInput) {
+            this.showToast('Select a drawing before adding a note.', 'warning');
+            return;
+        }
+
+        const text = noteInput.value.trim();
+        if (!text) {
+            this.showToast('Enter a note before saving.', 'warning');
+            return;
+        }
+
+        if (!Array.isArray(drawing.notes)) {
+            drawing.notes = [];
+        }
+
+        drawing.notes.unshift({
+            id: createId('note'),
+            text,
+            createdAt: Date.now()
+        });
+        noteInput.value = '';
+        this.renderNotes(drawing);
+        this.showToast('Note added to drawing.', 'success');
+    }
+
+    handleNoteListClick(event) {
+        const removeButton = event.target.closest('[data-action="remove-note"]');
+        if (!removeButton) {
+            return;
+        }
+        const item = removeButton.closest('[data-note-id]');
+        const drawing = this.getActiveDrawing();
+        if (!drawing || !item) {
+            return;
+        }
+
+        const noteId = item.getAttribute('data-note-id');
+        drawing.notes = (drawing.notes || []).filter((note) => note.id !== noteId);
+        this.renderNotes(drawing);
+        this.showToast('Note removed.', 'info');
+    }
+
+    async rotateActiveDrawing(delta = ROTATION_INCREMENT) {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            this.showToast('Select a drawing before rotating.', 'warning');
+            return;
+        }
+        const nextRotation = ((drawing.rotation || 0) + delta) % 360;
+        try {
+            if (drawing.type === 'pdf') {
+                await this.preparePdfPreview(drawing, { rotation: nextRotation });
+            } else {
+                await this.prepareImagePreview(drawing, { rotation: nextRotation });
+            }
+            await this.updatePlanPreview(drawing);
+            this.drawMeasurements();
+            this.updateStatus(`Rotation set to ${drawing.rotation}°.`);
+        } catch (error) {
+            console.error('Unable to rotate drawing', error);
+            this.showToast('Unable to rotate document preview.', 'error');
+        }
+    }
+
+    openActiveDocument() {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        const drawing = this.getActiveDrawing();
+        if (!drawing || !drawing.objectUrl) {
+            this.showToast('Select a drawing before opening the source file.', 'warning');
+            return;
+        }
+        try {
+            window.open(drawing.objectUrl, '_blank', 'noopener');
+        } catch (error) {
+            console.error('Unable to open drawing', error);
+            this.showToast('Unable to open the original document.', 'error');
+        }
+    }
     handleDrawingTableClick(event) {
         const button = event.target.closest('[data-action]');
         if (button) {
@@ -1964,7 +2226,7 @@ export class TakeoffManager {
             this.updatePlanVisibility();
             this.refreshMeasurementTable();
             this.drawMeasurements();
-            this.updatePdfControls();
+            this.updatePdfControls(null);
             this.updateScaleControls();
             this.updateZoomIndicator();
             this.updateCountToolbarVisibility();
@@ -2236,6 +2498,20 @@ export class TakeoffManager {
         }
     }
 
+    updatePdfControls(drawing) {
+        const { rotateLeftBtn, rotateRightBtn, openDocumentBtn } = this.elements;
+        const hasDrawing = Boolean(drawing);
+        [rotateLeftBtn, rotateRightBtn, openDocumentBtn].forEach((btn) => {
+            if (btn) {
+                btn.disabled = !hasDrawing;
+                btn.classList.toggle('is-disabled', !hasDrawing);
+            }
+        });
+        if (openDocumentBtn) {
+            openDocumentBtn.setAttribute('aria-disabled', hasDrawing ? 'false' : 'true');
+        }
+    }
+
     async updateActiveDrawingDisplay() {
         const drawing = this.getActiveDrawing();
         const { activeMeta } = this.elements;
@@ -2245,6 +2521,7 @@ export class TakeoffManager {
         await this.updatePlanPreview(drawing);
         this.renderNotes();
         this.updatePdfControls(drawing);
+        this.renderNotes(drawing);
     }
 
         async updatePlanPreview(drawing) {

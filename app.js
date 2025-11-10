@@ -2174,49 +2174,74 @@ import {
 
             updateBidInfoSummary();
             setBidInfoCollapsed(false);
-
-            updateNavToggle();
         }
 
         // --- NAVIGATION & UI ---
+        let closeNavDropdown = null;
+
         function setupNavigation() {
-            document.querySelectorAll('.topnav-item').forEach(item => {
+            document.querySelectorAll('.nav-item').forEach(item => {
                 item.addEventListener('click', function() {
                     const tab = this.getAttribute('data-tab');
-                    if (tab) switchTab(tab);
+                    if (tab) {
+                        switchTab(tab);
+                    }
                 });
             });
 
-            const navToggle = document.getElementById('navToggle');
-            if (navToggle) {
-                navToggle.addEventListener('click', toggleNavMenu);
-            }
-
-            lifecycle.addEventListener(window, 'resize', () => updateNavToggle());
+            setupNavDropdown();
             switchTab(state.currentTab || 'dashboard');
-            updateNavToggle();
         }
 
-        function toggleNavMenu() {
-            const navToggle = document.getElementById('navToggle');
-            const isOpen = document.body.classList.toggle('nav-open');
-            navToggle?.setAttribute('aria-expanded', String(isOpen));
-        }
+        function setupNavDropdown() {
+            const dropdownToggle = document.getElementById('navDropdownToggle');
+            const dropdownMenu = document.getElementById('navDropdownMenu');
 
-        function closeNavMenu() {
-            if (!document.body.classList.contains('nav-open')) return;
-            document.body.classList.remove('nav-open');
-            const navToggle = document.getElementById('navToggle');
-            navToggle?.setAttribute('aria-expanded', 'false');
-        }
-
-        function updateNavToggle() {
-            const navToggle = document.getElementById('navToggle');
-            if (!navToggle) return;
-            if (window.matchMedia('(min-width: 1025px)').matches) {
-                document.body.classList.remove('nav-open');
-                navToggle.setAttribute('aria-expanded', 'false');
+            if (!dropdownToggle || !dropdownMenu) {
+                closeNavDropdown = null;
+                return;
             }
+
+            const openDropdown = () => {
+                dropdownMenu.classList.add('is-open');
+                dropdownToggle.setAttribute('aria-expanded', 'true');
+            };
+
+            const closeDropdown = () => {
+                dropdownMenu.classList.remove('is-open');
+                dropdownToggle.setAttribute('aria-expanded', 'false');
+            };
+
+            closeNavDropdown = closeDropdown;
+
+            lifecycle.addEventListener(dropdownToggle, 'click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const isOpen = dropdownMenu.classList.contains('is-open');
+                if (isOpen) {
+                    closeDropdown();
+                } else {
+                    openDropdown();
+                }
+            });
+
+            lifecycle.addEventListener(dropdownMenu, 'click', (event) => {
+                if (event.target.closest('.nav-item')) {
+                    closeDropdown();
+                }
+            });
+
+            lifecycle.addEventListener(document, 'click', (event) => {
+                if (!dropdownMenu.contains(event.target) && event.target !== dropdownToggle) {
+                    closeDropdown();
+                }
+            });
+
+            lifecycle.addEventListener(document, 'keydown', (event) => {
+                if (event.key === 'Escape') {
+                    closeDropdown();
+                }
+            });
         }
 
         function switchTab(tabId) {
@@ -2228,7 +2253,7 @@ import {
                 tab.setAttribute('aria-hidden', String(!isActive));
             });
 
-            document.querySelectorAll('.topnav-item').forEach(item => {
+            document.querySelectorAll('.nav-item').forEach(item => {
                 const isActive = item.getAttribute('data-tab') === tabId;
                 item.classList.toggle('active', isActive);
                 item.setAttribute('aria-selected', String(isActive));
@@ -2239,6 +2264,10 @@ import {
             const pageTitleEl = document.getElementById('pageTitle');
             if (pageTitleEl) {
                 pageTitleEl.textContent = navLabel.trim() || 'Dashboard';
+            }
+
+            if (typeof closeNavDropdown === 'function') {
+                closeNavDropdown();
             }
 
             closeSidebarOnMobile();

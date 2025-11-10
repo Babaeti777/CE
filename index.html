@@ -71,6 +71,7 @@
             </div>
         </nav>
 
+
         <main class="main-content">
                 <section class="dashboard-hero" aria-label="Workspace highlights">
             <div class="dashboard-hero__content">
@@ -544,6 +545,18 @@
                                         <div id="takeoffAnnotationLayer" class="takeoff-annotation-layer" aria-live="polite"></div>
                                     </div>
                                     <button type="button" class="btn btn-secondary takeoff-fullscreen-toggle" id="takeoffFullScreenToggle" aria-pressed="false">Full View</button>
+                                </div>
+                                <div class="takeoff-note-panel">
+                                    <div class="takeoff-note-header">
+                                        <h4 class="takeoff-note-title">Plan notes</h4>
+                                        <p class="takeoff-note-subtitle">Track clarifications and assumptions while reviewing markups.</p>
+                                    </div>
+                                    <div class="takeoff-note-form">
+                                        <label class="sr-only" for="takeoffNoteInput">Add note</label>
+                                        <textarea id="takeoffNoteInput" class="form-input takeoff-note-input" placeholder="Add a note for this drawing"></textarea>
+                                        <button type="button" class="btn btn-secondary" id="takeoffAddNoteBtn">Add Note</button>
+                                    </div>
+                                    <ul class="takeoff-note-list" id="takeoffNoteList" aria-live="polite"></ul>
                                 </div>
                             </div>
                             <p id="takeoffStatus" class="takeoff-status"></p>
