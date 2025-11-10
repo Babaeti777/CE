@@ -3,20 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Construction Estimator Pro - Modern Edition</title>
+    <title>CE — Minimal Estimator Workspace</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        // Replace the placeholder values below with your Firebase project settings.
-        window.FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD3_zQVowO0Sg5rFSGkcSU0NoI852PuPAA",
-  authDomain: "construction-estimator-d2633.firebaseapp.com",
-  projectId: "construction-estimator-d2633",
-  storageBucket: "construction-estimator-d2633.firebasestorage.app",
-  messagingSenderId: "252394591641",
-  appId: "1:252394591641:web:3e8e9ceb6da9052c7daf08"
-};
+    <script src="/__/firebase/10.12.2/firebase-app-compat.js"></script>
+    <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "pdfjs-dist/build/pdf": "./vendor/pdfjs/pdf.mjs"
+            }
+        }
     </script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -28,15 +27,13 @@
         </svg>
     </button>
 
-    <div class="app-shell">
-        <!-- Sidebar -->
-        <nav class="sidebar" id="sidebar" role="navigation">
-            <div class="logo-container">
-                <div class="logo">CE</div>
-                <div class="logo-text">
-                    Construction Pro
-                    <span>Estimator Suite 2025</span>
-                </div>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar" role="navigation">
+        <div class="logo-container">
+            <div class="logo">CE</div>
+            <div class="logo-text">
+                Minimal Estimator
+                <span>Focused tools for teams</span>
             </div>
 
             <button type="button" class="nav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true">
@@ -69,64 +66,62 @@
             </button>
         </nav>
 
-        <!-- Main Content -->
-        <div class="content-area">
-            <header class="header">
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <div class="page-heading">
                 <h1 class="page-title" id="pageTitle">Dashboard</h1>
-                <div class="header-actions">
-                    <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Hide sidebar" aria-expanded="true">
-                        <svg class="sidebar-toggle-icon icon-expanded" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                        </svg>
-                        <svg class="sidebar-toggle-icon icon-collapsed" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                        <span class="sr-only" data-toggle-label>Hide sidebar</span>
-                    </button>
-                    <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                    </button>
-                    <div class="sync-badge" id="syncStatus">
-                        <div class="sync-dot"></div>
-                        <span>Database synced</span>
-                    </div>
-                    <button class="btn btn-primary" id="newProjectBtn">
-                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        New Project
-                    </button>
+                <p class="page-subtitle">Estimate smarter with a focused workspace.</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Hide sidebar" aria-expanded="true">
+                    <svg class="sidebar-toggle-icon icon-expanded" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                    <svg class="sidebar-toggle-icon icon-collapsed" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    <span class="sr-only" data-toggle-label>Hide sidebar</span>
+                </button>
+                <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                </button>
+                <div class="sync-badge" id="syncStatus">
+                    <div class="sync-dot"></div>
+                    <span>Database synced</span>
                 </div>
             </header>
 
             <div class="content">
                 <!-- Dashboard Tab -->
             <div id="dashboardTab" class="tab-content active">
-                <div class="grid-4" style="margin-bottom: 2rem;">
+                <div class="grid-4 mb-xl">
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Total Projects</h3><svg width="24" height="24" fill="none" stroke="var(--primary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg></div>
-                        <p id="totalProjects" style="font-size: 2.5rem; font-weight: 800; color: var(--primary);">0</p>
+                        <p id="totalProjects" class="stat-value text-primary">0</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Total Value</h3><svg width="24" height="24" fill="none" stroke="var(--success)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                        <p id="totalValue" style="font-size: 2.5rem; font-weight: 800; color: var(--success);">$0</p>
+                        <p id="totalValue" class="stat-value text-success">$0</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Under Review</h3><svg width="24" height="24" fill="none" stroke="var(--warning)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg></div>
-                        <p id="reviewCount" style="font-size: 2.5rem; font-weight: 800; color: var(--warning);">0</p>
+                        <p id="reviewCount" class="stat-value text-warning">0</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Win Rate</h3><svg width="24" height="24" fill="none" stroke="var(--secondary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                        <p id="winRate" style="font-size: 2.5rem; font-weight: 800; color: var(--secondary);">0%</p>
+                        <p id="winRate" class="stat-value text-secondary">0%</p>
                     </div>
                 </div>
                 <div class="grid-2">
                     <div class="card">
-                        <h3 class="card-title" style="margin-bottom: 1.5rem;">Recent Projects</h3>
+                        <h3 class="card-title mb-lg">Recent Projects</h3>
                         <div id="recentProjectsList" class="space-y-3"></div>
-                        <button class="btn btn-secondary" id="viewAllProjectsBtn" style="margin-top:1rem;">View All</button>
+                        <button class="btn btn-secondary mt-md" id="viewAllProjectsBtn">View All</button>
                     </div>
                     <div class="card">
-                        <h3 class="card-title" style="margin-bottom: 1.5rem;">Material Price Trends</h3>
-                        <canvas id="priceChart" style="max-height: 200px;"></canvas>
+                        <h3 class="card-title mb-lg">Material Price Trends</h3>
+                        <canvas id="priceChart" class="chart-sm"></canvas>
                     </div>
                 </div>
             </div>
@@ -147,15 +142,107 @@
                                 <div class="form-group"><label class="form-label" for="floors">Number of Floors</label><input type="number" class="form-input" id="floors" value="1" min="1" required></div>
                                 <div class="form-group"><label class="form-label" for="laborCost">Labor Multiplier</label><input type="number" class="form-input" id="laborCost" value="1.5" step="0.1" min="1"></div>
                             </div>
-                            <div class="form-group"><label class="form-label">Foundation Type</label><div class="material-grid"><div class="material-card" data-category="foundation" data-material="slab"><div class="material-name">Slab</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="crawl"><div class="material-name">Crawl Space</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="basement"><div class="material-name">Basement</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="pier"><div class="material-name">Pier & Grade Beam</div><div class="material-price">--</div></div><div class="material-card" data-category="foundation" data-material="mat"><div class="material-name">Mat Foundation</div><div class="material-price">--</div></div></div></div>
-                            <div class="form-group"><label class="form-label">Framing Material</label><div class="material-grid"><div class="material-card" data-category="framing" data-material="wood"><div class="material-name">Wood Stud</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="steel"><div class="material-name">Structural Steel</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="concrete"><div class="material-name">Cast-in-Place Concrete</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="massTimber"><div class="material-name">Mass Timber</div><div class="material-price">--</div></div><div class="material-card" data-category="framing" data-material="coldFormed"><div class="material-name">Cold-Formed Steel</div><div class="material-price">--</div></div></div></div>
-                            <div class="form-group"><label class="form-label">Exterior Finish</label><div class="material-grid"><div class="material-card" data-category="exterior" data-material="vinyl"><div class="material-name">Vinyl</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="brick"><div class="material-name">Brick Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stucco"><div class="material-name">Stucco</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="stone"><div class="material-name">Stone Veneer</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="fiberCement"><div class="material-name">Fiber Cement</div><div class="material-price">--</div></div><div class="material-card" data-category="exterior" data-material="curtainWall"><div class="material-name">Curtain Wall</div><div class="material-price">--</div></div></div></div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%;"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>Generate Pricing</button>
+                            <fieldset class="form-group material-fieldset">
+                                <legend class="form-label">Foundation Type</legend>
+                                <div class="material-grid" role="radiogroup" aria-label="Foundation Type">
+                                    <label class="material-card" data-category="foundation" data-material="slab">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="slab">
+                                        <span class="material-name">Slab</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="crawl">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="crawl">
+                                        <span class="material-name">Crawl Space</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="basement">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="basement">
+                                        <span class="material-name">Basement</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="pier">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="pier">
+                                        <span class="material-name">Pier &amp; Grade Beam</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="foundation" data-material="mat">
+                                        <input class="material-input" type="radio" name="foundationMaterial" value="mat">
+                                        <span class="material-name">Mat Foundation</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                            <fieldset class="form-group material-fieldset">
+                                <legend class="form-label">Framing Material</legend>
+                                <div class="material-grid" role="radiogroup" aria-label="Framing Material">
+                                    <label class="material-card" data-category="framing" data-material="wood">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="wood">
+                                        <span class="material-name">Wood Stud</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="steel">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="steel">
+                                        <span class="material-name">Structural Steel</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="concrete">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="concrete">
+                                        <span class="material-name">Cast-in-Place Concrete</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="massTimber">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="massTimber">
+                                        <span class="material-name">Mass Timber</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="framing" data-material="coldFormed">
+                                        <input class="material-input" type="radio" name="framingMaterial" value="coldFormed">
+                                        <span class="material-name">Cold-Formed Steel</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                            <fieldset class="form-group material-fieldset">
+                                <legend class="form-label">Exterior Finish</legend>
+                                <div class="material-grid" role="radiogroup" aria-label="Exterior Finish">
+                                    <label class="material-card" data-category="exterior" data-material="vinyl">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="vinyl">
+                                        <span class="material-name">Vinyl</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="brick">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="brick">
+                                        <span class="material-name">Brick Veneer</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="stucco">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="stucco">
+                                        <span class="material-name">Stucco</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="stone">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="stone">
+                                        <span class="material-name">Stone Veneer</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="fiberCement">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="fiberCement">
+                                        <span class="material-name">Fiber Cement</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                    <label class="material-card" data-category="exterior" data-material="curtainWall">
+                                        <input class="material-input" type="radio" name="exteriorMaterial" value="curtainWall">
+                                        <span class="material-name">Curtain Wall</span>
+                                        <span class="material-price">--</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                            <button type="submit" class="btn btn-primary w-full"><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>Generate Pricing</button>
                         </form>
                     </div>
                     <div>
-                        <div class="card" id="estimateWorkspace" style="display: none;">
-                            <div class="card-header" style="align-items: flex-start;">
+                        <div class="card is-hidden" id="estimateWorkspace">
+                            <div class="card-header align-start">
                                 <div>
                                     <h3 class="card-title">Estimate Worksheet</h3>
                                     <p class="card-subtitle">Fine-tune quantities and pricing before finalizing.</p>
@@ -181,8 +268,8 @@
                                 <p class="worksheet-empty" id="worksheetEmptyMessage">Select materials and generate pricing to build your worksheet.</p>
                             </div>
                         </div>
-                        <div class="summary-card" id="estimateSummary" style="display: none;">
-                            <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">Estimate Summary</h2>
+                        <div class="summary-card is-hidden" id="estimateSummary">
+                            <h2 class="summary-title">Estimate Summary</h2>
                             <div class="summary-grid">
                                 <div class="summary-item"><div class="summary-label">Materials</div><div class="summary-value" id="materialCost">$0</div></div>
                                 <div class="summary-item"><div class="summary-label">Labor</div><div class="summary-value" id="laborCostDisplay">$0</div></div>
@@ -191,7 +278,7 @@
                                 <div class="summary-item summary-item-total"><div class="summary-label">Total</div><div class="summary-value" id="totalCost">$0</div></div>
                             </div>
                             <p class="summary-meta" id="estimateMeta"></p>
-                            <button class="btn btn-secondary" id="saveProjectBtn" style="margin-top: 2rem;">Save Project</button>
+                            <button class="btn btn-secondary mt-xl" id="saveProjectBtn">Save Project</button>
                         </div>
                     </div>
                 </div>
@@ -200,10 +287,10 @@
             <!-- Detailed Bidding Tab -->
             <div id="detailedTab" class="tab-content">
                  <div class="card">
-                    <h3 class="card-title" style="margin-bottom: 1rem;">Bid Information</h3>
-                    <p class="card-subtitle" style="margin-bottom: 2rem;">Capture client info and key dates so they're always part of the exported package.</p>
+                    <h3 class="card-title mb-md">Bid Information</h3>
+                    <p class="card-subtitle mb-xl">Capture client info and key dates so they're always part of the exported package.</p>
                     <form id="detailedBidForm">
-                        <div class="grid-2" style="gap: 1rem;">
+                        <div class="grid-2 gap-md">
                             <div class="form-group"><label class="form-label">Project Name</label><input type="text" class="form-input" id="bidProjectName" placeholder="Enter project name" required></div>
                             <div class="form-group"><label class="form-label">Client Name</label><input type="text" class="form-input" id="clientName" placeholder="Enter client name" required></div>
                             <div class="form-group"><label class="form-label">Bid Date</label><input type="date" class="form-input" id="bidDate" required></div>
@@ -211,7 +298,7 @@
                         </div>
                     </form>
                 </div>
-                <div class="card" style="margin-top: 2rem;">
+                <div class="card mt-xl">
                     <div class="card-header line-item-header">
                         <div>
                             <h3 class="card-title">Line Items</h3>
@@ -236,24 +323,24 @@
                         <p class="line-item-empty" id="lineItemEmptyMessage">Add your first item to start building the bid.</p>
                     </div>
                 </div>
-                <div class="grid-3" style="margin-top: 2rem;">
-                    <div class="card"><h4 style="margin-bottom: 1rem;">Overhead</h4><input type="number" class="form-input" id="overhead" value="10" min="0" step="0.1"><span style="color: var(--gray-600); font-size: 0.875rem;">%</span></div>
-                    <div class="card"><h4 style="margin-bottom: 1rem;">Profit Margin</h4><input type="number" class="form-input" id="profit" value="15" min="0" step="0.1"><span style="color: var(--gray-600); font-size: 0.875rem;">%</span></div>
-                    <div class="card"><h4 style="margin-bottom: 1rem;">Contingency</h4><input type="number" class="form-input" id="contingency" value="5" min="0" step="0.1"><span style="color: var(--gray-600); font-size: 0.875rem;">%</span></div>
+                <div class="grid-3 mt-xl">
+                    <div class="card"><h4 class="section-subtitle">Overhead</h4><input type="number" class="form-input" id="overhead" value="10" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
+                    <div class="card"><h4 class="section-subtitle">Profit Margin</h4><input type="number" class="form-input" id="profit" value="15" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
+                    <div class="card"><h4 class="section-subtitle">Contingency</h4><input type="number" class="form-input" id="contingency" value="5" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
                 </div>
-                <div class="summary-card" style="margin-top: 2rem;">
-                    <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">Bid Summary</h2>
+                <div class="summary-card mt-xl">
+                    <h2 class="summary-title">Bid Summary</h2>
                     <div class="summary-grid">
                         <div class="summary-item"><div class="summary-label">Subtotal</div><div class="summary-value" id="bidSubtotal">$0</div></div>
                         <div class="summary-item"><div class="summary-label">Markup</div><div class="summary-value" id="bidMarkup">$0</div></div>
                         <div class="summary-item"><div class="summary-label">Contingency</div><div class="summary-value" id="bidContingency">$0</div></div>
                         <div class="summary-item"><div class="summary-label">Total Bid</div><div class="summary-value" id="bidTotal">$0</div></div>
                     </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 2rem;">
+                    <div class="action-row wrap gap-lg mt-xl">
                         <button class="btn btn-primary" id="exportPdfBtn">Export PDF</button>
                         <button class="btn btn-primary" id="exportXlsxBtn">Export Excel</button>
                         <button class="btn btn-primary" id="exportCsvBtn">Export CSV</button>
-                        <button class="btn btn-success" id="saveBidBtn" style="margin-left: auto;">Save Bid</button>
+                        <button class="btn btn-success ml-auto" id="saveBidBtn">Save Bid</button>
                     </div>
                 </div>
             </div>
@@ -263,26 +350,26 @@
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Saved Projects</h3>
-                        <input type="search" class="form-input" id="projectSearch" placeholder="Search projects..." style="max-width: 200px;">
+                        <input type="search" class="form-input max-w-sm" id="projectSearch" placeholder="Search projects...">
                         <button class="btn btn-secondary" id="exportProjectsBtn">Export</button>
                         <button class="btn btn-secondary" id="importProjectsBtn">Import</button>
-                        <input type="file" id="importProjectsInput" accept=".json,.csv,.xlsx,.xls" style="display:none">
+                        <input type="file" id="importProjectsInput" accept=".json,.csv,.xlsx,.xls" class="hidden-input">
                     </div>
-                    <div id="projectsList" style="margin-top: 2rem;"></div>
+                    <div id="projectsList" class="mt-xl"></div>
                 </div>
             </div>
 
             <!-- Takeoff Manager Tab -->
             <div id="takeoffTab" class="tab-content">
                 <div class="takeoff-layout">
-                    <div class="card takeoff-drawings">
-                        <div class="card-header">
-                            <h3 class="card-title">Drawing Pages</h3>
-                            <label class="btn btn-secondary takeoff-upload-label">
-                                Upload
-                                <input type="file" id="takeoffDrawingInput" accept="application/pdf,image/*" multiple style="display:none">
-                            </label>
-                        </div>
+                        <div class="card takeoff-drawings">
+                            <div class="card-header">
+                                <h3 class="card-title">Drawing Pages</h3>
+                                <label class="btn btn-secondary takeoff-upload-label">
+                                    Upload
+                                <input type="file" id="takeoffDrawingInput" accept="application/pdf,image/*" multiple class="hidden-input">
+                                </label>
+                            </div>
                         <div class="takeoff-filters">
                             <input type="search" class="form-input" id="takeoffSearchInput" placeholder="Filter by name, trade, floor...">
                             <div class="takeoff-sort-group">
@@ -319,12 +406,13 @@
                                     <p id="takeoffActiveMeta" class="takeoff-meta"></p>
                                 </div>
                             </div>
-                            <div id="takeoffPlanContainer" class="takeoff-plan" style="display:none;">
-                                <div class="takeoff-plan-toolbar" id="takeoffToolbar">
-                                    <div class="takeoff-toolbar-group">
-                                        <div class="form-group">
-                                            <label class="form-label" for="takeoffModeSelect">Mode</label>
-                                            <select id="takeoffModeSelect" class="form-select">
+                            <div id="takeoffPlanContainer" class="takeoff-plan is-hidden">
+                                <div id="takeoffToolbarMount">
+                                    <div class="takeoff-plan-toolbar" id="takeoffToolbar">
+                                        <div class="takeoff-toolbar-group">
+                                            <div class="form-group">
+                                                <label class="form-label" for="takeoffModeSelect">Mode</label>
+                                                <select id="takeoffModeSelect" class="form-select">
                                                 <option value="length">Length</option>
                                                 <option value="area">Area</option>
                                                 <option value="count">Count</option>
@@ -377,6 +465,7 @@
                                         </label>
                                     </div>
                                 </div>
+                                </div>
                                 <div class="takeoff-plan-stage" id="takeoffPlanStage" tabindex="0">
                                     <div class="takeoff-plan-inner" id="takeoffPlanInner">
                                         <img id="takeoffPlanPreview" alt="Plan preview">
@@ -392,7 +481,7 @@
                                 <button class="btn btn-primary" id="takeoffPushBtn">Send to Estimate</button>
                             </div>
                         </div>
-                        <div class="card" style="margin-top: 1.5rem;">
+                        <div class="card mt-lg">
                             <h3 class="card-title">Measurements</h3>
                             <div class="takeoff-table-wrapper">
                                 <table class="takeoff-table">
@@ -411,9 +500,9 @@
                                 <p id="takeoffMeasurementEmpty" class="takeoff-empty">Select a drawing and start measuring to build your takeoff.</p>
                             </div>
                         </div>
-                        <div class="card" style="margin-top: 1.5rem;">
+                        <div class="card mt-lg">
                             <h3 class="card-title">Quick Shapes</h3>
-                            <div class="grid-3" style="gap: 1rem;">
+                            <div class="grid-3 gap-md">
                                 <div class="form-group">
                                     <label class="form-label" for="takeoffShapeSelect">Shape</label>
                                     <select id="takeoffShapeSelect" class="form-select">
@@ -431,8 +520,8 @@
                                     <input type="number" id="takeoffDim2" class="form-input" placeholder="Width" min="0" step="0.01">
                                 </div>
                             </div>
-                            <button class="btn btn-secondary" id="takeoffQuickCalcBtn" style="margin-top: 1rem;">Calculate Area</button>
-                            <p id="takeoffQuickResult" class="takeoff-status" style="margin-top: 0.5rem;"></p>
+                                <button class="btn btn-secondary mt-md" id="takeoffQuickCalcBtn">Calculate Area</button>
+                                <p id="takeoffQuickResult" class="takeoff-status mt-sm"></p>
                         </div>
                     </div>
                 </div>
@@ -450,7 +539,7 @@
                             <span>Next auto-check: <span id="nextSync">--</span></span>
                         </div>
                     </div>
-                    <table class="modern-table" style="margin-top: 2rem;">
+                    <table class="modern-table mt-xl">
                         <thead><tr><th>Material</th><th>Category</th><th>Price</th><th>Unit</th><th>Change</th></tr></thead>
                         <tbody id="materialsTable"></tbody>
                     </table>
@@ -459,25 +548,25 @@
                         <ul id="sourceList" class="source-list"></ul>
                     </div>
                 </div>
-                <div class="grid-2" style="gap: 2rem; margin-top: 2rem;">
+                <div class="grid-2 gap-xl mt-xl">
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Labor Rates</h3></div>
-                        <table class="modern-table" style="margin-top: 1.5rem;">
+                        <table class="modern-table mt-lg">
                             <thead><tr><th>Trade</th><th>Rate</th><th>Unit</th><th>Burden</th><th>Notes</th></tr></thead>
                             <tbody id="laborTable"></tbody>
                         </table>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Equipment Rental Rates</h3></div>
-                        <table class="modern-table" style="margin-top: 1.5rem;">
+                        <table class="modern-table mt-lg">
                             <thead><tr><th>Equipment</th><th>Rate</th><th>Unit</th><th>Notes</th></tr></thead>
                             <tbody id="equipmentTable"></tbody>
                         </table>
                     </div>
                 </div>
-                <div class="card" style="margin-top: 2rem;">
+                <div class="card mt-xl">
                     <div class="card-header"><h3 class="card-title">Regional Cost Multipliers</h3></div>
-                    <table class="modern-table" style="margin-top: 1.5rem;">
+                    <table class="modern-table mt-lg">
                         <thead><tr><th>Region</th><th>Multiplier</th><th>Major Markets</th><th>Notes</th></tr></thead>
                         <tbody id="regionTable"></tbody>
                     </table>
@@ -487,34 +576,42 @@
             <!-- Settings Tab -->
             <div id="settingsTab" class="tab-content">
                 <div class="card">
-                    <h3 class="card-title" style="margin-bottom: 2rem;">Application Settings</h3>
-                    <div class="grid-2" style="gap: 2rem;">
+                    <h3 class="card-title mb-xl">Application Settings</h3>
+                    <div class="grid-2 gap-xl">
                         <div>
-                            <h4 style="margin-bottom: 1rem;">Database Updates</h4>
+                            <h4 class="section-subtitle">Database Updates</h4>
                             <div class="form-group"><label class="form-label">Automatic Updates</label><select class="form-select" id="autoUpdate"><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></div>
                             <div class="form-group"><label class="form-label">Update Frequency</label><select class="form-select" id="updateFrequency"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></div>
                             <button class="btn btn-primary" id="checkUpdatesBtn">Check for Updates</button>
                         </div>
                         <div>
-                            <h4 style="margin-bottom: 1rem;">Preferences</h4>
+                            <h4 class="section-subtitle">Preferences</h4>
                             <div class="form-group"><label class="form-label">Currency</label><select class="form-select"><option>USD ($)</option><option>EUR (€)</option><option>GBP (£)</option></select></div>
                             <div class="form-group"><label class="form-label">Default Tax Rate (%)</label><input type="number" class="form-input" value="8.5" step="0.1"></div>
                         </div>
                     </div>
                 </div>
-                <div class="card" style="margin-top:2rem;">
-                    <h3 class="card-title" style="margin-bottom:1.5rem;">Company Information</h3>
-                    <div class="grid-2" style="gap:1rem;">
+                <div class="card mt-xl">
+                    <h3 class="card-title mb-lg">Company Information</h3>
+                    <div class="grid-2 gap-md">
                         <div class="form-group"><label class="form-label">Company Name</label><input type="text" class="form-input" id="companyName"></div>
                         <div class="form-group"><label class="form-label">Address</label><input type="text" class="form-input" id="companyAddress"></div>
                         <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="companyPhone"></div>
                         <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="companyEmail"></div>
                     </div>
-                    <button class="btn btn-primary" id="saveCompanyBtn" style="margin-top:1rem;">Save Company Info</button>
+                    <button class="btn btn-primary mt-md" id="saveCompanyBtn">Save Company Info</button>
                 </div>
-                <div class="card" style="margin-top:2rem;">
-                    <h3 class="card-title" style="margin-bottom:1.5rem;">Cloud Sync</h3>
-                    <p class="card-subtitle" style="margin-bottom:1.5rem;">Connect Firebase to sync your projects across browsers and devices.</p>
+                <div class="card mt-xl">
+                    <h3 class="card-title mb-lg">Cloud Sync</h3>
+                    <p class="card-subtitle mb-lg">Connect Firebase to sync your projects across browsers and devices.</p>
+                    <div class="form-group">
+                        <label class="form-label">Google Account</label>
+                        <div class="sync-id-row">
+                            <button class="btn btn-primary" id="googleSignInBtn" type="button">Sign in with Google</button>
+                            <button class="btn btn-secondary is-hidden" id="googleSignOutBtn" type="button">Sign out</button>
+                        </div>
+                        <p class="form-hint" id="authUserDisplay">Not signed in.</p>
+                    </div>
                     <div class="form-group">
                         <label class="form-label" for="currentSyncId">Current Sync ID</label>
                         <div class="sync-id-row">
@@ -523,7 +620,7 @@
                         </div>
                         <p class="form-hint">Use this ID on another device after configuring Firebase to load the same workspace.</p>
                     </div>
-                    <div class="form-group" style="margin-top:1.5rem;">
+                    <div class="form-group mt-lg">
                         <label class="form-label" for="syncIdInput">Link to an Existing ID</label>
                         <div class="sync-id-row">
                             <input type="text" class="form-input" id="syncIdInput" placeholder="Paste sync ID">
@@ -578,11 +675,11 @@
                 <button class="btn" data-value="2">2</button>
                 <button class="btn" data-value="3">3</button>
                 <button class="btn btn-primary" data-value="+">+</button>
-                <button class="btn" data-value="0" style="grid-column: span 2;">0</button>
+                <button class="btn span-2" data-value="0">0</button>
                 <button class="btn" data-value=".">.</button>
                 <button class="btn btn-primary" data-value="=">=</button>
             </div>
-            <div id="engineeringBtns" class="calculator-grid" style="display:none; margin-top:1rem;">
+            <div id="engineeringBtns" class="calculator-grid is-hidden mt-md">
                 <button class="btn" data-value="sin">sin</button>
                 <button class="btn" data-value="cos">cos</button>
                 <button class="btn" data-value="tan">tan</button>
@@ -593,13 +690,13 @@
                 <button class="btn btn-secondary" id="convertUnitBtn">&rarr;</button>
                 <select id="unitTo" class="form-select"><option value="in">Inches</option><option value="ft">Feet</option><option value="sqyd">Sq. Yd.</option><option value="sqft">Sq. Ft.</option></select>
             </div>
-            <button class="btn btn-success" id="useValueBtn" style="width: 100%; margin-top: 1.5rem;">Use Value</button>
+            <button class="btn btn-success w-full mt-lg" id="useValueBtn">Use Value</button>
         </div>
     </div>
     <div class="modal" id="newProjectModal">
         <div class="modal-dialog">
             <div class="modal-header"><h2 class="modal-title">Select Estimator Type</h2><button class="modal-close" id="closeNewProjectModal">&times;</button></div>
-            <div style="display:flex; gap:1rem; justify-content:center; margin-top:1rem;">
+            <div class="button-row justify-center gap-md mt-md">
                 <button class="btn btn-primary" id="startQuickBtn">Quick Estimator</button>
                 <button class="btn btn-secondary" id="startDetailedBtn">Detailed Bidding</button>
             </div>
@@ -609,6 +706,26 @@
     <!-- Toast Container -->
     <div id="toastContainer"></div>
 
+    <div class="modal" id="takeoffLabelModal" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="takeoffLabelForm" class="modal-form" novalidate>
+                <div class="modal-header">
+                    <h2 class="modal-title">Name Measurement</h2>
+                    <button type="button" class="modal-close" id="closeTakeoffLabelModal" aria-label="Close measurement name dialog">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label" for="takeoffLabelInput">Measurement name</label>
+                    <input id="takeoffLabelInput" class="form-input" type="text" required>
+                    <p class="form-help">Provide a descriptive label to keep your takeoff organized.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelTakeoffLabelModal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="confirmTakeoffLabelModal">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script type="module" src="app.js"></script>
     <div id="takeoffPdfModal" class="takeoff-pdf-modal" aria-hidden="true">
         <div class="takeoff-pdf-modal-overlay" id="takeoffPdfModalOverlay"></div>
@@ -617,6 +734,7 @@
                 <h2 id="takeoffPdfModalTitle">PDF Reader</h2>
                 <button type="button" class="btn btn-ghost takeoff-pdf-modal-close" id="takeoffPdfModalClose" aria-label="Close PDF reader">×</button>
             </div>
+            <div class="takeoff-pdf-modal-tools is-hidden" id="takeoffPdfModalTools" aria-label="Takeoff tools"></div>
             <iframe id="takeoffPdfFrame" title="PDF reader" loading="lazy"></iframe>
             <p class="takeoff-pdf-modal-hint">Use the built-in PDF controls for search, download, zoom, and printing.</p>
         </div>

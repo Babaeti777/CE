@@ -1,4 +1,12 @@
 import { TakeoffManager } from './takeoff.js';
+import { StateManager } from './state/state-manager.js';
+import { createStorageService } from './services/storage-service.js';
+import { ErrorBoundary } from './utils/error-boundary.js';
+import { debounce } from './utils/debounce.js';
+import { VirtualList } from './ui/virtual-list.js';
+import { LoadingManager } from './services/loading-manager.js';
+import { CommandHistory } from './services/command-history.js';
+import { LifecycleManager } from './services/lifecycle-manager.js';
 import {
     initializeFirebase,
     isFirebaseConfigured,
@@ -7,7 +15,10 @@ import {
     saveCompanyInfo as saveCompanyInfoToCloud,
     loadCompanyInfo as loadCompanyInfoFromCloud,
     fetchProjects as fetchProjectsFromCloud,
-    replaceAllProjects as replaceAllProjectsInCloud
+    replaceAllProjects as replaceAllProjectsInCloud,
+    onAuthStateChange,
+    signInWithGoogle,
+    signOutFromGoogle
 } from './firebase.js';
 
 (function() {
@@ -27,8 +38,11 @@ import {
             offline: 'Cloud sync offline',
             connecting: 'Connecting to Firebase…',
             connected: 'Cloud sync connected',
-            error: 'Cloud sync unavailable'
+            error: 'Cloud sync unavailable',
+            authRequired: 'Sign in with Google to enable cloud sync.'
         };
+
+        const EMPTY_COMPANY_INFO = { name: '', address: '', phone: '', email: '' };
 
         const QUICK_SCOPE_CONFIG = [
             {
@@ -61,7 +75,7 @@ import {
         const QUICK_SCOPE_CATEGORIES = [...new Set(QUICK_SCOPE_CONFIG.map(cfg => cfg.category))];
 
         // --- STATE MANAGEMENT ---
-        const state = {
+        const initialState = {
             currentTab: 'dashboard',
             materialPrices: {},
             lineItemCategories: {},
@@ -72,7 +86,7 @@ import {
             referenceAssemblies: [],
             databaseMeta: {},
             savedProjects: [],
-            companyInfo: { name: '', address: '', phone: '', email: '' },
+            companyInfo: { ...EMPTY_COMPANY_INFO },
             currentEstimate: null,
             quickEstimatorItems: [],
             editingProjectId: null,
@@ -94,43 +108,99 @@ import {
             syncProfileId: null,
             remoteSyncEnabled: false,
             remoteSyncStatus: 'disabled',
+            authUser: null,
         };
+
+        const stateManager = new StateManager(initialState);
+        const state = stateManager.state;
+        const storage = createStorageService({ prefix: 'ce' });
+        const DATABASE_STORAGE_KEY = 'materialDatabase';
+        const DATABASE_VERSION_KEY = 'materialDatabaseVersion';
+        const DATABASE_SOURCE_URL = 'data/database.json';
+        const loadingManager = new LoadingManager();
+        const commandHistory = new CommandHistory();
+        const lifecycle = new LifecycleManager();
 
         let takeoffManager = null;
         let autoSyncTimeoutId = null;
         let autoSyncInFlight = false;
         let unsubscribeCloud = null;
+        let unsubscribeAuth = null;
         let applyingRemoteProjects = false;
         let firebaseReady = false;
         let lastScreenIsMobile = window.matchMedia('(max-width: 1024px)').matches;
         let wasSidebarCollapsedDesktop = false;
-
-        async function loadDatabase() {
-            try {
-                const cached = loadCachedDatabase();
-                if (cached) {
-                    applyDatabase(cached, { persist: false });
-                }
-
-                const res = await fetch('database.json', { cache: 'no-store' });
-                if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
-                const data = await res.json();
-                applyDatabase(data);
-            } catch (err) {
-                console.error('Error loading database:', err);
-                showToast('Unable to load material database. Offline data will be used if available.', 'error');
-            }
-        }
+        let projectListVirtualizer = null;
 
         function loadCachedDatabase() {
             try {
-                const cached = localStorage.getItem('materialDatabase');
+                const cached = storage.getItem(DATABASE_STORAGE_KEY);
                 return cached ? JSON.parse(cached) : null;
             } catch (error) {
                 console.warn('Unable to parse cached database payload.', error);
                 return null;
             }
         }
+
+        function persistDatabaseVersion(version) {
+            if (!version) return;
+            try {
+                storage.setItem(DATABASE_VERSION_KEY, version);
+            } catch (error) {
+                console.warn('Unable to persist material database version.', error);
+            }
+        }
+
+        function getInstalledDatabaseVersion(cached) {
+            const stored = storage.getItem(DATABASE_VERSION_KEY);
+            if (stored) return stored;
+            if (cached?.version) return cached.version;
+            if (cached?.databaseMeta?.version) return cached.databaseMeta.version;
+            return null;
+        }
+
+        async function downloadDatabase(url = DATABASE_SOURCE_URL) {
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Failed to load database: ${response.status}`);
+            return response.json();
+        }
+
+        async function ensureMaterialDatabase() {
+            const cached = loadCachedDatabase();
+            if (cached) {
+                applyDatabase(cached, { persist: false });
+            }
+
+            try {
+                setSyncState('syncing', 'Checking for updates…');
+                const manifest = await fetchUpdateManifest();
+                const latestVersion = manifest?.latestVersion || null;
+                const currentVersion = getInstalledDatabaseVersion(cached);
+                const dataUrl = manifest?.dataUrl || DATABASE_SOURCE_URL;
+                const needsDownload =
+                    !cached || !currentVersion || (latestVersion && isNewerVersion(latestVersion, currentVersion));
+
+                if (needsDownload) {
+                    const data = await downloadDatabase(dataUrl);
+                    applyDatabase(data, { announce: Boolean(currentVersion) });
+                    persistDatabaseVersion(data.version || latestVersion);
+                    setSyncState('success');
+                } else {
+                    setSyncState('success');
+                    persistDatabaseVersion(currentVersion);
+                }
+
+                state.pendingUpdate = null;
+            } catch (error) {
+                console.error('Error loading material database:', error);
+                setSyncState('error', 'Update check failed');
+                if (!cached) {
+                    showToast('Unable to load material database. Offline data will be used if available.', 'error');
+                }
+            }
+        }
+
+        const safeEnsureMaterialDatabase = ErrorBoundary.wrap(ensureMaterialDatabase, 'Load material database');
 
         function applyDatabase(data, options = {}) {
             if (!data) return;
@@ -162,7 +232,8 @@ import {
                     ...data,
                     materialPrices: normalizedMaterials,
                 };
-                localStorage.setItem('materialDatabase', JSON.stringify(payload));
+                storage.setItem(DATABASE_STORAGE_KEY, JSON.stringify(payload));
+                persistDatabaseVersion(payload.version || state.databaseMeta.version);
             }
 
             refreshQuickEstimatorFromDatabase();
@@ -621,7 +692,10 @@ import {
             cards.forEach(card => {
                 const isMatch = card.dataset.material === materialKey;
                 card.classList.toggle('selected', isMatch);
-                card.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+                const input = card.querySelector('.material-input');
+                if (input) {
+                    input.checked = isMatch;
+                }
                 if (isMatch) {
                     applied = true;
                 }
@@ -651,7 +725,7 @@ import {
         }
 
         function handleMaterialSelection(event) {
-            const card = event.currentTarget || event.target.closest('.material-card');
+            const card = event.target?.closest('.material-card');
             if (!card) return;
             const { category, material } = card.dataset;
             if (!category || !material) return;
@@ -842,7 +916,7 @@ import {
                     updateFrequency: state.updateFrequency,
                     lastSyncCheck: state.lastSyncCheck
                 };
-                localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
+                storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
             } catch (error) {
                 console.warn('Unable to persist settings', error);
             }
@@ -850,7 +924,7 @@ import {
 
         function loadSettingsFromStorage() {
             try {
-                const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+                const raw = storage.getItem(SETTINGS_STORAGE_KEY);
                 if (!raw) return {};
                 const parsed = JSON.parse(raw);
                 if (parsed && typeof parsed === 'object') {
@@ -1219,38 +1293,42 @@ import {
             }
         }
         async function init() {
-            loadSavedData();
-            setupEventListeners();
-            setupNavigation();
-            updateAuthUI();
-            populateMaterialsTable();
-            loadProjects();
-            updateDashboard();
-            initCharts();
-            checkForUpdatesOnLoad();
+            await loadingManager.track('bootstrap', async () => {
+                loadSavedData();
+                setupEventListeners();
+                setupNavigation();
+                enhanceAccessibility();
+                updateAuthUI();
+                populateMaterialsTable();
+                loadProjects();
+                updateDashboard();
+                initCharts();
 
-            takeoffManager = new TakeoffManager({
-                showToast,
-                onPushToEstimate: handleTakeoffPush
+                takeoffManager = new TakeoffManager({
+                    toastService: showToast,
+                    estimateService: { push: handleTakeoffPush },
+                    storageService: storage
+                });
+                takeoffManager.init();
+
+                const bidDateInput = document.getElementById('bidDate');
+                if (bidDateInput) {
+                    bidDateInput.value = new Date().toISOString().split('T')[0];
+                }
+
+                await safeInitCloudSync();
+                scheduleAutoSync();
             });
-            takeoffManager.init();
-
-            const bidDateInput = document.getElementById('bidDate');
-            if (bidDateInput) {
-                bidDateInput.value = new Date().toISOString().split('T')[0];
-            }
-
-            await initCloudSync();
         }
 
         function loadSavedData() {
             try {
-                const savedData = localStorage.getItem('constructionProjects');
+                const savedData = storage.getItem('constructionProjects');
                 state.savedProjects = savedData ? JSON.parse(savedData) : [];
                 state.savedProjects.forEach(p => { if (!p.status) p.status = 'review'; });
-                const storedSyncId = localStorage.getItem(SYNC_PROFILE_STORAGE_KEY);
+                const storedSyncId = storage.getItem(SYNC_PROFILE_STORAGE_KEY);
                 if (storedSyncId) state.syncProfileId = storedSyncId;
-                const companyData = localStorage.getItem('companyInfo');
+                const companyData = storage.getItem('companyInfo');
                 if (companyData) {
                     try {
                         applyCompanyInfo(JSON.parse(companyData), { persistLocal: false });
@@ -1268,9 +1346,9 @@ import {
                 if (autoUpdateSelect) autoUpdateSelect.value = state.autoUpdate;
                 const frequencySelect = document.getElementById('updateFrequency');
                 if (frequencySelect) frequencySelect.value = state.updateFrequency;
-                const theme = localStorage.getItem('darkMode');
+                const theme = storage.getItem('darkMode');
                 if (theme === 'on') document.body.classList.add('dark-mode');
-                const storedSidebarState = localStorage.getItem('sidebarCollapsed');
+                const storedSidebarState = storage.getItem('sidebarCollapsed');
                 const isSidebarCollapsed = storedSidebarState === '1';
                 document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
                 setMenuToggleExpanded(!isSidebarCollapsed);
@@ -1296,14 +1374,14 @@ import {
             }
             let stored = null;
             try {
-                stored = localStorage.getItem(SYNC_PROFILE_STORAGE_KEY);
+                stored = storage.getItem(SYNC_PROFILE_STORAGE_KEY);
             } catch (error) {
                 console.warn('Unable to access sync profile storage', error);
             }
             if (!stored) {
                 stored = generateSyncId();
                 try {
-                    localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, stored);
+                    storage.setItem(SYNC_PROFILE_STORAGE_KEY, stored);
                 } catch (error) {
                     console.warn('Unable to persist sync profile id', error);
                 }
@@ -1321,28 +1399,6 @@ import {
             const syncInput = document.getElementById('syncIdInput');
             if (syncInput && !syncInput.placeholder) {
                 syncInput.placeholder = 'Paste sync ID';
-            }
-        }
-
-        function updateAuthUI() {
-            const status = state.remoteSyncStatus || 'disabled';
-            updateCloudStatus(status);
-
-            updateSyncIdDisplay();
-
-            const copyBtn = document.getElementById('copySyncIdBtn');
-            if (copyBtn) {
-                const disabled = !state.syncProfileId;
-                copyBtn.disabled = disabled;
-                copyBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
-            }
-
-            const applyBtn = document.getElementById('applySyncIdBtn');
-            if (applyBtn) {
-                const input = document.getElementById('syncIdInput');
-                const hasValue = Boolean(input && input.value.trim());
-                applyBtn.disabled = !hasValue;
-                applyBtn.setAttribute('aria-disabled', applyBtn.disabled ? 'true' : 'false');
             }
         }
 
@@ -1365,28 +1421,61 @@ import {
 
         function updateAuthUI() {
             const configured = isFirebaseConfigured();
-            const controls = [
-                document.getElementById('copySyncIdBtn'),
-                document.getElementById('applySyncIdBtn')
-            ];
-            controls.forEach(control => {
-                if (!control) return;
-                control.disabled = !configured;
-                control.setAttribute('aria-disabled', (!configured).toString());
-            });
+            const user = state.authUser;
+
+            updateSyncIdDisplay();
+
+            const copyBtn = document.getElementById('copySyncIdBtn');
+            if (copyBtn) {
+                const disabled = !configured || !state.syncProfileId || !user;
+                copyBtn.disabled = disabled;
+                copyBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+            }
+
+            const applyBtn = document.getElementById('applySyncIdBtn');
+            if (applyBtn) {
+                const input = document.getElementById('syncIdInput');
+                const hasValue = Boolean(input && input.value.trim());
+                const disabled = !configured || !user || !hasValue;
+                applyBtn.disabled = disabled;
+                applyBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+            }
 
             const syncInput = document.getElementById('syncIdInput');
             if (syncInput) {
-                syncInput.disabled = !configured;
+                syncInput.disabled = !configured || !user;
+            }
+
+            const signInBtn = document.getElementById('googleSignInBtn');
+            const signOutBtn = document.getElementById('googleSignOutBtn');
+            const authStatus = document.getElementById('authUserDisplay');
+
+            if (signInBtn) {
+                signInBtn.disabled = !configured || Boolean(user);
+                signInBtn.classList.toggle('is-hidden', Boolean(user));
+            }
+
+            if (signOutBtn) {
+                const showSignOut = configured && Boolean(user);
+                signOutBtn.disabled = !showSignOut;
+                signOutBtn.classList.toggle('is-hidden', !showSignOut);
+            }
+
+            if (authStatus) {
+                if (!configured) {
+                    authStatus.textContent = 'Firebase is not configured.';
+                } else if (user) {
+                    const name = user.displayName || user.email || 'Signed in';
+                    authStatus.textContent = `Signed in as ${name}`;
+                } else {
+                    authStatus.textContent = 'Not signed in.';
+                }
             }
 
             if (!configured) {
                 updateCloudStatus('disabled', CLOUD_STATUS_MESSAGES.disabled);
-                return;
-            }
-
-            if (!state.remoteSyncEnabled) {
-                updateCloudStatus('offline', CLOUD_STATUS_MESSAGES.offline);
+            } else if (!user) {
+                updateCloudStatus('authRequired', CLOUD_STATUS_MESSAGES.authRequired);
             } else if (state.remoteSyncStatus) {
                 updateCloudStatus(state.remoteSyncStatus, CLOUD_STATUS_MESSAGES[state.remoteSyncStatus]);
             }
@@ -1394,7 +1483,7 @@ import {
 
         function persistLocalProjects() {
             try {
-                localStorage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
+                storage.setItem('constructionProjects', JSON.stringify(state.savedProjects));
             } catch (error) {
                 console.warn('Unable to persist projects locally', error);
             }
@@ -1402,7 +1491,7 @@ import {
 
         function persistCompanyInfoLocal() {
             try {
-                localStorage.setItem('companyInfo', JSON.stringify(state.companyInfo));
+                storage.setItem('companyInfo', JSON.stringify(state.companyInfo));
             } catch (error) {
                 console.warn('Unable to persist company info locally', error);
             }
@@ -1446,6 +1535,13 @@ import {
             unsubscribeCloud = null;
         }
 
+        function stopAuthListener() {
+            if (typeof unsubscribeAuth === 'function') {
+                unsubscribeAuth();
+            }
+            unsubscribeAuth = null;
+        }
+
         function applyRemoteProjects(projects = [], { persistLocal = true } = {}) {
             applyingRemoteProjects = true;
             try {
@@ -1466,6 +1562,64 @@ import {
                 updateDashboard();
             } finally {
                 applyingRemoteProjects = false;
+            }
+        }
+
+        function clearCloudScopedState({ persistLocal = true } = {}) {
+            applyRemoteProjects([], { persistLocal });
+            state.companyInfo = { ...EMPTY_COMPANY_INFO };
+            populateCompanyInfoFields();
+            if (persistLocal) {
+                persistCompanyInfoLocal();
+            }
+        }
+
+        async function handleAuthStateChange(user) {
+            stopCloudSubscription();
+
+            if (!user) {
+                state.authUser = null;
+                state.remoteSyncEnabled = false;
+                state.syncProfileId = null;
+                clearCloudScopedState();
+                try {
+                    storage.removeItem(SYNC_PROFILE_STORAGE_KEY);
+                } catch (error) {
+                    console.warn('Unable to clear sync profile id after sign-out', error);
+                }
+                ensureSyncProfileId();
+                updateCloudStatus('authRequired', CLOUD_STATUS_MESSAGES.authRequired);
+                updateAuthUI();
+                return;
+            }
+
+            state.authUser = {
+                uid: user.uid,
+                displayName: user.displayName || '',
+                email: user.email || '',
+                photoURL: user.photoURL || '',
+            };
+
+            state.remoteSyncEnabled = true;
+            state.syncProfileId = user.uid;
+            try {
+                storage.setItem(SYNC_PROFILE_STORAGE_KEY, state.syncProfileId);
+            } catch (error) {
+                console.warn('Unable to persist sync profile id for authenticated user', error);
+            }
+
+            updateCloudStatus('connecting', CLOUD_STATUS_MESSAGES.connecting);
+            updateAuthUI();
+
+            try {
+                await hydrateCloudState({ allowUpload: true });
+                startCloudSubscription();
+                updateCloudStatus('connected', CLOUD_STATUS_MESSAGES.connected);
+            } catch (error) {
+                console.error('Failed to sync cloud data after authentication change:', error);
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+            } finally {
+                updateAuthUI();
             }
         }
 
@@ -1518,6 +1672,7 @@ import {
             if (!isFirebaseConfigured()) {
                 updateCloudStatus('disabled', CLOUD_STATUS_MESSAGES.disabled);
                 state.remoteSyncEnabled = false;
+                stopAuthListener();
                 updateAuthUI();
                 return;
             }
@@ -1526,18 +1681,26 @@ import {
             try {
                 await initializeFirebase();
                 firebaseReady = true;
-                state.remoteSyncEnabled = true;
-                await hydrateCloudState({ allowUpload: true });
-                startCloudSubscription();
+                stopAuthListener();
+                unsubscribeAuth = onAuthStateChange((user) => {
+                    Promise.resolve(handleAuthStateChange(user)).catch(error => {
+                        console.error('Authentication listener error:', error);
+                        updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+                        updateAuthUI();
+                    });
+                });
                 updateAuthUI();
             } catch (error) {
                 console.error('Firebase initialization failed:', error);
                 state.remoteSyncEnabled = false;
                 firebaseReady = false;
+                stopAuthListener();
                 updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
                 updateAuthUI();
             }
         }
+
+        const safeInitCloudSync = ErrorBoundary.wrap(initCloudSync, 'Initialize cloud sync');
 
         async function handleApplySyncId(event) {
             event?.preventDefault?.();
@@ -1550,7 +1713,7 @@ import {
                 return;
             }
             try {
-                localStorage.setItem(SYNC_PROFILE_STORAGE_KEY, value);
+                storage.setItem(SYNC_PROFILE_STORAGE_KEY, value);
             } catch (error) {
                 console.warn('Unable to persist sync profile id', error);
             }
@@ -1579,6 +1742,40 @@ import {
             } catch (error) {
                 console.warn('Unable to copy sync id', error);
                 showToast('Unable to copy the sync ID.', 'error');
+            }
+        }
+
+        async function handleGoogleSignIn(event) {
+            event?.preventDefault?.();
+            if (!isFirebaseConfigured()) {
+                showToast('Configure Firebase before signing in.', 'warning');
+                return;
+            }
+            try {
+                updateCloudStatus('connecting', CLOUD_STATUS_MESSAGES.connecting);
+                await signInWithGoogle();
+                showToast('Signed in with Google.', 'success');
+            } catch (error) {
+                console.error('Google sign-in failed:', error);
+                const message = error?.message ? `Unable to sign in with Google: ${error.message}` : 'Unable to sign in with Google.';
+                showToast(message, 'error');
+                updateCloudStatus('error', CLOUD_STATUS_MESSAGES.error);
+            } finally {
+                updateAuthUI();
+            }
+        }
+
+        async function handleGoogleSignOut(event) {
+            event?.preventDefault?.();
+            try {
+                await signOutFromGoogle();
+                showToast('Signed out of Google.', 'success');
+            } catch (error) {
+                console.error('Google sign-out failed:', error);
+                const message = error?.message ? `Unable to sign out: ${error.message}` : 'Unable to sign out of Google.';
+                showToast(message, 'error');
+            } finally {
+                updateAuthUI();
             }
         }
 
@@ -1627,9 +1824,31 @@ import {
             });
             document.getElementById('estimatorForm')?.addEventListener('submit', handleEstimatorSubmit);
             document.getElementById('laborCost')?.addEventListener('input', handleLaborMultiplierChange);
-            document.querySelectorAll('.material-card').forEach(card => card.addEventListener('click', handleMaterialSelection));
+            document.querySelectorAll('.material-input').forEach(input => input.addEventListener('change', handleMaterialSelection));
             document.getElementById('saveProjectBtn')?.addEventListener('click', saveProject);
-            document.getElementById('addLineItemBtn')?.addEventListener('click', () => addLineItem());
+            document.getElementById('addLineItemBtn')?.addEventListener('click', () => {
+                commandHistory.execute({
+                    execute() {
+                        const row = addLineItem();
+                        this.snapshot = serializeLineItemRow(row);
+                    },
+                    undo() {
+                        if (!this.snapshot?.id) return;
+                        const existing = document.querySelector(`.line-item-row[data-id="${this.snapshot.id}"]`);
+                        existing?.remove();
+                        updateBidTotal();
+                        updateLineItemEmptyState();
+                    },
+                    redo() {
+                        if (!this.snapshot) {
+                            this.execute();
+                            return;
+                        }
+                        const row = restoreLineItem(this.snapshot, { position: 'top' });
+                        this.snapshot = serializeLineItemRow(row);
+                    }
+                });
+            });
             document.getElementById('generatePricingBtn')?.addEventListener('click', () => updateWorksheetTotals({ announce: true }));
             document.getElementById('resetWorksheetBtn')?.addEventListener('click', resetWorksheet);
 
@@ -1659,6 +1878,8 @@ import {
             document.getElementById('copySyncIdBtn')?.addEventListener('click', () => { handleCopySyncId(); });
             document.getElementById('applySyncIdBtn')?.addEventListener('click', handleApplySyncId);
             document.getElementById('syncIdInput')?.addEventListener('input', () => updateAuthUI());
+            document.getElementById('googleSignInBtn')?.addEventListener('click', handleGoogleSignIn);
+            document.getElementById('googleSignOutBtn')?.addEventListener('click', handleGoogleSignOut);
 
             // Modals
             document.getElementById('closeUpdateModal')?.addEventListener('click', () => closeModal('updateModal'));
@@ -1694,7 +1915,29 @@ import {
                 lineItemsContainer.addEventListener('click', (e) => {
                     const removeButton = e.target.closest('.remove-line-item');
                     if (removeButton) {
-                        removeLineItem(removeButton.closest('.line-item-row'));
+                        const row = removeButton.closest('.line-item-row');
+                        const snapshot = serializeLineItemRow(row);
+                        if (!snapshot) return;
+                        commandHistory.execute({
+                            execute() {
+                                row.remove();
+                                updateBidTotal();
+                                updateLineItemEmptyState();
+                            },
+                            undo() {
+                                const restored = restoreLineItem(snapshot, { position: 'top' });
+                                if (restored) {
+                                    const quantity = restored.querySelector('[data-field="quantity"]');
+                                    quantity?.focus?.();
+                                }
+                            },
+                            redo() {
+                                const existing = document.querySelector(`.line-item-row[data-id="${snapshot.id}"]`);
+                                existing?.remove();
+                                updateBidTotal();
+                                updateLineItemEmptyState();
+                            }
+                        });
                     }
                 });
                 lineItemsContainer.addEventListener('focusin', (e) => {
@@ -1703,12 +1946,16 @@ import {
                     }
                 });
             }
-            document.getElementById('lineItemSearch')?.addEventListener('input', handleLineItemSearch);
+            const lineItemSearch = document.getElementById('lineItemSearch');
+            if (lineItemSearch) {
+                const debouncedSearch = debounce((value) => handleLineItemSearch(value), 250);
+                lineItemSearch.addEventListener('input', (event) => debouncedSearch(event.target.value));
+            }
 
             const worksheetBody = document.getElementById('estimateWorksheetBody');
             worksheetBody?.addEventListener('input', handleWorksheetInput);
 
-            window.addEventListener('resize', handleSidebarResize);
+            lifecycle.addEventListener(window, 'resize', handleSidebarResize);
             updateSidebarToggleState();
 
             // Calculator
@@ -1717,9 +1964,9 @@ import {
             document.getElementById('useValueBtn')?.addEventListener('click', useCalculatorValue);
             document.getElementById('modeBasic')?.addEventListener('click', () => updateCalcMode('basic'));
             document.getElementById('modeEngineering')?.addEventListener('click', () => updateCalcMode('engineering'));
-            document.addEventListener('keydown', handleGlobalKeydown);
+            lifecycle.addEventListener(document, 'keydown', handleGlobalKeydown);
             document.getElementById('viewAllProjectsBtn')?.addEventListener('click', () => switchTab('projects'));
-            document.addEventListener('keydown', handleCalculatorKeydown);
+            lifecycle.addEventListener(document, 'keydown', handleCalculatorKeydown);
             updateCalcMode(state.calcMode);
             updateLineItemEmptyState();
 
@@ -1840,7 +2087,7 @@ import {
 
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
-            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
+            storage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
         }
 
         async function handleAutoUpdateChange(event) {
@@ -1868,11 +2115,15 @@ import {
             toast.className = `toast ${type}`;
 
             const icon = type === 'success' ? '✓' : type === 'error' ? '!' : '?';
-            
+
             toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
             container.appendChild(toast);
 
             setTimeout(() => toast.remove(), 3000);
+        }
+
+        if (typeof window !== 'undefined') {
+            window.showToast = showToast;
         }
         
         function formatCurrency(amount) {
@@ -2359,16 +2610,44 @@ import {
             updateLineItemEmptyState();
         }
 
+        function serializeLineItemRow(row) {
+            if (!row) return null;
+            return {
+                id: row.dataset.id,
+                category: row.querySelector('[data-field="category"]')?.value || '',
+                description: row.querySelector('[data-field="description"]')?.value || '',
+                quantity: parseFloat(row.querySelector('[data-field="quantity"]').value) || 0,
+                unit: row.querySelector('[data-field="unit"]')?.value || '',
+                rate: parseFloat(row.querySelector('[data-field="rate"]').value) || 0,
+            };
+        }
+
+        function restoreLineItem(snapshot, options = {}) {
+            if (!snapshot) return null;
+            return addLineItem({
+                category: snapshot.category,
+                description: snapshot.description,
+                quantity: snapshot.quantity,
+                unit: snapshot.unit,
+                rate: snapshot.rate,
+            }, { ...options, reuseId: snapshot.id });
+        }
+
         // --- DETAILED BIDDING ---
-        function addLineItem(item = null, { position = 'top' } = {}) {
+        function addLineItem(item = null, { position = 'top', reuseId = null } = {}) {
             if (item?.category && !state.lineItemCategories[item.category]) {
                 state.lineItemCategories[item.category] = [];
             }
 
-            state.lineItemId++;
+            const reused = reuseId != null;
+            const numericReuse = reused ? Number.parseInt(reuseId, 10) : null;
+            const rowId = reused ? reuseId : String(++state.lineItemId);
+            if (reused && Number.isFinite(numericReuse) && numericReuse > state.lineItemId) {
+                state.lineItemId = numericReuse;
+            }
             const div = document.createElement('div');
             div.className = 'line-item-row';
-            div.dataset.id = state.lineItemId;
+            div.dataset.id = rowId;
 
             const categories = getSortedLineItemCategories();
             const categoryOptions = categories
@@ -2416,6 +2695,7 @@ import {
             }
 
             updateLineItemEmptyState();
+            return div;
         }
         
         function updateItemSelectionOptions(row, { preserveExisting = false, previousDescription } = {}) {
@@ -2461,12 +2741,6 @@ import {
             }
         }
 
-        function removeLineItem(row) {
-            row.remove();
-            updateBidTotal();
-            updateLineItemEmptyState();
-        }
-
         function updateLineItemTotal(row) {
             const quantity = parseFloat(row.querySelector('[data-field="quantity"]').value) || 0;
             const rate = parseFloat(row.querySelector('[data-field="rate"]').value) || 0;
@@ -2486,8 +2760,10 @@ import {
             message.style.display = hasRows ? 'none' : 'block';
         }
 
-        function handleLineItemSearch(e) {
-            const term = e.target.value.trim().toLowerCase();
+        function handleLineItemSearch(value) {
+            const term = typeof value === 'string'
+                ? value.trim().toLowerCase()
+                : String(value?.target?.value || '').trim().toLowerCase();
             const rows = document.querySelectorAll('#lineItems .line-item-row');
             let visible = 0;
             rows.forEach(row => {
@@ -2788,52 +3064,53 @@ import {
         }
 
         function updateCalcMode(mode) {
-            state.calcMode = mode;
+            const nextMode = mode === 'engineering' ? 'engineering' : 'basic';
+            state.calcMode = nextMode;
 
-            const basicTools = document.getElementById('basicTools');
+            const calculatorGrid = document.getElementById('calculatorGrid');
             const engineeringBtns = document.getElementById('engineeringBtns');
             const modeBasicBtn = document.getElementById('modeBasic');
             const modeEngineeringBtn = document.getElementById('modeEngineering');
 
-            if (basicTools) basicTools.style.display = mode === 'basic' ? 'block' : 'none';
-            if (engineeringBtns) engineeringBtns.style.display = mode === 'engineering' ? 'grid' : 'none';
-            modeBasicBtn?.classList.toggle('active', mode === 'basic');
-            modeEngineeringBtn?.classList.toggle('active', mode === 'engineering');
+            if (engineeringBtns) {
+                engineeringBtns.classList.toggle('is-hidden', nextMode !== 'engineering');
+                engineeringBtns.setAttribute('aria-hidden', nextMode === 'engineering' ? 'false' : 'true');
+            }
+
+            if (calculatorGrid) {
+                calculatorGrid.classList.toggle('calculator-grid--engineering', nextMode === 'engineering');
+            }
+
+            modeBasicBtn?.classList.toggle('active', nextMode === 'basic');
+            modeEngineeringBtn?.classList.toggle('active', nextMode === 'engineering');
+            modeBasicBtn?.setAttribute('aria-pressed', nextMode === 'basic' ? 'true' : 'false');
+            modeEngineeringBtn?.setAttribute('aria-pressed', nextMode === 'engineering' ? 'true' : 'false');
         }
 
         function handleTakeoffPush(rows) {
-            if (!Array.isArray(rows) || !rows.length) {
+            if (!Array.isArray(rows) || rows.length === 0) {
                 showToast('No takeoff data to send to the estimate.', 'warning');
                 return;
             }
 
             ensureTakeoffCategory(rows);
             rows.forEach((row) => {
-                const quantity = parseFloat(row.quantity) || 0;
+                const label = (row?.label || '').trim() || 'Measurement';
+                const drawingSuffix = row?.drawing ? ` (${row.drawing})` : '';
+                const notes = (row?.details || '').trim();
+                const description = notes ? `${label}${drawingSuffix} – ${notes}` : `${label}${drawingSuffix}`;
+                const quantity = Number.parseFloat(row?.quantity) || 0;
+
                 addLineItem({
                     category: 'Takeoff Measurements',
-                    description: row.drawing ? `${row.label} (${row.drawing})` : row.label,
+                    description,
                     quantity,
-                    unit: row.unit,
+                    unit: row?.unit || '',
                     rate: 0,
                     total: 0
                 });
-
-                measurement.subItems.forEach(subItem => {
-                    const subDescription = subItem.label && subItem.label.trim()
-                        ? `${description} - ${subItem.label.trim()}`
-                        : `${description} - Sub-item`;
-                    const subNotes = subItem.notes && subItem.notes.trim() ? ` (${subItem.notes.trim()})` : '';
-                    addLineItem({
-                        category: 'Takeoff Measurements',
-                        description: `${subDescription}${subNotes}`,
-                        quantity: typeof subItem.quantity === 'number' && !Number.isNaN(subItem.quantity) ? subItem.quantity : 0,
-                        unit: subItem.unit || '',
-                        rate: 0,
-                        total: 0
-                    });
-                });
             });
+
             updateBidTotal();
             showToast('Takeoff measurements added to the detailed estimate.', 'success');
             switchTab('detailed');
@@ -2845,15 +3122,16 @@ import {
             }
             const category = state.lineItemCategories['Takeoff Measurements'];
             rows.forEach((row) => {
-                const existing = category.find((item) => item.name === row.label);
+                const label = (row?.label || '').trim() || 'Measurement';
+                const existing = category.find((item) => item.name === label);
                 if (!existing) {
                     category.push({
-                        name: row.label,
-                        unit: row.unit,
+                        name: label,
+                        unit: row?.unit || '',
                         rate: 0
                     });
                 } else {
-                    existing.unit = row.unit;
+                    existing.unit = row?.unit || existing.unit || '';
                 }
             });
         }
@@ -3035,47 +3313,74 @@ import {
         }
 
         // --- PROJECTS & MATERIALS ---
+        function ensureProjectVirtualizer() {
+            const list = document.getElementById('projectsList');
+            if (!list) return null;
+            if (projectListVirtualizer) return projectListVirtualizer;
+            list.innerHTML = '';
+            projectListVirtualizer = new VirtualList(list, 148, (project) => buildProjectListItem(project));
+            return projectListVirtualizer;
+        }
+
+        function destroyProjectVirtualizer() {
+            projectListVirtualizer?.destroy();
+            projectListVirtualizer = null;
+        }
+
+        function buildProjectListItem(project) {
+            const div = document.createElement('div');
+            div.className = 'project-list-item';
+            div.style.padding = '1rem';
+            div.style.background = 'var(--gray-100)';
+            div.style.borderRadius = '12px';
+            div.style.marginBottom = '1rem';
+            const typeLabel = project.estimateType === 'detailed' ? 'Detailed' : 'Quick';
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="font-weight: 600;">${project.name}</h4>
+                        <p style="color: var(--gray-600); font-size: 0.875rem;">${project.type || ''}${project.sqft ? ' • ' + project.sqft + ' sqft' : ''} • ${typeLabel}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p style="font-weight: 700; color: var(--primary);">${formatCurrency(project.total)}</p>
+                        <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(project.date).toLocaleDateString()}</p>
+                        <select class="form-select project-status" data-id="${project.id}" style="margin-top:0.25rem;">
+                            <option value="review" ${project.status === 'review' ? 'selected' : ''}>Under Review</option>
+                            <option value="won" ${project.status === 'won' ? 'selected' : ''}>Won</option>
+                            <option value="lost" ${project.status === 'lost' ? 'selected' : ''}>Lost</option>
+                        </select>
+                        <button class="btn btn-secondary ${project.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${project.id}" style="margin-top:0.25rem;">Edit</button>
+                    </div>
+                </div>
+            `;
+            const statusSelect = div.querySelector('.project-status');
+            statusSelect.addEventListener('change', (e) => updateProjectStatus(project.id, e.target.value));
+            div.querySelector('.edit-project')?.addEventListener('click', () => editProject(project.id));
+            div.querySelector('.edit-bid')?.addEventListener('click', () => editBid(project.id));
+            return div;
+        }
+
         function loadProjects(searchTerm = '') {
             const list = document.getElementById('projectsList');
-            list.innerHTML = '';
-            
+            if (!list) return;
+
             const filteredProjects = state.savedProjects.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
             if (filteredProjects.length === 0) {
+                destroyProjectVirtualizer();
                 list.innerHTML = `<p style="color: var(--gray-600);">No saved projects found.</p>`;
                 return;
             }
 
-            filteredProjects.forEach(p => {
-                const div = document.createElement('div');
-                div.style = "padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem;";
-                const typeLabel = p.estimateType === 'detailed' ? 'Detailed' : 'Quick';
-                div.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h4 style="font-weight: 600;">${p.name}</h4>
-                            <p style="color: var(--gray-600); font-size: 0.875rem;">${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}</p>
-                        </div>
-                        <div style="text-align: right;">
-                            <p style="font-weight: 700; color: var(--primary);">${formatCurrency(p.total)}</p>
-                            <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
-                            <select class="form-select project-status" data-id="${p.id}" style="margin-top:0.25rem;">
-                                <option value="review" ${p.status === 'review' ? 'selected' : ''}>Under Review</option>
-                                <option value="won" ${p.status === 'won' ? 'selected' : ''}>Won</option>
-                                <option value="lost" ${p.status === 'lost' ? 'selected' : ''}>Lost</option>
-                            </select>
-                            <button class="btn btn-secondary ${p.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${p.id}" style="margin-top:0.25rem;">Edit</button>
-                        </div>
-                    </div>
-                `;
-                const statusSelect = div.querySelector('.project-status');
-                statusSelect.addEventListener('change', (e) => updateProjectStatus(p.id, e.target.value));
-                div.querySelector('.edit-project')?.addEventListener('click', () => editProject(p.id));
-                div.querySelector('.edit-bid')?.addEventListener('click', () => editBid(p.id));
-                list.appendChild(div);
-            });
+            const virtualizer = ensureProjectVirtualizer();
+            if (!virtualizer) {
+                list.innerHTML = '';
+                filteredProjects.forEach(project => list.appendChild(buildProjectListItem(project)));
+                return;
+            }
+            virtualizer.setItems(filteredProjects);
         }
 
         async function updateProjectStatus(id, status) {
@@ -3085,6 +3390,51 @@ import {
             persistLocalProjects();
             await syncProjectToCloud(proj);
             updateDashboard();
+        }
+
+        function enhanceAccessibility() {
+            if (typeof document === 'undefined') return;
+            let announcer = document.getElementById('srAnnouncer');
+            if (!announcer) {
+                announcer = document.createElement('div');
+                announcer.id = 'srAnnouncer';
+                announcer.className = 'sr-only';
+                announcer.setAttribute('aria-live', 'polite');
+                announcer.setAttribute('aria-atomic', 'true');
+                document.body.appendChild(announcer);
+            }
+
+            const announce = (message) => {
+                announcer.textContent = message;
+                setTimeout(() => { announcer.textContent = ''; }, 120);
+            };
+
+            lifecycle.addEventListener(document, 'keydown', (event) => {
+                const target = event.target;
+                if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) {
+                    return;
+                }
+                const key = event.key?.toLowerCase();
+                const modifierActive = event.ctrlKey || event.metaKey;
+                if (!modifierActive) return;
+                if (!event.shiftKey && key === 'z') {
+                    event.preventDefault();
+                    commandHistory.undo();
+                    announce('Undid last action');
+                } else if ((event.shiftKey && key === 'z') || key === 'y') {
+                    event.preventDefault();
+                    commandHistory.redo();
+                    announce('Redid last action');
+                } else if (key === 's') {
+                    event.preventDefault();
+                    saveProject();
+                    announce('Saving project');
+                }
+            });
+
+            if (typeof window !== 'undefined') {
+                window.announce = announce;
+            }
         }
 
         function exportProjects() {
@@ -3413,13 +3763,6 @@ import {
         }
 
         // --- SETTINGS & UPDATES ---
-        async function checkForUpdatesOnLoad() {
-            const result = await checkForUpdates({ silent: true });
-            if (result.updateAvailable) {
-                openModal('updateModal');
-            }
-        }
-
         async function checkForUpdates(options = {}) {
             if (options instanceof Event) {
                 options.preventDefault?.();
@@ -3491,9 +3834,8 @@ import {
             setSyncState('syncing', 'Downloading update...');
 
             try {
-                const res = await fetch(state.pendingUpdate.dataUrl, { cache: 'no-store' });
-                if (!res.ok) throw new Error(`Update download failed: ${res.status}`);
-                const data = await res.json();
+                const dataUrl = state.pendingUpdate.dataUrl || DATABASE_SOURCE_URL;
+                const data = await downloadDatabase(dataUrl);
 
                 if (data.version && !isNewerVersion(data.version, state.databaseMeta.version)) {
                     throw new Error('Downloaded database is not newer than the installed version.');
@@ -3512,8 +3854,14 @@ import {
         
         // --- RUN APP ---
         document.addEventListener('DOMContentLoaded', async () => {
-            await loadDatabase();
+            await loadingManager.track('load-database', () => safeEnsureMaterialDatabase());
             await init();
+            if (typeof window !== 'undefined') {
+                window.addEventListener('beforeunload', () => {
+                    takeoffManager?.destroy();
+                    lifecycle.cleanup();
+                });
+            }
         });
 
     })();
