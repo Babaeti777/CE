@@ -17,7 +17,9 @@ import {
     replaceAllProjects as replaceAllProjectsInCloud,
     onAuthStateChange,
     signInWithGoogle,
-    signOutFromGoogle
+    signOutFromGoogle,
+    setFirebaseConfig,
+    getFirebaseConfig
 } from './firebase.js';
 
 (function() {
@@ -127,8 +129,6 @@ import {
         let unsubscribeAuth = null;
         let applyingRemoteProjects = false;
         let firebaseReady = false;
-        let lastScreenIsMobile = window.matchMedia('(max-width: 1024px)').matches;
-        let wasSidebarCollapsedDesktop = false;
 
         function loadCachedDatabase() {
             try {
@@ -1397,6 +1397,7 @@ import {
                 } else {
                     populateCompanyInfoFields();
                 }
+                populateFirebaseConfigFields();
                 const settings = loadSettingsFromStorage();
                 state.autoUpdate = settings.autoUpdate || state.autoUpdate;
                 state.updateFrequency = settings.updateFrequency || state.updateFrequency;
@@ -1405,12 +1406,6 @@ import {
                 if (autoUpdateSelect) autoUpdateSelect.value = state.autoUpdate;
                 const frequencySelect = document.getElementById('updateFrequency');
                 if (frequencySelect) frequencySelect.value = state.updateFrequency;
-                const theme = storage.getItem('darkMode');
-                if (theme === 'on') document.body.classList.add('dark-mode');
-                const storedSidebarState = storage.getItem('sidebarCollapsed');
-                const isSidebarCollapsed = storedSidebarState === '1';
-                document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
-                setMenuToggleExpanded(!isSidebarCollapsed);
                 ensureSyncProfileId();
             } catch (e) {
                 console.error('Error loading saved data:', e);
@@ -1553,6 +1548,44 @@ import {
                 storage.setItem('companyInfo', JSON.stringify(state.companyInfo));
             } catch (error) {
                 console.warn('Unable to persist company info locally', error);
+            }
+        }
+
+        function populateFirebaseConfigFields() {
+            const config = getFirebaseConfig() || {};
+            const fieldMap = {
+                firebaseApiKey: config.apiKey || '',
+                firebaseAuthDomain: config.authDomain || '',
+                firebaseProjectId: config.projectId || '',
+                firebaseStorageBucket: config.storageBucket || '',
+                firebaseMessagingSenderId: config.messagingSenderId || '',
+                firebaseAppId: config.appId || ''
+            };
+            Object.entries(fieldMap).forEach(([id, value]) => {
+                const input = document.getElementById(id);
+                if (input) input.value = value;
+            });
+        }
+
+        async function handleFirebaseConfigSave(event) {
+            event?.preventDefault?.();
+            const config = {
+                apiKey: document.getElementById('firebaseApiKey')?.value.trim(),
+                authDomain: document.getElementById('firebaseAuthDomain')?.value.trim(),
+                projectId: document.getElementById('firebaseProjectId')?.value.trim(),
+                storageBucket: document.getElementById('firebaseStorageBucket')?.value.trim(),
+                messagingSenderId: document.getElementById('firebaseMessagingSenderId')?.value.trim(),
+                appId: document.getElementById('firebaseAppId')?.value.trim()
+            };
+            try {
+                setFirebaseConfig(config);
+                showToast('Firebase configuration saved.', 'success');
+                await safeInitCloudSync();
+                populateFirebaseConfigFields();
+            } catch (error) {
+                console.error('Unable to save Firebase configuration', error);
+                const message = error?.message || 'Unable to save Firebase configuration.';
+                showToast(message, 'error');
             }
         }
 
@@ -1916,6 +1949,7 @@ import {
                     }
                 });
             });
+            document.getElementById('manualLineItemForm')?.addEventListener('submit', handleManualLineItemSubmit);
             document.getElementById('generatePricingBtn')?.addEventListener('click', () => updateWorksheetTotals({ announce: true }));
             document.getElementById('resetWorksheetBtn')?.addEventListener('click', resetWorksheet);
 
@@ -1941,11 +1975,11 @@ import {
 
             document.getElementById('saveBidBtn')?.addEventListener('click', saveBid);
             document.getElementById('saveCompanyBtn')?.addEventListener('click', saveCompanyInfo);
+            document.getElementById('saveFirebaseConfigBtn')?.addEventListener('click', handleFirebaseConfigSave);
             document.getElementById('checkUpdatesBtn')?.addEventListener('click', checkForUpdates);
             document.getElementById('applyUpdateBtn')?.addEventListener('click', applyUpdate);
             document.getElementById('laterBtn')?.addEventListener('click', () => closeModal('updateModal'));
             document.getElementById('newProjectBtn')?.addEventListener('click', () => openModal('newProjectModal'));
-            document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
             document.getElementById('projectSearch')?.addEventListener('input', (e) => loadProjects(e.target.value));
 
             document.getElementById('exportProjectsBtn')?.addEventListener('click', exportProjects);
@@ -2044,8 +2078,6 @@ import {
             const worksheetBody = document.getElementById('estimateWorksheetBody');
             worksheetBody?.addEventListener('input', handleWorksheetInput);
 
-            lifecycle.addEventListener(window, 'resize', handleSidebarResize);
-            updateSidebarToggleState();
 
             // Calculator
             document.getElementById('calculatorGrid')?.addEventListener('click', handleCalculatorClick);
@@ -2063,19 +2095,48 @@ import {
             updateBidInfoSummary();
             setBidInfoCollapsed(false);
 
-            handleSidebarResize();
+            updateNavToggle();
         }
 
         // --- NAVIGATION & UI ---
         function setupNavigation() {
-            document.querySelectorAll('.nav-item').forEach(item => {
+            document.querySelectorAll('.topnav-item').forEach(item => {
                 item.addEventListener('click', function() {
                     const tab = this.getAttribute('data-tab');
                     if (tab) switchTab(tab);
                 });
             });
 
+            const navToggle = document.getElementById('navToggle');
+            if (navToggle) {
+                navToggle.addEventListener('click', toggleNavMenu);
+            }
+
+            lifecycle.addEventListener(window, 'resize', () => updateNavToggle());
             switchTab(state.currentTab || 'dashboard');
+            updateNavToggle();
+        }
+
+        function toggleNavMenu() {
+            const navToggle = document.getElementById('navToggle');
+            const isOpen = document.body.classList.toggle('nav-open');
+            navToggle?.setAttribute('aria-expanded', String(isOpen));
+        }
+
+        function closeNavMenu() {
+            if (!document.body.classList.contains('nav-open')) return;
+            document.body.classList.remove('nav-open');
+            const navToggle = document.getElementById('navToggle');
+            navToggle?.setAttribute('aria-expanded', 'false');
+        }
+
+        function updateNavToggle() {
+            const navToggle = document.getElementById('navToggle');
+            if (!navToggle) return;
+            if (window.matchMedia('(min-width: 1025px)').matches) {
+                document.body.classList.remove('nav-open');
+                navToggle.setAttribute('aria-expanded', 'false');
+            }
         }
 
         function switchTab(tabId) {
@@ -2087,110 +2148,13 @@ import {
                 tab.setAttribute('aria-hidden', String(!isActive));
             });
 
-            document.querySelectorAll('.nav-item').forEach(item => {
+            document.querySelectorAll('.topnav-item').forEach(item => {
                 const isActive = item.getAttribute('data-tab') === tabId;
                 item.classList.toggle('active', isActive);
                 item.setAttribute('aria-selected', String(isActive));
             });
 
-            const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
-            const navLabel = navItem?.querySelector('.nav-label')?.textContent || navItem?.innerText || 'Dashboard';
-            const pageTitleEl = document.getElementById('pageTitle');
-            if (pageTitleEl) {
-                pageTitleEl.textContent = navLabel.trim() || 'Dashboard';
-            }
-
-            closeSidebarOnMobile();
-        }
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return false;
-
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-            if (isMobile) {
-                const shouldOpen = !sidebar.classList.contains('open');
-                sidebar.classList.toggle('open', shouldOpen);
-            } else {
-                const shouldCollapse = !document.body.classList.contains('sidebar-collapsed');
-                document.body.classList.toggle('sidebar-collapsed', shouldCollapse);
-                wasSidebarCollapsedDesktop = shouldCollapse;
-            }
-
-            updateSidebarToggleState();
-            return isSidebarCollapsed();
-        }
-
-        function closeSidebarOnMobile() {
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return;
-            if (window.matchMedia('(max-width: 1024px)').matches) {
-                sidebar.classList.remove('open');
-                updateSidebarToggleState();
-            }
-        }
-
-        function isSidebarCollapsed() {
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return false;
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-            return isMobile ? !sidebar.classList.contains('open') : document.body.classList.contains('sidebar-collapsed');
-        }
-
-        function updateSidebarToggleState() {
-            const collapseButton = document.getElementById('sidebarCollapseBtn');
-            const menuToggle = document.getElementById('menuToggle');
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return;
-
-            const collapsed = isSidebarCollapsed();
-            const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
-
-            if (collapseButton) {
-                collapseButton.classList.toggle('collapsed', collapsed);
-                collapseButton.setAttribute('aria-label', label);
-                collapseButton.setAttribute('aria-expanded', String(!collapsed));
-                collapseButton.setAttribute('title', label);
-
-                const textEl = collapseButton.querySelector('[data-toggle-label]');
-                if (textEl) {
-                    textEl.textContent = label;
-                }
-            }
-
-            if (menuToggle) {
-                const mobileLabel = collapsed ? 'Open navigation' : 'Close navigation';
-                menuToggle.setAttribute('aria-expanded', String(!collapsed));
-                menuToggle.setAttribute('aria-label', mobileLabel);
-                menuToggle.setAttribute('title', mobileLabel);
-            }
-        }
-
-        function handleSidebarResize() {
-            const sidebar = document.getElementById('sidebar');
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-
-            if (isMobile !== lastScreenIsMobile) {
-                if (isMobile) {
-                    wasSidebarCollapsedDesktop = document.body.classList.contains('sidebar-collapsed');
-                    document.body.classList.remove('sidebar-collapsed');
-                } else {
-                    if (wasSidebarCollapsedDesktop) {
-                        document.body.classList.add('sidebar-collapsed');
-                    } else {
-                        document.body.classList.remove('sidebar-collapsed');
-                    }
-                    sidebar?.classList.remove('open');
-                }
-                lastScreenIsMobile = isMobile;
-            }
-
-            updateSidebarToggleState();
-        }
-
-        function toggleTheme() {
-            document.body.classList.toggle('dark-mode');
-            storage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
+            closeNavMenu();
         }
 
         async function handleAutoUpdateChange(event) {
@@ -2830,6 +2794,54 @@ import {
             return div;
         }
         
+        function handleManualLineItemSubmit(event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            if (!form) return;
+
+            const category = form.querySelector('#manualCategoryInput')?.value.trim();
+            const description = form.querySelector('#manualDescriptionInput')?.value.trim();
+            const quantityRaw = parseFloat(form.querySelector('#manualQuantityInput')?.value || '0');
+            const unit = form.querySelector('#manualUnitInput')?.value.trim() || '';
+            const rateRaw = parseFloat(form.querySelector('#manualRateInput')?.value || '0');
+
+            if (!category || !description) {
+                showToast('Add a category and description to create a manual item.', 'error');
+                return;
+            }
+
+            const quantity = Number.isFinite(quantityRaw) ? quantityRaw : 0;
+            const rate = Number.isFinite(rateRaw) ? rateRaw : 0;
+
+            if (!state.lineItemCategories[category]) {
+                state.lineItemCategories[category] = [];
+            }
+
+            if (!state.lineItemCategories[category].some(item => item.name === description)) {
+                state.lineItemCategories[category].push({ name: description, unit, rate });
+                state.lineItemCategories[category].sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            const newRow = addLineItem({
+                category,
+                description,
+                quantity: quantity || 0,
+                unit,
+                rate,
+                total: (quantity || 0) * (rate || 0)
+            }, { position: 'top' });
+
+            refreshLineItemCategoryOptions();
+            if (newRow) {
+                updateLineItemTotal(newRow);
+            }
+            form.reset();
+            const quantityInput = form.querySelector('#manualQuantityInput');
+            if (quantityInput) quantityInput.value = '1';
+            form.querySelector('#manualCategoryInput')?.focus();
+            showToast('Manual line item added to the bid.', 'success');
+        }
+
         function updateItemSelectionOptions(row, { preserveExisting = false, previousDescription } = {}) {
             const categorySelect = row.querySelector('[data-field="category"]');
             const descriptionSelect = row.querySelector('[data-field="description"]');
@@ -3977,19 +3989,61 @@ import {
 
         // --- CHARTS ---
         function initCharts() {
-            const ctxPrice = document.getElementById('priceChart')?.getContext('2d');
-            if (ctxPrice) new Chart(ctxPrice, {
+            const canvas = document.getElementById('priceChart');
+            const ctxPrice = canvas?.getContext('2d');
+            const ChartGlobal = window.Chart;
+            if (!ctxPrice || !ChartGlobal) return;
+
+            if (typeof ChartGlobal.getChart === 'function') {
+                const existing = ChartGlobal.getChart(canvas);
+                existing?.destroy();
+            }
+
+            new ChartGlobal(ctxPrice, {
                 type: 'line',
                 data: {
                     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                     datasets: [
-                        { label: 'Lumber', data: [12, 19, 13, 15, 12, 13], borderColor: 'rgba(99, 102, 241, 1)', tension: 0.4, fill: false },
-                        { label: 'Steel', data: [20, 22, 21, 24, 25, 23], borderColor: 'rgba(16, 185, 129, 1)', tension: 0.4, fill: false }
+                        {
+                            label: 'Lumber',
+                            data: [12, 19, 13, 15, 12, 13],
+                            borderColor: 'rgba(99, 102, 241, 1)',
+                            backgroundColor: 'rgba(99, 102, 241, 0.25)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Steel',
+                            data: [20, 22, 21, 24, 25, 23],
+                            borderColor: 'rgba(14, 165, 233, 1)',
+                            backgroundColor: 'rgba(14, 165, 233, 0.25)',
+                            tension: 0.4,
+                            fill: true
+                        }
                     ]
                 },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#e2e8f0'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.2)' }
+                        },
+                        y: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.15)' }
+                        }
+                    }
+                }
             });
-
         }
 
         // --- SETTINGS & UPDATES ---

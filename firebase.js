@@ -1,10 +1,88 @@
+const CONFIG_STORAGE_KEY = 'ce:firebase-config';
+const REQUIRED_CONFIG_KEYS = ['apiKey', 'authDomain', 'projectId', 'appId'];
+
 let appInstance = null;
 let firestoreInstance = null;
 let authInstance = null;
 let firebaseApi = null;
 let firebaseModulePromise = null;
+let manualConfig = null;
+
+function normalizeConfig(config = {}) {
+    const normalized = {};
+    Object.keys(config).forEach(key => {
+        const value = config[key];
+        if (value !== undefined && value !== null && value !== '') {
+            normalized[key] = String(value).trim();
+        }
+    });
+    return normalized;
+}
+
+function loadStoredConfig() {
+    if (manualConfig) return manualConfig;
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = window.localStorage?.getItem(CONFIG_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+            manualConfig = normalizeConfig(parsed);
+            return manualConfig;
+        }
+    } catch (error) {
+        console.warn('Unable to parse stored Firebase configuration', error);
+    }
+    return null;
+}
+
+function persistConfig(config) {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage?.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+    } catch (error) {
+        console.warn('Unable to persist Firebase configuration', error);
+    }
+}
+
+function clearCachedInstances() {
+    appInstance = null;
+    firestoreInstance = null;
+    authInstance = null;
+    firebaseApi = null;
+    firebaseModulePromise = null;
+}
+
+export function setFirebaseConfig(config = {}) {
+    const normalized = normalizeConfig(config);
+    const missing = REQUIRED_CONFIG_KEYS.filter(key => !normalized[key]);
+    if (missing.length) {
+        throw new Error(`Firebase configuration is missing: ${missing.join(', ')}`);
+    }
+    manualConfig = normalized;
+    persistConfig(manualConfig);
+    clearCachedInstances();
+}
+
+export function getFirebaseConfig() {
+    return loadStoredConfig();
+}
+
+export function clearFirebaseConfig() {
+    manualConfig = null;
+    clearCachedInstances();
+    if (typeof window !== 'undefined') {
+        try {
+            window.localStorage?.removeItem(CONFIG_STORAGE_KEY);
+        } catch (error) {
+            console.warn('Unable to clear stored Firebase configuration', error);
+        }
+    }
+}
 
 function resolveFirebaseOptions() {
+    const stored = loadStoredConfig();
+    if (stored) return stored;
     if (typeof window === 'undefined') return null;
     try {
         const compatApp = window.firebase?.app?.();
@@ -39,6 +117,7 @@ async function loadFirebaseModules() {
                 deleteDoc: firestoreModule.deleteDoc,
                 onSnapshot: firestoreModule.onSnapshot,
                 getDoc: firestoreModule.getDoc,
+                writeBatch: firestoreModule.writeBatch,
                 getAuth: authModule.getAuth,
                 GoogleAuthProvider: authModule.GoogleAuthProvider,
                 signInWithPopup: authModule.signInWithPopup,
@@ -85,8 +164,10 @@ export async function initializeFirebase() {
 
     const options = resolveFirebaseOptions();
     if (!options) {
-        throw new Error('Firebase configuration is missing. Confirm that Firebase Hosting has injected the SDK.');
+        throw new Error('Firebase configuration is missing. Add your Firebase web app keys in the settings tab.');
     }
+
+    manualConfig = normalizeConfig(options);
 
     const api = await loadFirebaseModules();
 
@@ -199,23 +280,38 @@ export function signOutFromGoogle() {
 export async function saveCompanyInfo(profileId, companyInfo) {
     const { setDoc } = requireFirebaseApi();
     const docRef = profileDoc(profileId);
-    const payload = {
-        companyInfo: companyInfo || {},
-        updatedAt: new Date().toISOString(),
-    };
-    await setDoc(docRef, payload, { merge: true });
+    await setDoc(docRef, { companyInfo, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
 export async function loadCompanyInfo(profileId) {
     const { getDoc } = requireFirebaseApi();
-    const docRef = profileDoc(profileId);
-    const snapshot = await getDoc(docRef);
-    if (!snapshot.exists()) return null;
-    const data = snapshot.data();
-    return data?.companyInfo || null;
+    const docSnap = await getDoc(profileDoc(profileId));
+    if (!docSnap.exists()) return null;
+    return docSnap.data()?.companyInfo || null;
 }
 
 export async function replaceAllProjects(profileId, projects = []) {
-    const ops = projects.map(project => saveProject(profileId, project));
-    await Promise.all(ops);
+    const db = requireFirestore();
+    const { doc, setDoc, deleteDoc } = requireFirebaseApi();
+    const batch = firebaseApi.writeBatch ? firebaseApi.writeBatch(db) : null;
+
+    if (batch) {
+        const collectionRef = projectCollection(profileId);
+        const existing = await firebaseApi.getDocs(collectionRef);
+        existing.forEach(docSnap => batch.delete(docSnap.ref));
+        projects.forEach(project => {
+            const docRef = doc(collectionRef, String(project.id));
+            batch.set(docRef, project, { merge: true });
+        });
+        await batch.commit();
+        return;
+    }
+
+    const collectionRef = projectCollection(profileId);
+    const existing = await firebaseApi.getDocs(collectionRef);
+    await Promise.all(existing.docs.map(docSnap => deleteDoc(docSnap.ref)));
+    await Promise.all(projects.map(project => {
+        const docRef = doc(collectionRef, String(project.id));
+        return setDoc(docRef, project, { merge: true });
+    }));
 }
