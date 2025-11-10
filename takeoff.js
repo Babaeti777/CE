@@ -60,7 +60,8 @@ export class TakeoffManager {
             sortDir: 'asc',
             currentDrawingId: null,
             zoom: 1,
-            isFullscreen: false
+            isFullscreen: false,
+            previewPoint: null
         };
 
         this.measurements = new Map();
@@ -427,8 +428,126 @@ export class TakeoffManager {
         if (field === 'trade' || field === 'floor' || field === 'page') {
             this.updateActiveDrawingDisplay();
         }
-        this.state.previewPoint = point || null;
         this.drawMeasurements();
+    }
+
+    drawMeasurements() {
+        const { canvas } = this.elements;
+        if (!canvas) {
+            return;
+        }
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+            return;
+        }
+
+        const width = Number.isFinite(canvas.width) ? canvas.width : canvas.clientWidth || 0;
+        const height = Number.isFinite(canvas.height) ? canvas.height : canvas.clientHeight || 0;
+        context.clearRect(0, 0, width, height);
+
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            return;
+        }
+
+        const overlay = this.measurements.get(drawing.id);
+        const measurements = this.normalizeMeasurements(overlay);
+        if (!measurements.length) {
+            return;
+        }
+
+        measurements.forEach((measurement) => this.renderMeasurement(context, measurement));
+    }
+
+    normalizeMeasurements(overlay) {
+        if (!overlay) {
+            return [];
+        }
+        if (Array.isArray(overlay)) {
+            return overlay;
+        }
+        if (Array.isArray(overlay?.items)) {
+            return overlay.items;
+        }
+        return [];
+    }
+
+    renderMeasurement(context, measurement) {
+        if (!measurement || typeof measurement !== 'object') {
+            return;
+        }
+
+        const rawPoints = Array.isArray(measurement.points) ? measurement.points : [];
+        const scale = Number.isFinite(this.state.zoom) ? this.state.zoom : 1;
+        const points = rawPoints
+            .map((point) => this.toCanvasPoint(point, scale))
+            .filter(Boolean);
+
+        if (!points.length) {
+            return;
+        }
+
+        context.save();
+        context.lineWidth = measurement.lineWidth ?? 2;
+        context.strokeStyle = measurement.color || 'rgba(0, 123, 255, 0.85)';
+
+        context.beginPath();
+        points.forEach(({ x, y }, index) => {
+            if (index === 0) {
+                context.moveTo(x, y);
+            } else {
+                context.lineTo(x, y);
+            }
+        });
+
+        const shouldClosePath = Boolean(measurement.closed) || (measurement.fill && points.length > 2);
+        if (shouldClosePath) {
+            context.closePath();
+        }
+
+        if (measurement.fill) {
+            context.fillStyle = measurement.fill;
+            context.fill();
+        }
+
+        context.stroke();
+
+        if (measurement.label) {
+            const anchorPoint = this.getLabelAnchor(measurement, points, scale);
+            if (anchorPoint) {
+                context.fillStyle = measurement.labelColor || context.strokeStyle;
+                context.font = measurement.labelFont || '12px sans-serif';
+                const offsetX = measurement.labelOffsetX ?? 8;
+                const offsetY = measurement.labelOffsetY ?? -8;
+                context.fillText(
+                    measurement.label,
+                    anchorPoint.x + offsetX,
+                    anchorPoint.y + offsetY
+                );
+            }
+        }
+
+        context.restore();
+    }
+
+    toCanvasPoint(point, scale) {
+        if (!point) {
+            return null;
+        }
+        const x = Number.isFinite(point.x) ? point.x : Number.isFinite(point[0]) ? point[0] : null;
+        const y = Number.isFinite(point.y) ? point.y : Number.isFinite(point[1]) ? point[1] : null;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return null;
+        }
+        return { x: x * scale, y: y * scale };
+    }
+
+    getLabelAnchor(measurement, points, scale) {
+        if (measurement.labelPosition) {
+            return this.toCanvasPoint(measurement.labelPosition, scale);
+        }
+        return points[points.length - 1] || null;
     }
 
     removeDrawing(id) {
