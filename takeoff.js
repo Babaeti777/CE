@@ -20,12 +20,9 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.1;
 
-const MODE_LABELS = {
-    length: 'Length',
-    area: 'Area',
-    count: 'Count',
-    diameter: 'Diameter'
-};
+function createId(prefix = 'drawing') {
+    return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+}
 
 function createId(prefix = 'drawing') {
     return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -175,9 +172,6 @@ export class TakeoffManager {
     init() {
         this.cacheDom();
         this.bindEvents();
-        this.updateModeControls();
-        this.updateCountToolbarVisibility();
-        this.updateScaleInput();
         this.renderDrawingList();
         this.updateActiveDrawingDisplay();
         this.updatePlanVisibility();
@@ -213,7 +207,6 @@ export class TakeoffManager {
             measurementTableBody: byId('takeoffMeasurementTableBody'),
             measurementEmpty: byId('takeoffMeasurementEmpty'),
             planContainer: byId('takeoffPlanContainer'),
-            planStage: byId('takeoffPlanStage'),
             planInner: byId('takeoffPlanInner'),
             planPreview: byId('takeoffPlanPreview'),
             canvas: byId('takeoffCanvas'),
@@ -221,8 +214,6 @@ export class TakeoffManager {
             zoomInBtn: byId('takeoffZoomInBtn'),
             zoomResetBtn: byId('takeoffZoomResetBtn'),
             zoomIndicator: byId('takeoffZoomIndicator'),
-            modeSelect: byId('takeoffModeSelect'),
-            scaleInput: byId('takeoffScaleInput'),
             status: byId('takeoffStatus'),
             activeMeta: byId('takeoffActiveMeta'),
             pdfControls: byId('takeoffPdfControls'),
@@ -342,13 +333,8 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(fullscreenBtn, 'click', () => this.toggleFullscreen());
         this.lifecycle.addEventListener(fullScreenToggle, 'click', () => this.toggleFullscreen());
         this.lifecycle.addEventListener(document, 'keydown', (event) => {
-            if (event.key === 'Escape') {
-                if (this.state.isFullscreen) {
-                    this.setFullscreen(false);
-                }
-                if (this.state.draftPoints.length) {
-                    this.resetDraft();
-                }
+            if (event.key === 'Escape' && this.state.isFullscreen) {
+                this.setFullscreen(false);
             }
         });
 
@@ -1121,8 +1107,7 @@ export class TakeoffManager {
             createdAt: Date.now(),
             type: SUPPORTED_IMAGE_TYPES.has(file.type) ? 'image' : 'pdf',
             objectUrl,
-            file,
-            scale: this.getDrawingScale()
+            file
         };
 
         if (base.type === 'image') {
@@ -1171,6 +1156,12 @@ export class TakeoffManager {
 
         return filtered;
     }
+
+    renderDrawingList() {
+        const { drawingTableBody, drawingEmpty } = this.elements;
+        if (!drawingTableBody) {
+            return;
+        }
 
     renderDrawingList() {
         const { drawingTableBody, drawingEmpty } = this.elements;
@@ -1249,78 +1240,6 @@ export class TakeoffManager {
         drawing[field] = event.target.value;
         if (field === 'trade' || field === 'floor' || field === 'page') {
             this.updateActiveDrawingDisplay();
-        }
-        this.drawMeasurements();
-    }
-
-    getPointerPosition(event) {
-        const { canvas } = this.elements;
-        if (!canvas) {
-            return null;
-        }
-        const rect = canvas.getBoundingClientRect();
-        if (!rect.width || !rect.height) {
-            return null;
-        }
-        const scaleX = rect.width / (canvas.width || rect.width);
-        const scaleY = rect.height / (canvas.height || rect.height);
-        const x = (event.clientX - rect.left) / (scaleX || 1);
-        const y = (event.clientY - rect.top) / (scaleY || 1);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) {
-            return null;
-        }
-        return { x, y };
-    }
-
-    handlePointerDown(event) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing) {
-            return;
-        }
-        const point = this.getPointerPosition(event);
-        if (!point) {
-            return;
-        }
-        event.preventDefault();
-
-        if (this.state.mode === 'area' && event.detail > 1) {
-            return;
-        }
-
-        if (this.state.mode === 'count') {
-            this.createMeasurement({
-                mode: 'count',
-                points: [point],
-                quantity: 1,
-                units: 'ct',
-                details: this.state.countSettings.label || '',
-                color: this.state.countSettings.color,
-                shape: this.state.countSettings.shape,
-                label: this.state.countSettings.label || ''
-            });
-            this.state.previewPoint = null;
-            this.drawMeasurements();
-            return;
-        }
-
-        this.state.draftPoints = [...this.state.draftPoints, point];
-        if (this.state.mode === 'length' || this.state.mode === 'diameter') {
-            if (this.state.draftPoints.length >= 2) {
-                this.finalizeMeasurement(this.state.draftPoints);
-                this.resetDraft();
-            }
-        }
-        this.drawMeasurements();
-    }
-
-    handlePointerMove(event) {
-        if (this.state.mode === 'count' && !this.state.draftPoints.length) {
-            this.state.previewPoint = this.getPointerPosition(event);
-            this.drawMeasurements();
-            return;
-        }
-        if (!this.state.draftPoints.length) {
-            return;
         }
         const point = this.getPointerPosition(event);
         if (!point) {
@@ -1636,7 +1555,6 @@ export class TakeoffManager {
         if (activeMeta) {
             activeMeta.textContent = formatMeta(drawing);
         }
-        this.updateScaleInput(drawing);
         await this.updatePlanPreview(drawing);
         this.updatePdfControls(drawing);
     }
