@@ -28,6 +28,10 @@ function createId(prefix = 'drawing') {
     return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
 }
 
+function createId(prefix = 'drawing') {
+    return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
@@ -149,6 +153,7 @@ export class TakeoffManager {
         };
 
         this.measurements = new Map();
+        this.measurementCounters = new Map();
         this.labelCounters = new Map();
         this.measurementCounters = new Map();
         this.previewToken = 0;
@@ -177,6 +182,8 @@ export class TakeoffManager {
         this.updatePlanVisibility();
         this.updateZoomIndicator();
         this.updatePdfControls();
+        this.updateScaleControls();
+        this.updateCountToolbarVisibility();
         this.updateFullscreenButton();
         this.updateStatus('Upload plan files to start measuring.');
         this.refreshMeasurementTable();
@@ -301,6 +308,9 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(drawingTableBody, 'input', (event) => this.handleDrawingTableInput(event));
         this.lifecycle.addEventListener(measurementTableBody, 'click', (event) => this.handleMeasurementTableClick(event));
 
+        this.lifecycle.addEventListener(modeSelect, 'change', (event) => this.updateMode(event.target.value));
+        this.lifecycle.addEventListener(scaleInput, 'change', (event) => this.handleScaleChange(event));
+
         this.lifecycle.addEventListener(zoomOutBtn, 'click', () => this.stepZoom(-ZOOM_STEP));
         this.lifecycle.addEventListener(zoomInBtn, 'click', () => this.stepZoom(ZOOM_STEP));
         this.lifecycle.addEventListener(zoomResetBtn, 'click', () => this.resetZoom());
@@ -364,6 +374,127 @@ export class TakeoffManager {
         });
     }
 
+    updateMode(mode) {
+        const allowed = new Set(Object.keys(MODE_LABELS));
+        const nextMode = allowed.has(mode) ? mode : 'length';
+        const changed = this.state.mode !== nextMode;
+        this.state.mode = nextMode;
+        const { modeSelect, planStage } = this.elements;
+        if (modeSelect && modeSelect.value !== nextMode) {
+            modeSelect.value = nextMode;
+        }
+        if (planStage) {
+            planStage.dataset.mode = nextMode;
+        }
+        this.updateCountToolbarVisibility();
+        if (changed) {
+            this.resetDraft();
+            this.updateStatus(`${MODE_LABELS[nextMode]} mode active.`);
+        }
+        this.drawMeasurements();
+    }
+
+    updateCountToolbarVisibility() {
+        const { countToolbar } = this.elements;
+        if (!countToolbar) {
+            return;
+        }
+        countToolbar.classList.toggle('is-hidden', this.state.mode !== 'count');
+    }
+
+    updateCountSetting(key, value) {
+        if (!(key in this.state.countSettings)) {
+            return;
+        }
+        this.state.countSettings[key] = value;
+        if (key !== 'label') {
+            this.drawMeasurements();
+        }
+    }
+
+    createEmptyCounters() {
+        return { length: 0, area: 0, count: 0, diameter: 0 };
+    }
+
+    recalculateCounters(items = []) {
+        const counters = this.createEmptyCounters();
+        items.forEach((item) => {
+            const mode = item?.mode;
+            if (mode && Object.prototype.hasOwnProperty.call(counters, mode)) {
+                counters[mode] += 1;
+            }
+        });
+        return counters;
+    }
+
+    getMeasurementCounters(drawingId, { create = false } = {}) {
+        if (!drawingId) {
+            return null;
+        }
+        let counters = this.measurementCounters.get(drawingId);
+        if (!counters && create) {
+            counters = this.createEmptyCounters();
+            this.measurementCounters.set(drawingId, counters);
+        }
+        return counters || null;
+    }
+
+    generateMeasurementName(drawingId, mode) {
+        const counters = this.getMeasurementCounters(drawingId, { create: true });
+        if (!counters) {
+            return MODE_LABELS[mode] || 'Measurement';
+        }
+        if (!Object.prototype.hasOwnProperty.call(counters, mode)) {
+            counters[mode] = 0;
+        }
+        counters[mode] = (counters[mode] || 0) + 1;
+        return `${MODE_LABELS[mode] || 'Measurement'} ${counters[mode]}`;
+    }
+
+    getDrawingScale(drawing = this.getActiveDrawing()) {
+        if (!drawing) {
+            return this.state.scale || 1;
+        }
+        const value = Number(drawing.scale);
+        if (Number.isFinite(value) && value > 0) {
+            return value;
+        }
+        return this.state.scale || 1;
+    }
+
+    updateScaleControls(drawing = this.getActiveDrawing()) {
+        const { scaleInput } = this.elements;
+        if (!scaleInput) {
+            return;
+        }
+        if (!drawing) {
+            scaleInput.value = '';
+            scaleInput.disabled = true;
+            return;
+        }
+        scaleInput.disabled = false;
+        const scale = this.getDrawingScale(drawing);
+        scaleInput.value = Number.isFinite(scale) ? scale : '';
+    }
+
+    handleScaleChange(event) {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            event.target.value = '';
+            this.services.toast('Select a drawing before setting the scale.', 'warning');
+            return;
+        }
+        const value = Number(event?.target?.value);
+        if (!Number.isFinite(value) || value <= 0) {
+            this.services.toast('Enter a valid scale in pixels per foot.', 'error');
+            this.updateScaleControls(drawing);
+            return;
+        }
+        drawing.scale = value;
+        this.state.scale = value;
+        this.updateStatus(`Scale set to ${formatNumber(value)} px/ft.`);
+    }
+
     getMeasurementStore(drawingId, { create = false } = {}) {
         if (!drawingId) {
             return null;
@@ -375,6 +506,9 @@ export class TakeoffManager {
             }
             store = { items: [] };
             this.measurements.set(drawingId, store);
+            if (!this.measurementCounters.has(drawingId)) {
+                this.measurementCounters.set(drawingId, this.createEmptyCounters());
+            }
             return store;
         }
         if (Array.isArray(store)) {
@@ -417,6 +551,7 @@ export class TakeoffManager {
             ? items.map((item) => this.prepareMeasurement(item)).filter(Boolean)
             : [];
         store.items = normalized;
+        this.measurementCounters.set(drawingId, this.recalculateCounters(normalized));
         if (drawingId === this.state.currentDrawingId) {
             this.refreshMeasurementTable(drawingId);
         }
@@ -604,6 +739,8 @@ export class TakeoffManager {
             return;
         }
         store.items = [];
+        this.measurementCounters.set(drawingId, this.createEmptyCounters());
+        this.resetDraft();
         if (drawingId === this.state.currentDrawingId) {
             this.refreshMeasurementTable(drawingId);
         }
@@ -677,7 +814,8 @@ export class TakeoffManager {
             nameCell.textContent = measurement.name || measurement.label || 'Measurement';
         }
         if (modeCell) {
-            modeCell.textContent = measurement.mode || measurement.type || '';
+            const label = MODE_LABELS[measurement.mode] || measurement.type || measurement.mode || '';
+            modeCell.textContent = label;
         }
         if (quantityCell) {
             const value = measurement.quantity ?? measurement.value ?? measurement.area ?? null;
@@ -1290,7 +1428,10 @@ export class TakeoffManager {
             return;
         }
 
-        const context = canvas.getContext('2d');
+        const context = this.canvasContext || canvas.getContext('2d');
+        if (!this.canvasContext && context) {
+            this.canvasContext = context;
+        }
         if (!context) {
             return;
         }
@@ -1514,12 +1655,136 @@ export class TakeoffManager {
             this.state.currentDrawingId = this.state.drawings[0]?.id || null;
         }
 
-        this.renderDrawingList();
-        this.updateActiveDrawingDisplay();
-        this.updatePlanVisibility();
-        this.refreshMeasurementTable();
+    handlePointerMove(event) {
+        const point = this.getPointerPosition(event);
+        if (this.state.mode === 'count') {
+            this.state.previewPoint = point;
+            this.drawMeasurements();
+            return;
+        }
+        if (!this.state.draftPoints.length) {
+            if (this.state.previewPoint !== point) {
+                this.state.previewPoint = point;
+                this.drawMeasurements();
+            }
+            return;
+        }
+        this.state.previewPoint = point;
         this.drawMeasurements();
-        this.updateStatus(`${removed?.name || 'Drawing'} removed.`);
+    }
+
+    handleDoubleClick(event) {
+        if (this.state.mode !== 'area') {
+            return;
+        }
+        if (!this.state.draftPoints.length) {
+            return;
+        }
+        const point = this.getPointerPosition(event);
+        const points = [...this.state.draftPoints];
+        if (point) {
+            points.push(point);
+        }
+        event.preventDefault?.();
+        this.finalizeMeasurement(points);
+        this.resetDraft();
+    }
+
+    handlePlanContextMenu(event) {
+        if (this.state.draftPoints.length) {
+            event.preventDefault();
+            this.resetDraft();
+        }
+    }
+
+    drawDraft(context) {
+        if (!this.state.draftPoints.length) {
+            return;
+        }
+        if (this.state.mode === 'count') {
+            return;
+        }
+        const scale = Number.isFinite(this.state.zoom) ? this.state.zoom : 1;
+        const basePoints = [...this.state.draftPoints];
+        if (this.state.previewPoint) {
+            basePoints.push(this.state.previewPoint);
+        }
+        const points = basePoints
+            .map((point) => this.toCanvasPoint(point, scale))
+            .filter(Boolean);
+        if (!points.length) {
+            return;
+        }
+        context.save();
+        context.lineWidth = 2;
+        context.strokeStyle = 'rgba(37, 99, 235, 0.9)';
+        context.setLineDash([6, 4]);
+        context.beginPath();
+        points.forEach(({ x, y }, index) => {
+            if (index === 0) {
+                context.moveTo(x, y);
+            } else {
+                context.lineTo(x, y);
+            }
+        });
+        if (this.state.mode === 'area' && points.length > 2) {
+            context.closePath();
+            context.fillStyle = 'rgba(37, 99, 235, 0.12)';
+            context.fill();
+        }
+        context.stroke();
+        context.restore();
+    }
+
+    drawCountMarker(context, point, color, shape, label) {
+        if (!point) {
+            return;
+        }
+        const scale = Number.isFinite(this.state.zoom) ? this.state.zoom : 1;
+        const canvasPoint = this.toCanvasPoint(point, scale);
+        if (!canvasPoint) {
+            return;
+        }
+        const { x, y } = canvasPoint;
+        const size = 9;
+        context.save();
+        context.lineWidth = 2;
+        context.fillStyle = color || '#ef4444';
+        context.strokeStyle = 'rgba(17, 24, 39, 0.6)';
+        context.beginPath();
+        switch (shape) {
+            case 'square':
+                context.rect(x - size, y - size, size * 2, size * 2);
+                context.closePath();
+                break;
+            case 'diamond':
+                context.moveTo(x, y - size);
+                context.lineTo(x + size, y);
+                context.lineTo(x, y + size);
+                context.lineTo(x - size, y);
+                context.closePath();
+                break;
+            case 'triangle':
+                context.moveTo(x, y - size);
+                context.lineTo(x + size, y + size);
+                context.lineTo(x - size, y + size);
+                context.closePath();
+                break;
+            case 'circle':
+            default:
+                context.arc(x, y, size, 0, Math.PI * 2);
+                context.closePath();
+                break;
+        }
+        context.fill();
+        context.stroke();
+        if (label) {
+            context.font = '12px sans-serif';
+            context.fillStyle = color || '#ef4444';
+            context.textBaseline = 'middle';
+            context.fillText(label, x + size + 6, y);
+        }
+        context.restore();
     }
 
     selectDrawing(id) {
