@@ -3,7 +3,6 @@ import { StateManager } from './state/state-manager.js';
 import { createStorageService } from './services/storage-service.js';
 import { ErrorBoundary } from './utils/error-boundary.js';
 import { debounce } from './utils/debounce.js';
-import { VirtualList } from './ui/virtual-list.js';
 import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
 import { LifecycleManager } from './services/lifecycle-manager.js';
@@ -130,7 +129,6 @@ import {
         let firebaseReady = false;
         let lastScreenIsMobile = window.matchMedia('(max-width: 1024px)').matches;
         let wasSidebarCollapsedDesktop = false;
-        let projectListVirtualizer = null;
 
         function loadCachedDatabase() {
             try {
@@ -3313,20 +3311,6 @@ import {
         }
 
         // --- PROJECTS & MATERIALS ---
-        function ensureProjectVirtualizer() {
-            const list = document.getElementById('projectsList');
-            if (!list) return null;
-            if (projectListVirtualizer) return projectListVirtualizer;
-            list.innerHTML = '';
-            projectListVirtualizer = new VirtualList(list, 148, (project) => buildProjectListItem(project));
-            return projectListVirtualizer;
-        }
-
-        function destroyProjectVirtualizer() {
-            projectListVirtualizer?.destroy();
-            projectListVirtualizer = null;
-        }
-
         function buildProjectListItem(project) {
             const div = document.createElement('div');
             div.className = 'project-list-item';
@@ -3336,20 +3320,20 @@ import {
             div.style.marginBottom = '1rem';
             const typeLabel = project.estimateType === 'detailed' ? 'Detailed' : 'Quick';
             div.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h4 style="font-weight: 600;">${project.name}</h4>
-                        <p style="color: var(--gray-600); font-size: 0.875rem;">${project.type || ''}${project.sqft ? ' • ' + project.sqft + ' sqft' : ''} • ${typeLabel}</p>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+                    <div style="flex: 1 1 auto; min-width: 0;">
+                        <h4 style="font-weight: 600; margin: 0; word-break: break-word; overflow-wrap: anywhere;">${project.name}</h4>
+                        <p style="color: var(--gray-600); font-size: 0.875rem; margin: 0.25rem 0 0; word-break: break-word; overflow-wrap: anywhere;">${project.type || ''}${project.sqft ? ' • ' + project.sqft + ' sqft' : ''} • ${typeLabel}</p>
                     </div>
-                    <div style="text-align: right;">
-                        <p style="font-weight: 700; color: var(--primary);">${formatCurrency(project.total)}</p>
-                        <p style="color: var(--gray-600); font-size: 0.75rem;">${new Date(project.date).toLocaleDateString()}</p>
-                        <select class="form-select project-status" data-id="${project.id}" style="margin-top:0.25rem;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; text-align: right;">
+                        <p style="font-weight: 700; color: var(--primary); margin: 0;">${formatCurrency(project.total)}</p>
+                        <p style="color: var(--gray-600); font-size: 0.75rem; margin: 0;">${new Date(project.date).toLocaleDateString()}</p>
+                        <select class="form-select project-status" data-id="${project.id}">
                             <option value="review" ${project.status === 'review' ? 'selected' : ''}>Under Review</option>
                             <option value="won" ${project.status === 'won' ? 'selected' : ''}>Won</option>
                             <option value="lost" ${project.status === 'lost' ? 'selected' : ''}>Lost</option>
                         </select>
-                        <button class="btn btn-secondary ${project.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${project.id}" style="margin-top:0.25rem;">Edit</button>
+                        <button class="btn btn-secondary ${project.estimateType === 'quick' ? 'edit-project' : 'edit-bid'}" data-id="${project.id}">Edit</button>
                     </div>
                 </div>
             `;
@@ -3369,18 +3353,16 @@ import {
             );
 
             if (filteredProjects.length === 0) {
-                destroyProjectVirtualizer();
                 list.innerHTML = `<p style="color: var(--gray-600);">No saved projects found.</p>`;
                 return;
             }
 
-            const virtualizer = ensureProjectVirtualizer();
-            if (!virtualizer) {
-                list.innerHTML = '';
-                filteredProjects.forEach(project => list.appendChild(buildProjectListItem(project)));
-                return;
-            }
-            virtualizer.setItems(filteredProjects);
+            list.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+            filteredProjects.forEach(project => {
+                fragment.appendChild(buildProjectListItem(project));
+            });
+            list.appendChild(fragment);
         }
 
         async function updateProjectStatus(id, status) {
