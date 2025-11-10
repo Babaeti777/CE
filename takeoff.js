@@ -2380,6 +2380,7 @@ export class TakeoffManager {
             this.updatePlanVisibility();
             this.refreshMeasurementTable();
             this.drawMeasurements();
+            this.renderMeasurementSummary();
             this.updatePdfControls(null);
             this.updateScaleControls();
             this.updateZoomIndicator();
@@ -2632,6 +2633,7 @@ export class TakeoffManager {
         this.updatePlanVisibility();
         this.refreshMeasurementTable();
         this.drawMeasurements();
+        this.renderMeasurementSummary(drawing);
         this.renderNotes(drawing);
     }
 
