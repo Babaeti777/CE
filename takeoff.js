@@ -431,8 +431,8 @@ export class TakeoffManager {
         this.drawMeasurements();
     }
 
-    drawMeasurements() {
-        const { canvas } = this.elements;
+    drawMeasurements(options = {}) {
+        const { canvas, planInner } = this.elements;
         if (!canvas) {
             return;
         }
@@ -457,7 +457,12 @@ export class TakeoffManager {
             return;
         }
 
-        measurements.forEach((measurement) => this.renderMeasurement(context, measurement));
+        const hasCssScale = Boolean(planInner?.style?.transform && /scale\(/.test(planInner.style.transform));
+        const manualScale = Number.isFinite(options?.scale) ? options.scale : null;
+        const zoom = Number.isFinite(this.state.zoom) ? this.state.zoom : 1;
+        const scale = manualScale ?? (hasCssScale ? 1 : zoom);
+
+        measurements.forEach((measurement) => this.renderMeasurement(context, measurement, scale));
     }
 
     normalizeMeasurements(overlay) {
@@ -473,7 +478,7 @@ export class TakeoffManager {
         return [];
     }
 
-    renderMeasurement(context, measurement) {
+    renderMeasurement(context, measurement, scale = 1) {
         if (!measurement || typeof measurement !== 'object') {
             return;
         }
@@ -483,7 +488,12 @@ export class TakeoffManager {
             .map((point) => this.toCanvasPoint(point))
             .filter(Boolean);
 
-        if (!points.length) {
+        const scaleFactor = Number.isFinite(scale) ? scale : 1;
+        const scaledPoints = scaleFactor === 1
+            ? points
+            : points.map(({ x, y }) => ({ x: x * scaleFactor, y: y * scaleFactor }));
+
+        if (!scaledPoints.length) {
             return;
         }
 
@@ -492,7 +502,7 @@ export class TakeoffManager {
         context.strokeStyle = measurement.color || 'rgba(0, 123, 255, 0.85)';
 
         context.beginPath();
-        points.forEach(({ x, y }, index) => {
+        scaledPoints.forEach(({ x, y }, index) => {
             if (index === 0) {
                 context.moveTo(x, y);
             } else {
@@ -500,7 +510,7 @@ export class TakeoffManager {
             }
         });
 
-        const shouldClosePath = Boolean(measurement.closed) || (measurement.fill && points.length > 2);
+        const shouldClosePath = Boolean(measurement.closed) || (measurement.fill && scaledPoints.length > 2);
         if (shouldClosePath) {
             context.closePath();
         }
@@ -513,7 +523,7 @@ export class TakeoffManager {
         context.stroke();
 
         if (measurement.label) {
-            const anchorPoint = this.getLabelAnchor(measurement, points);
+            const anchorPoint = this.getLabelAnchor(measurement, scaledPoints, scaleFactor);
             if (anchorPoint) {
                 context.fillStyle = measurement.labelColor || context.strokeStyle;
                 context.font = measurement.labelFont || '12px sans-serif';
@@ -542,9 +552,19 @@ export class TakeoffManager {
         return { x, y };
     }
 
-    getLabelAnchor(measurement, points) {
+    getLabelAnchor(measurement, points, scale = 1) {
         if (measurement.labelPosition) {
-            return this.toCanvasPoint(measurement.labelPosition);
+            const anchor = this.toCanvasPoint(measurement.labelPosition);
+            if (!anchor) {
+                return null;
+            }
+            if (scale !== 1 && Number.isFinite(scale)) {
+                return {
+                    x: anchor.x * scale,
+                    y: anchor.y * scale
+                };
+            }
+            return anchor;
         }
         return points[points.length - 1] || null;
     }
