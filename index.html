@@ -6,6 +6,7 @@
     <title>CE — Minimal Estimator Workspace</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
     <script src="/__/firebase/10.12.2/firebase-app-compat.js"></script>
     <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
     <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
@@ -14,12 +15,7 @@
 </head>
 <body>
     <div class="app-shell">
-        <nav class="workspace-header" id="sidebar" role="navigation">
-            <button class="workspace-menu-toggle" id="menuToggle" aria-controls="workspaceTabBar" aria-expanded="false" aria-label="Open navigation" title="Open navigation">
-                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                </svg>
-            </button>
+                <nav class="workspace-header" id="sidebar" role="navigation">
             <div class="workspace-brand">
                 <span class="brand-mark">CE</span>
                 <div class="brand-copy">
@@ -27,46 +23,43 @@
                     <span class="brand-tagline">Plan, price, and deliver with clarity.</span>
                 </div>
             </div>
-            <div class="workspace-tab-bar" id="workspaceTabBar">
-                <button type="button" class="nav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-                    <span class="nav-label">Dashboard</span>
-                </button>
-                <button type="button" class="nav-item" data-tab="estimator" aria-controls="estimatorTab" aria-selected="false">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                    <span class="nav-label">Quick Estimator</span>
-                </button>
-                <button type="button" class="nav-item" data-tab="detailed" aria-controls="detailedTab" aria-selected="false">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                    <span class="nav-label">Detailed Bidding</span>
-                </button>
-                <button type="button" class="nav-item" data-tab="takeoff" aria-controls="takeoffTab" aria-selected="false">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
-                    <span class="nav-label">Takeoff Manager</span>
-                </button>
-                <button type="button" class="nav-item" data-tab="projects" aria-controls="projectsTab" aria-selected="false">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                    <span class="nav-label">Projects</span>
-                </button>
-                <button type="button" class="nav-item" data-tab="materials" aria-controls="materialsTab" aria-selected="false">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
-                    <span class="nav-label">Materials</span>
-                </button>
-                <button type="button" class="nav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    <span class="nav-label">Settings</span>
-                </button>
-            </div>
             <div class="workspace-actions">
-                <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Collapse navigation" aria-expanded="true">
-                    <svg class="sidebar-toggle-icon icon-expanded" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                    </svg>
-                    <svg class="sidebar-toggle-icon icon-collapsed" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                    <span class="sr-only" data-toggle-label>Collapse navigation</span>
-                </button>
+                <div class="nav-dropdown">
+                    <button class="btn btn-ghost nav-dropdown-trigger" id="navToggle" aria-haspopup="true" aria-expanded="false" aria-controls="workspaceTabBar">
+                        Workspace
+                        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <div class="nav-dropdown-menu" id="workspaceTabBar" role="menu">
+                        <button type="button" class="nav-item topnav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true" role="menuitem">
+                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                            <span class="nav-label">Dashboard</span>
+                        </button>
+                        <button type="button" class="nav-item topnav-item" data-tab="estimator" aria-controls="estimatorTab" aria-selected="false" role="menuitem">
+                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                            <span class="nav-label">Quick Estimator</span>
+                        </button>
+                        <button type="button" class="nav-item topnav-item" data-tab="detailed" aria-controls="detailedTab" aria-selected="false" role="menuitem">
+                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                            <span class="nav-label">Detailed Bidding</span>
+                        </button>
+                        <button type="button" class="nav-item topnav-item" data-tab="takeoff" aria-controls="takeoffTab" aria-selected="false" role="menuitem">
+                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
+                            <span class="nav-label">Takeoff Manager</span>
+                        </button>
+                        <button type="button" class="nav-item topnav-item" data-tab="projects" aria-controls="projectsTab" aria-selected="false" role="menuitem">
+                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                            <span class="nav-label">Projects</span>
+                        </button>
+                        <button type="button" class="nav-item topnav-item" data-tab="materials" aria-controls="materialsTab" aria-selected="false" role="menuitem">
+                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
+                            <span class="nav-label">Materials</span>
+                        </button>
+                        <button type="button" class="nav-item topnav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false" role="menuitem">
+                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31-.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.072 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            <span class="nav-label">Settings</span>
+                        </button>
+                    </div>
+                </div>
                 <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                 </button>
@@ -79,39 +72,51 @@
         </nav>
 
         <main class="main-content">
-        <section class="header-insights" aria-label="Workflow highlights">
-            <article class="insight-card">
-                <h2 class="insight-title">Focus your effort</h2>
-                <p class="insight-body">Pin critical pursuits, monitor pricing updates, and spotlight risk items before the next stand-up.</p>
-            </article>
-            <article class="insight-card">
-                <h2 class="insight-title">Stay in sync</h2>
-                <ul class="insight-list">
-                    <li>Capture takeoffs from the field and publish directly to estimates.</li>
-                    <li>Share curated pricing feeds with teammates in real time.</li>
-                </ul>
-            </article>
+                <section class="dashboard-hero" aria-label="Workspace highlights">
+            <div class="dashboard-hero__content">
+                <h1 class="dashboard-title" id="pageTitle">Dashboard</h1>
+                <p class="dashboard-subtitle">Stay ahead of bids with an instant view of active pursuits, pricing shifts, and sync health.</p>
+                <div class="dashboard-hero__tags" role="list">
+                    <span class="dashboard-tag" role="listitem">Live market signals</span>
+                    <span class="dashboard-tag" role="listitem">Team workload</span>
+                    <span class="dashboard-tag" role="listitem">Win tracking</span>
+                </div>
+            </div>
+            <div class="dashboard-hero__metrics">
+                <article class="dashboard-hero-card" aria-live="polite">
+                    <h2 class="hero-card-label">Active projects</h2>
+                    <p id="totalProjects" class="hero-card-value">0</p>
+                    <span class="hero-card-hint">Projects currently in play</span>
+                </article>
+                <article class="dashboard-hero-card" aria-live="polite">
+                    <h2 class="hero-card-label">Bid volume</h2>
+                    <p id="totalValue" class="hero-card-value">$0</p>
+                    <span class="hero-card-hint">Total value across bids</span>
+                </article>
+            </div>
         </section>
 
         <div class="content">
                 <!-- Dashboard Tab -->
             <div id="dashboardTab" class="tab-content active">
-                <div class="grid-4 mb-xl">
-                    <div class="card">
-                        <div class="card-header"><h3 class="card-title">Total Projects</h3><svg width="24" height="24" fill="none" stroke="var(--primary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg></div>
-                        <p id="totalProjects" class="stat-value text-primary">0</p>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h3 class="card-title">Total Value</h3><svg width="24" height="24" fill="none" stroke="var(--success)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                        <p id="totalValue" class="stat-value text-success">$0</p>
-                    </div>
+                <div class="dashboard-secondary grid-3">
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Under Review</h3><svg width="24" height="24" fill="none" stroke="var(--warning)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg></div>
-                        <p id="reviewCount" class="stat-value text-warning">0</p>
+                        <p id="reviewCount" class="dashboard-secondary-value text-warning">0</p>
+                        <p class="dashboard-secondary-hint">Bids awaiting client feedback.</p>
                     </div>
                     <div class="card">
                         <div class="card-header"><h3 class="card-title">Win Rate</h3><svg width="24" height="24" fill="none" stroke="var(--secondary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                        <p id="winRate" class="stat-value text-secondary">0%</p>
+                        <p id="winRate" class="dashboard-secondary-value text-secondary">0%</p>
+                        <p class="dashboard-secondary-hint">Closed wins this quarter.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h3 class="card-title">Team Focus</h3><svg width="24" height="24" fill="none" stroke="var(--primary)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h10"></path></svg></div>
+                        <ul class="dashboard-secondary-list">
+                            <li>Finalize scope narratives</li>
+                            <li>Share updated lumber pricing</li>
+                            <li>Verify site logistics plan</li>
+                        </ul>
                     </div>
                 </div>
                 <div class="grid-2">
@@ -429,7 +434,7 @@
                                 <h3 class="card-title">Drawing Pages</h3>
                                 <label class="btn btn-secondary takeoff-upload-label">
                                     Upload
-                                <input type="file" id="takeoffDrawingInput" accept="image/*" multiple class="hidden-input">
+                                <input type="file" id="takeoffDrawingInput" accept="application/pdf,image/*" multiple class="hidden-input">
                                 </label>
                             </div>
                             <button class="btn btn-secondary" id="takeoffAddDrawingBtn" type="button">Add Drawing</button>
@@ -460,6 +465,7 @@
                                         <th scope="col">Drawing</th>
                                         <th scope="col">Trade</th>
                                         <th scope="col">Level</th>
+                                        <th scope="col">Sheet</th>
                                         <th scope="col">Notes</th>
                                         <th scope="col"></th>
                                     </tr>
@@ -479,11 +485,11 @@
                             </div>
                             <div id="takeoffPlanContainer" class="takeoff-plan is-hidden">
                                 <div id="takeoffToolbarMount">
-                                    <div class="takeoff-plan-toolbar" id="takeoffToolbar">
-                                        <div class="takeoff-toolbar-group">
-                                            <div class="form-group">
-                                                <label class="form-label" for="takeoffModeSelect">Mode</label>
-                                                <select id="takeoffModeSelect" class="form-select">
+                                <div class="takeoff-plan-toolbar" id="takeoffToolbar">
+                                    <div class="takeoff-toolbar-group">
+                                        <div class="form-group">
+                                            <label class="form-label" for="takeoffModeSelect">Mode</label>
+                                            <select id="takeoffModeSelect" class="form-select">
                                                 <option value="length">Length</option>
                                                 <option value="area">Area</option>
                                                 <option value="count">Count</option>
@@ -502,6 +508,13 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomInBtn" aria-label="Zoom in">+</button>
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
+                                    </div>
+                                    <div class="takeoff-toolbar-group takeoff-plan-tools">
+                                        <span class="takeoff-toolbar-label">Plan</span>
+                                        <button type="button" class="btn btn-ghost" id="takeoffOpenSourceBtn">Open Original</button>
+                                        <button type="button" class="btn btn-ghost" id="takeoffRotateLeftBtn" aria-label="Rotate counter-clockwise">↺</button>
+                                        <button type="button" class="btn btn-ghost" id="takeoffRotateRightBtn" aria-label="Rotate clockwise">↻</button>
+                                        <button type="button" class="btn btn-secondary" id="takeoffNoteModeBtn" aria-pressed="false">Add Note</button>
                                     </div>
                                     <div class="takeoff-toolbar-group takeoff-count-toolbar is-hidden" id="takeoffCountToolbar">
                                         <span class="takeoff-toolbar-label">Count marker</span>
@@ -524,11 +537,11 @@
                                         </label>
                                     </div>
                                 </div>
-                                </div>
                                 <div class="takeoff-plan-stage" id="takeoffPlanStage" tabindex="0">
                                     <div class="takeoff-plan-inner" id="takeoffPlanInner">
                                         <img id="takeoffPlanPreview" alt="Plan preview">
                                         <canvas id="takeoffCanvas"></canvas>
+                                        <div id="takeoffAnnotationLayer" class="takeoff-annotation-layer" aria-live="polite"></div>
                                     </div>
                                     <button type="button" class="btn btn-secondary takeoff-fullscreen-toggle" id="takeoffFullScreenToggle" aria-pressed="false">Full View</button>
                                 </div>
