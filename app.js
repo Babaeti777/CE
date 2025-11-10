@@ -2112,21 +2112,31 @@ import {
         }
 
         function updateSidebarToggleState() {
-            const button = document.getElementById('sidebarCollapseBtn');
+            const collapseButton = document.getElementById('sidebarCollapseBtn');
+            const menuToggle = document.getElementById('menuToggle');
             const sidebar = document.getElementById('sidebar');
-            if (!button || !sidebar) return;
+            if (!sidebar) return;
 
             const collapsed = isSidebarCollapsed();
             const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
 
-            button.classList.toggle('collapsed', collapsed);
-            button.setAttribute('aria-label', label);
-            button.setAttribute('aria-expanded', String(!collapsed));
-            button.setAttribute('title', label);
+            if (collapseButton) {
+                collapseButton.classList.toggle('collapsed', collapsed);
+                collapseButton.setAttribute('aria-label', label);
+                collapseButton.setAttribute('aria-expanded', String(!collapsed));
+                collapseButton.setAttribute('title', label);
 
-            const textEl = button.querySelector('[data-toggle-label]');
-            if (textEl) {
-                textEl.textContent = label;
+                const textEl = collapseButton.querySelector('[data-toggle-label]');
+                if (textEl) {
+                    textEl.textContent = label;
+                }
+            }
+
+            if (menuToggle) {
+                const mobileLabel = collapsed ? 'Open navigation' : 'Close navigation';
+                menuToggle.setAttribute('aria-expanded', String(!collapsed));
+                menuToggle.setAttribute('aria-label', mobileLabel);
+                menuToggle.setAttribute('title', mobileLabel);
             }
         }
 
@@ -2225,11 +2235,17 @@ import {
         }
         
         function openModal(modalId) {
-            document.getElementById(modalId)?.classList.add('active');
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.add('active');
+            modal.setAttribute('aria-hidden', 'false');
         }
-        
+
         function closeModal(modalId) {
-            document.getElementById(modalId)?.classList.remove('active');
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
         }
 
         // --- QUICK ESTIMATOR ---

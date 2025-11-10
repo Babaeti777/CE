@@ -875,6 +875,7 @@ fieldset.material-fieldset {
     z-index: 100;
 }
 
+.modal.active,
 .modal.show {
     display: flex;
 }
