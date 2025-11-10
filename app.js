@@ -1372,6 +1372,7 @@ import {
                 const bidDateInput = document.getElementById('bidDate');
                 if (bidDateInput) {
                     bidDateInput.value = new Date().toISOString().split('T')[0];
+                    updateBidInfoSummary();
                 }
 
                 await safeInitCloudSync();
@@ -1955,6 +1956,13 @@ import {
             ['overhead', 'profit', 'contingency'].forEach(id => {
                 document.getElementById(id)?.addEventListener('input', updateBidTotal);
             });
+
+            ['bidProjectName', 'clientName', 'completionDays'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', updateBidInfoSummary);
+            });
+            const bidDateEl = document.getElementById('bidDate');
+            bidDateEl?.addEventListener('input', updateBidInfoSummary);
+            bidDateEl?.addEventListener('change', updateBidInfoSummary);
             
             const lineItemsContainer = document.getElementById('lineItems');
             if (lineItemsContainer) {
@@ -2644,6 +2652,7 @@ import {
             document.getElementById('lineItems').innerHTML = '';
             bid.lineItems.forEach(item => addLineItem(item, { position: 'bottom' }));
             updateBidTotal();
+            updateBidInfoSummary();
             switchTab('detailed');
         }
 
@@ -2897,6 +2906,54 @@ import {
             document.getElementById('bidMarkup').textContent = formatCurrency(markup);
             document.getElementById('bidContingency').textContent = formatCurrency(contingency);
             document.getElementById('bidTotal').textContent = formatCurrency(total);
+        }
+
+        function updateBidInfoSummary() {
+            const summaryEl = document.getElementById('bidInfoSummaryText');
+            if (!summaryEl) {
+                return;
+            }
+
+            const projectNameField = document.getElementById('bidProjectName');
+            const clientNameField = document.getElementById('clientName');
+            const bidDateField = document.getElementById('bidDate');
+            const completionField = document.getElementById('completionDays');
+
+            const projectName = projectNameField?.value?.trim() || '';
+            const clientName = clientNameField?.value?.trim() || '';
+            const bidDateValue = bidDateField?.value || '';
+            const completionRaw = completionField?.value?.trim() || '';
+
+            const hasDetails = Boolean(projectName || clientName || bidDateValue || completionRaw);
+            if (!hasDetails) {
+                summaryEl.textContent = 'Add project details to build your summary.';
+                return;
+            }
+
+            let bidDateText = 'Date TBD';
+            if (bidDateValue) {
+                const parsed = new Date(bidDateValue);
+                bidDateText = Number.isFinite(parsed.getTime())
+                    ? parsed.toLocaleDateString()
+                    : bidDateValue;
+            }
+
+            const completionNumber = Number.parseInt(completionRaw, 10);
+            let timelineText = 'TBD';
+            if (Number.isFinite(completionNumber) && completionNumber > 0) {
+                timelineText = `${completionNumber} day${completionNumber === 1 ? '' : 's'}`;
+            } else if (completionRaw) {
+                timelineText = completionRaw;
+            }
+
+            const parts = [
+                projectName || 'Untitled project',
+                clientName ? `Client: ${clientName}` : 'Client: TBD',
+                `Bid: ${bidDateText}`,
+                `Duration: ${timelineText}`
+            ];
+
+            summaryEl.textContent = parts.join(' • ');
         }
         
         async function saveBid() {

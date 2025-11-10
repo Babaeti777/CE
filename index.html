@@ -352,62 +352,75 @@
 
             <!-- Detailed Bidding Tab -->
             <div id="detailedTab" class="tab-content">
-                 <div class="card">
-                    <h3 class="card-title mb-md">Bid Information</h3>
-                    <p class="card-subtitle mb-xl">Capture client info and key dates so they're always part of the exported package.</p>
-                    <form id="detailedBidForm">
-                        <div class="grid-2 gap-md">
-                            <div class="form-group"><label class="form-label">Project Name</label><input type="text" class="form-input" id="bidProjectName" placeholder="Enter project name" required></div>
-                            <div class="form-group"><label class="form-label">Client Name</label><input type="text" class="form-input" id="clientName" placeholder="Enter client name" required></div>
-                            <div class="form-group"><label class="form-label">Bid Date</label><input type="date" class="form-input" id="bidDate" required></div>
-                            <div class="form-group"><label class="form-label">Completion Timeline (Days)</label><input type="number" class="form-input" id="completionDays" placeholder="Enter days" required></div>
+                <div class="detailed-layout">
+                    <div class="detailed-main">
+                        <div class="card">
+                            <h3 class="card-title mb-md">Bid Information</h3>
+                            <p class="card-subtitle">Capture client info and key dates so they're always part of the exported package.</p>
+                            <details id="bidInfoPanel" class="bid-info-panel" open>
+                                <summary id="bidInfoSummary" class="bid-info-summary">
+                                    <span class="bid-info-summary-label">Project overview</span>
+                                    <span class="bid-info-summary-text" id="bidInfoSummaryText" aria-live="polite">Add project details to build your summary.</span>
+                                    <span class="bid-info-summary-icon" aria-hidden="true">▾</span>
+                                </summary>
+                                <form id="detailedBidForm" class="bid-info-form">
+                                    <div class="grid-2 gap-md">
+                                        <div class="form-group"><label class="form-label" for="bidProjectName">Project Name</label><input type="text" class="form-input" id="bidProjectName" placeholder="Enter project name" required></div>
+                                        <div class="form-group"><label class="form-label" for="clientName">Client Name</label><input type="text" class="form-input" id="clientName" placeholder="Enter client name" required></div>
+                                        <div class="form-group"><label class="form-label" for="bidDate">Bid Date</label><input type="date" class="form-input" id="bidDate" required></div>
+                                        <div class="form-group"><label class="form-label" for="completionDays">Completion Timeline (Days)</label><input type="number" class="form-input" id="completionDays" placeholder="Enter days" required></div>
+                                    </div>
+                                </form>
+                            </details>
                         </div>
-                    </form>
-                </div>
-                <div class="card mt-xl">
-                    <div class="card-header line-item-header">
-                        <div>
-                            <h3 class="card-title">Line Items</h3>
-                            <p class="card-subtitle">Build your bid with curated assemblies and custom entries.</p>
+                        <div class="card mt-xl">
+                            <div class="card-header line-item-header">
+                                <div>
+                                    <h3 class="card-title">Line Items</h3>
+                                    <p class="card-subtitle">Build your bid with curated assemblies and custom entries.</p>
+                                </div>
+                                <div class="line-item-tools">
+                                    <input type="search" class="form-input" id="lineItemSearch" placeholder="Filter items..." aria-label="Filter line items">
+                                    <button class="btn btn-secondary" id="addLineItemBtn">+ Add Item</button>
+                                </div>
+                            </div>
+                            <div class="line-item-table-wrapper">
+                                <div class="line-item-header-row">
+                                    <span>Category</span>
+                                    <span>Description</span>
+                                    <span>Quantity</span>
+                                    <span>Unit</span>
+                                    <span>Rate</span>
+                                    <span class="text-right">Subtotal</span>
+                                    <span class="sr-only">Actions</span>
+                                </div>
+                                <div id="lineItems" class="line-item-body"></div>
+                                <p class="line-item-empty" id="lineItemEmptyMessage">Add your first item to start building the bid.</p>
+                            </div>
                         </div>
-                        <div class="line-item-tools">
-                            <input type="search" class="form-input" id="lineItemSearch" placeholder="Filter items..." aria-label="Filter line items">
-                            <button class="btn btn-secondary" id="addLineItemBtn">+ Add Item</button>
+                        <div class="grid-3 mt-xl detailed-adjustments">
+                            <div class="card"><h4 class="section-subtitle">Overhead</h4><input type="number" class="form-input" id="overhead" value="10" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
+                            <div class="card"><h4 class="section-subtitle">Profit Margin</h4><input type="number" class="form-input" id="profit" value="15" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
+                            <div class="card"><h4 class="section-subtitle">Contingency</h4><input type="number" class="form-input" id="contingency" value="5" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
                         </div>
                     </div>
-                    <div class="line-item-table-wrapper">
-                        <div class="line-item-header-row">
-                            <span>Category</span>
-                            <span>Description</span>
-                            <span>Quantity</span>
-                            <span>Unit</span>
-                            <span>Rate</span>
-                            <span class="text-right">Subtotal</span>
-                            <span class="sr-only">Actions</span>
+                    <aside class="detailed-sidebar">
+                        <div class="summary-card">
+                            <h2 class="summary-title">Bid Summary</h2>
+                            <div class="summary-grid">
+                                <div class="summary-item"><div class="summary-label">Subtotal</div><div class="summary-value" id="bidSubtotal">$0</div></div>
+                                <div class="summary-item"><div class="summary-label">Markup</div><div class="summary-value" id="bidMarkup">$0</div></div>
+                                <div class="summary-item"><div class="summary-label">Contingency</div><div class="summary-value" id="bidContingency">$0</div></div>
+                                <div class="summary-item"><div class="summary-label">Total Bid</div><div class="summary-value" id="bidTotal">$0</div></div>
+                            </div>
+                            <div class="action-row wrap gap-lg mt-xl">
+                                <button class="btn btn-primary" id="exportPdfBtn">Export PDF</button>
+                                <button class="btn btn-primary" id="exportXlsxBtn">Export Excel</button>
+                                <button class="btn btn-primary" id="exportCsvBtn">Export CSV</button>
+                                <button class="btn btn-success ml-auto" id="saveBidBtn">Save Bid</button>
+                            </div>
                         </div>
-                        <div id="lineItems" class="line-item-body"></div>
-                        <p class="line-item-empty" id="lineItemEmptyMessage">Add your first item to start building the bid.</p>
-                    </div>
-                </div>
-                <div class="grid-3 mt-xl">
-                    <div class="card"><h4 class="section-subtitle">Overhead</h4><input type="number" class="form-input" id="overhead" value="10" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
-                    <div class="card"><h4 class="section-subtitle">Profit Margin</h4><input type="number" class="form-input" id="profit" value="15" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
-                    <div class="card"><h4 class="section-subtitle">Contingency</h4><input type="number" class="form-input" id="contingency" value="5" min="0" step="0.1"><span class="text-muted text-sm">%</span></div>
-                </div>
-                <div class="summary-card mt-xl">
-                    <h2 class="summary-title">Bid Summary</h2>
-                    <div class="summary-grid">
-                        <div class="summary-item"><div class="summary-label">Subtotal</div><div class="summary-value" id="bidSubtotal">$0</div></div>
-                        <div class="summary-item"><div class="summary-label">Markup</div><div class="summary-value" id="bidMarkup">$0</div></div>
-                        <div class="summary-item"><div class="summary-label">Contingency</div><div class="summary-value" id="bidContingency">$0</div></div>
-                        <div class="summary-item"><div class="summary-label">Total Bid</div><div class="summary-value" id="bidTotal">$0</div></div>
-                    </div>
-                    <div class="action-row wrap gap-lg mt-xl">
-                        <button class="btn btn-primary" id="exportPdfBtn">Export PDF</button>
-                        <button class="btn btn-primary" id="exportXlsxBtn">Export Excel</button>
-                        <button class="btn btn-primary" id="exportCsvBtn">Export CSV</button>
-                        <button class="btn btn-success ml-auto" id="saveBidBtn">Save Bid</button>
-                    </div>
+                    </aside>
                 </div>
             </div>
 
@@ -497,7 +510,6 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomInBtn" aria-label="Zoom in">+</button>
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
-                                        <button type="button" class="btn btn-secondary takeoff-open-pdf-btn" id="takeoffOpenPdfBtn" aria-hidden="true">Open PDF Reader</button>
                                     </div>
                                     <div class="takeoff-toolbar-group takeoff-pdf-controls is-hidden" id="takeoffPdfControls">
                                         <span class="takeoff-toolbar-label">PDF</span>
