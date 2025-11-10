@@ -40,6 +40,29 @@ function formatMeta(drawing) {
     return parts.filter(Boolean).join(' • ');
 }
 
+function escapeHtml(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+
+    return String(value).replace(/[&<>"']/g, (char) => {
+        switch (char) {
+            case '&':
+                return '&amp;';
+            case '<':
+                return '&lt;';
+            case '>':
+                return '&gt;';
+            case '"':
+                return '&quot;';
+            case "'":
+                return '&#39;';
+            default:
+                return char;
+        }
+    });
+}
+
 export class TakeoffManager {
     constructor({ toastService, storageService } = {}) {
         this.services = {
