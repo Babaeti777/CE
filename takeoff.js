@@ -179,6 +179,9 @@ export class TakeoffManager {
         this.resizeScheduled = false;
         this.pointerSession = null;
         this.pdfWorkerInitialized = false;
+        this.pdfRenderToken = 0;
+        this.pdfRenderInFlight = false;
+        this.pendingZoomRefresh = false;
         this.handlers = {
             windowResize: () => {
                 if (this.resizeScheduled) return;
@@ -1405,6 +1408,132 @@ export class TakeoffManager {
         this.persistState();
     }
 
+    handleDrawingFormSubmit(event) {
+        event?.preventDefault?.();
+        const {
+            drawingName,
+            drawingTrade,
+            drawingFloor,
+            drawingNotes,
+            measurementList,
+            drawingEmptyState
+        } = this.elements;
+
+        const name = drawingName?.value?.trim() || '';
+        if (!name) {
+            this.showToast('Enter a drawing name before saving.', 'warning');
+            return;
+        }
+
+        const drawing = {
+            id: createId(),
+            name,
+            trade: drawingTrade?.value?.trim() || '',
+            floor: drawingFloor?.value?.trim() || '',
+            page: '',
+            createdAt: Date.now(),
+            type: 'manual',
+            notes: drawingNotes?.value?.trim() || '',
+            rotation: 0,
+            annotations: [],
+            naturalWidth: this.elements.canvas?.width || 0,
+            naturalHeight: this.elements.canvas?.height || 0,
+            measurements: []
+        };
+
+        this.state.drawings.push(drawing);
+        this.measurements.set(drawing.id, { items: [] });
+        this.measurementCounters.set(drawing.id, this.createEmptyCounters());
+        this.state.currentDrawingId = drawing.id;
+
+        if (drawingName) drawingName.value = '';
+        if (drawingTrade) drawingTrade.value = '';
+        if (drawingFloor) drawingFloor.value = '';
+        if (drawingNotes) drawingNotes.value = '';
+
+        this.renderDrawingList();
+        this.updateActiveDrawingDisplay();
+        this.updatePlanVisibility();
+        this.refreshMeasurementTable(drawing.id);
+        this.drawMeasurements();
+        this.renderNotes(drawing);
+
+        if (measurementList) {
+            measurementList.textContent = 'Add measurements to capture quantities.';
+        }
+        if (drawingEmptyState) {
+            drawingEmptyState.textContent = '';
+        }
+
+        this.persistState();
+        this.updateStatus('Drawing added.');
+        this.showToast('Drawing saved.', 'success');
+    }
+
+    handleMeasurementFormSubmit(event) {
+        event?.preventDefault?.();
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            this.showToast('Create a drawing before adding measurements.', 'warning');
+            return;
+        }
+
+        const {
+            measurementLabel,
+            measurementMode,
+            measurementValue,
+            measurementUnit,
+            measurementList,
+            summaryContainer
+        } = this.elements;
+
+        const label = measurementLabel?.value?.trim() || '';
+        const mode = measurementMode?.value || 'length';
+        const numericValue = parseFloat(measurementValue?.value);
+        const quantity = Number.isFinite(numericValue) ? numericValue : 0;
+        const units = measurementUnit?.value?.trim() || '';
+
+        const payload = {
+            id: createId('measurement'),
+            name: label || undefined,
+            mode,
+            quantity,
+            units,
+            details: units ? `${quantity} ${units}` : `${quantity}`,
+            label,
+            points: []
+        };
+
+        const saved = this.addMeasurement(drawing.id, payload);
+        if (!saved) {
+            this.showToast('Unable to save measurement.', 'error');
+            return;
+        }
+
+        if (!Array.isArray(drawing.measurements)) {
+            drawing.measurements = [];
+        }
+        drawing.measurements.push(saved);
+
+        if (measurementLabel) measurementLabel.value = '';
+        if (measurementValue) measurementValue.value = '';
+        if (measurementUnit) measurementUnit.value = '';
+
+        if (measurementList) {
+            const items = this.getMeasurementItems(drawing.id);
+            const summary = items.map((item) => item.label || item.name || 'Measurement').join(', ');
+            measurementList.textContent = summary || 'Add measurements to capture quantities.';
+        }
+
+        if (summaryContainer) {
+            const suffix = units ? ` ${units}` : '';
+            summaryContainer.textContent = `Measurement summary: ${quantity}${suffix}`.trim();
+        }
+
+        this.updateStatus('Measurement saved.');
+        this.showToast('Measurement saved.', 'success');
+    }
+
     async handleDrawingUpload(event) {
         const files = Array.from(event?.target?.files || []);
         if (!files.length) {
@@ -1672,7 +1801,7 @@ export class TakeoffManager {
         drawing.naturalHeight = height;
     }
 
-    async renderPdfPreview(drawing) {
+    async renderPdfPreview(drawing, { scale = DEFAULT_PDF_SCALE } = {}) {
         await this.ensurePdfWorker();
         const data = drawing.pdfData || await drawing.file?.arrayBuffer();
         if (!data) {
@@ -1682,7 +1811,8 @@ export class TakeoffManager {
         const pdf = await window.pdfjsLib.getDocument({ data }).promise;
         const pageIndex = drawing.currentPage || 1;
         const page = await pdf.getPage(pageIndex);
-        const viewport = page.getViewport({ scale: DEFAULT_PDF_SCALE, rotation: drawing.rotation || 0 });
+        const effectiveScale = Number.isFinite(scale) && scale > 0 ? scale : DEFAULT_PDF_SCALE;
+        const viewport = page.getViewport({ scale: effectiveScale, rotation: drawing.rotation || 0 });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.width = viewport.width;
@@ -1692,6 +1822,7 @@ export class TakeoffManager {
         drawing.naturalWidth = canvas.width;
         drawing.naturalHeight = canvas.height;
         drawing.pdfPageCount = pdf.numPages;
+        drawing.renderedPdfScale = effectiveScale;
     }
 
     loadImageResource(url) {
@@ -1852,6 +1983,7 @@ export class TakeoffManager {
         });
         noteInput.value = '';
         this.renderNotes(drawing);
+        this.persistState();
         this.showToast('Note added to drawing.', 'success');
     }
 
@@ -2686,6 +2818,8 @@ export class TakeoffManager {
 
         if (!drawing) {
             planPreview.removeAttribute('src');
+            planPreview.style.removeProperty('width');
+            planPreview.style.removeProperty('height');
             if (canvas) {
                 canvas.width = 0;
                 canvas.height = 0;
@@ -2718,9 +2852,22 @@ export class TakeoffManager {
                 if (token !== this.previewToken) {
                     return resolve();
                 }
-                drawing.naturalWidth = planPreview.naturalWidth;
-                drawing.naturalHeight = planPreview.naturalHeight;
+                const intrinsicWidth = planPreview.naturalWidth;
+                const intrinsicHeight = planPreview.naturalHeight;
+                let displayWidth = intrinsicWidth;
+                let displayHeight = intrinsicHeight;
+                if (drawing.type === 'pdf') {
+                    const zoom = clamp(this.state.zoom, MIN_ZOOM, MAX_ZOOM) || 1;
+                    displayWidth = intrinsicWidth / zoom;
+                    displayHeight = intrinsicHeight / zoom;
+                }
+
+                drawing.naturalWidth = displayWidth;
+                drawing.naturalHeight = displayHeight;
+                planPreview.style.width = `${displayWidth}px`;
+                planPreview.style.height = `${displayHeight}px`;
                 this.sizeCanvasToDrawing(drawing);
+                this.drawMeasurements();
                 resolve();
             };
 
@@ -2761,6 +2908,12 @@ export class TakeoffManager {
     }
 
 
+    showToast(message, type = 'info') {
+        if (typeof this.services.toast === 'function') {
+            this.services.toast(message, type);
+        }
+    }
+
     updateStatus(message) {
         const { status } = this.elements;
         if (status) {
@@ -2783,6 +2936,58 @@ export class TakeoffManager {
         planInner.style.transformOrigin = 'top left';
         planInner.style.transform = `scale(${zoom})`;
         this.updateZoomIndicator();
+        this.queuePdfResolutionUpdate();
+    }
+
+    queuePdfResolutionUpdate() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing || drawing.type !== 'pdf') {
+            this.pendingZoomRefresh = false;
+            return;
+        }
+
+        if (this.pdfRenderInFlight) {
+            this.pendingZoomRefresh = true;
+            return;
+        }
+
+        this.refreshPdfResolutionForZoom(drawing);
+    }
+
+    async refreshPdfResolutionForZoom(drawing) {
+        const activeDrawing = drawing || this.getActiveDrawing();
+        if (!activeDrawing || activeDrawing.type !== 'pdf') {
+            return;
+        }
+
+        const token = ++this.pdfRenderToken;
+        this.pdfRenderInFlight = true;
+        const zoom = clamp(this.state.zoom, MIN_ZOOM, MAX_ZOOM);
+
+        try {
+            await this.renderPdfPreview(activeDrawing, { scale: DEFAULT_PDF_SCALE * zoom });
+            if (token !== this.pdfRenderToken) {
+                return;
+            }
+
+            const currentDrawing = this.getActiveDrawing();
+            if (!currentDrawing || currentDrawing.id !== activeDrawing.id) {
+                return;
+            }
+
+            await this.updatePlanPreview(activeDrawing);
+            this.drawMeasurements();
+        } catch (error) {
+            console.warn('Unable to refresh PDF quality after zoom.', error);
+        } finally {
+            if (token === this.pdfRenderToken) {
+                this.pdfRenderInFlight = false;
+                if (this.pendingZoomRefresh) {
+                    this.pendingZoomRefresh = false;
+                    this.queuePdfResolutionUpdate();
+                }
+            }
+        }
     }
 
     stepZoom(delta) {
