@@ -455,19 +455,18 @@ import {
                     table.setAttribute('aria-hidden', 'true');
                 }
                 if (wrapper) wrapper.classList.add('empty');
-                updateEstimatorSummaryTotals();
-                return;
+            } else {
+                if (emptyState) emptyState.hidden = true;
+                if (table) {
+                    table.classList.remove('is-hidden');
+                    table.setAttribute('aria-hidden', 'false');
+                }
+                if (wrapper) wrapper.classList.remove('empty');
+                items.forEach(item => {
+                    tbody.appendChild(buildEstimatorRow(item));
+                });
             }
 
-            if (emptyState) emptyState.hidden = true;
-            if (table) {
-                table.classList.remove('is-hidden');
-                table.setAttribute('aria-hidden', 'false');
-            }
-            if (wrapper) wrapper.classList.remove('empty');
-            items.forEach(item => {
-                tbody.appendChild(buildEstimatorRow(item));
-            });
             updateEstimatorSummaryTotals();
         }
 
