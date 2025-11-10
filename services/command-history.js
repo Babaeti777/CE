@@ -14,9 +14,8 @@ export class CommandHistory {
         this.history.push(command);
         if (this.history.length > this.maxSize) {
             this.history.shift();
-        } else {
-            this.currentIndex += 1;
         }
+        this.currentIndex = this.history.length - 1;
     }
 
     undo() {

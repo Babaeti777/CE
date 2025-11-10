@@ -6,6 +6,7 @@ import { debounce } from './utils/debounce.js';
 import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
 import { LifecycleManager } from './services/lifecycle-manager.js';
+import { calculate as performCalculation, handleUnitConversion as convertUnits } from './calculator.js';
 import {
     initializeFirebase,
     isFirebaseConfigured,
@@ -3474,21 +3475,13 @@ import {
             if (firstOperand == null && !isNaN(inputValue)) {
                 state.calculator.firstOperand = inputValue;
             } else if (operator) {
-                const result = calculate(firstOperand, inputValue, operator);
+                const result = performCalculation(firstOperand, inputValue, operator);
                 state.calculator.displayValue = `${parseFloat(result.toFixed(7))}`;
                 state.calculator.firstOperand = result;
             }
-            
+
             state.calculator.waitingForSecondOperand = true;
             state.calculator.operator = nextOperator;
-        }
-
-        function calculate(first, second, op) {
-            if (op === '+') return first + second;
-            if (op === '-') return first - second;
-            if (op === '*') return first * second;
-            if (op === '/') return first / second;
-            return second;
         }
 
         function resetCalculator() {
@@ -3503,21 +3496,14 @@ import {
             const toUnit = document.getElementById('unitTo').value;
             const value = parseFloat(state.calculator.displayValue);
 
-            const conversions = {
-                'ft-in': val => val * 12,
-                'in-ft': val => val / 12,
-                'sqft-sqyd': val => val / 9,
-                'sqyd-sqft': val => val * 9,
-            };
-
-            const key = `${fromUnit}-${toUnit}`;
-            if (!conversions[key]) {
-                showToast('Invalid unit conversion', 'error');
-                return;
+            try {
+                const result = convertUnits(value, fromUnit, toUnit);
+                state.calculator.displayValue = String(parseFloat(result.toFixed(5)));
+            } catch (error) {
+                const message = error?.message || 'Invalid unit conversion';
+                showToast(message, 'error');
             }
 
-            const result = conversions[key](value);
-            state.calculator.displayValue = String(parseFloat(result.toFixed(5)));
             updateCalculatorDisplay();
         }
 

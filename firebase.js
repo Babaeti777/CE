@@ -113,8 +113,6 @@ export async function initializeFirebase() {
         throw new Error('Firebase configuration is missing. Add your web app credentials in the settings panel.');
     }
 
-    manualConfig = normalizeConfig(options);
-
     const api = await loadFirebaseModules();
 
     const apps = api.getApps ? api.getApps() : [];
