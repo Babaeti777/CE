@@ -20,6 +20,11 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="app-background" aria-hidden="true">
+        <div class="app-gradient"></div>
+        <div class="app-glow"></div>
+    </div>
+    <div class="app-shell">
     <!-- Mobile Menu Toggle -->
     <button class="menu-toggle" id="menuToggle" aria-controls="sidebar" aria-expanded="true" title="Toggle navigation">
         <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -29,13 +34,19 @@
 
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar" role="navigation">
-        <div class="logo-container">
-            <div class="logo">CE</div>
-            <div class="logo-text">
-                Minimal Estimator
-                <span>Focused tools for teams</span>
+        <div class="sidebar-header">
+            <div class="logo-container">
+                <div class="logo">CE</div>
+                <div class="logo-text">
+                    Command Edition
+                    <span>Precision for modern estimators</span>
+                </div>
             </div>
+            <p class="sidebar-tagline">Navigate bids, takeoffs, and pricing from a single, curated cockpit.</p>
+        </div>
 
+        <span class="sidebar-section-label">Command modules</span>
+        <div class="sidebar-menu" role="list">
             <button type="button" class="nav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true">
                 <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
                 <span class="nav-label">Dashboard</span>
@@ -64,14 +75,29 @@
                 <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 <span class="nav-label">Settings</span>
             </button>
-        </nav>
+        </div>
+        <div class="sidebar-footer">
+            <div class="sidebar-footer-heading">Workspace signals</div>
+            <p class="sidebar-footer-text">Keep a pulse on team activity and market updates before publishing proposals.</p>
+            <div class="sidebar-metric">
+                <span class="sidebar-metric-label">Sync</span>
+                <span class="sidebar-metric-value">Live &amp; secure</span>
+            </div>
+        </div>
+    </nav>
 
     <!-- Main Content -->
     <main class="main-content">
         <header class="header">
-            <div class="page-heading">
-                <h1 class="page-title" id="pageTitle">Dashboard</h1>
-                <p class="page-subtitle">Estimate smarter with a focused workspace.</p>
+            <div class="header-identity">
+                <div class="page-heading">
+                    <h1 class="page-title" id="pageTitle">Dashboard</h1>
+                    <p class="page-subtitle">Orchestrate bids, takeoffs, and pricing from a unified control surface.</p>
+                </div>
+                <div class="header-meta">
+                    <span class="badge badge-soft">Today&#39;s mission</span>
+                    <span class="header-subtext">Review pipeline health &amp; prep next proposal.</span>
+                </div>
             </div>
             <div class="header-actions">
                 <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Hide sidebar" aria-expanded="true">
@@ -93,9 +119,24 @@
                     <div class="sync-dot"></div>
                     <span>Database synced</span>
                 </div>
-            </header>
+            </div>
+        </header>
 
-            <div class="content">
+        <section class="header-insights" aria-label="Workflow highlights">
+            <article class="insight-card">
+                <h2 class="insight-title">Focus your effort</h2>
+                <p class="insight-body">Pin critical pursuits, monitor pricing updates, and spotlight risk items before the next stand-up.</p>
+            </article>
+            <article class="insight-card">
+                <h2 class="insight-title">Stay in sync</h2>
+                <ul class="insight-list">
+                    <li>Capture takeoffs from the field and publish directly to estimates.</li>
+                    <li>Share curated pricing feeds with teammates in real time.</li>
+                </ul>
+            </article>
+        </section>
+
+        <div class="content">
                 <!-- Dashboard Tab -->
             <div id="dashboardTab" class="tab-content active">
                 <div class="grid-4 mb-xl">
@@ -664,6 +705,10 @@
             </div>
             </div>
         </div>
+    </div>
+
+    </main>
+
     </div>
 
     <!-- Modals -->
