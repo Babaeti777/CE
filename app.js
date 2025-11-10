@@ -855,6 +855,50 @@ import {
                 .join(' ');
         }
 
+        function coerceDate(value) {
+            if (value === null || value === undefined) return null;
+            if (value instanceof Date) {
+                return Number.isNaN(value.getTime()) ? null : value;
+            }
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (!trimmed) return null;
+                const parsed = new Date(trimmed);
+                return Number.isNaN(parsed.getTime()) ? null : parsed;
+            }
+            if (typeof value === 'number') {
+                const parsed = new Date(value);
+                return Number.isNaN(parsed.getTime()) ? null : parsed;
+            }
+            return null;
+        }
+
+        function formatDate(value, fallback = 'Invalid date') {
+            try {
+                const date = coerceDate(value);
+                if (!date) return fallback;
+                return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            } catch (error) {
+                return fallback;
+            }
+        }
+
+        function formatDateTime(value, fallback = 'Invalid date') {
+            try {
+                const date = coerceDate(value);
+                if (!date) return fallback;
+                return date.toLocaleString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                });
+            } catch (error) {
+                return fallback;
+            }
+        }
+
         function updateDatabaseBadge(message) {
             const badge = document.getElementById('syncStatus');
             if (!badge) return;
@@ -882,13 +926,7 @@ import {
 
         function formatDateForDisplay(dateString) {
             if (!dateString) return '';
-            try {
-                const date = new Date(dateString);
-                if (Number.isNaN(date.getTime())) return dateString;
-                return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-            } catch (error) {
-                return dateString;
-            }
+            return formatDate(dateString, dateString);
         }
 
         function compareVersions(a, b) {
@@ -1262,14 +1300,23 @@ import {
             const lastSyncedEl = document.getElementById('lastSynced');
             const lastCheckEl = document.getElementById('lastCheck');
             const nextSyncEl = document.getElementById('nextSync');
-            if (lastUpdateEl) lastUpdateEl.textContent = state.databaseMeta?.lastUpdated ? formatDate(state.databaseMeta.lastUpdated) : 'Unknown';
-            if (lastSyncedEl) lastSyncedEl.textContent = state.databaseMeta?.lastSynced ? formatDate(state.databaseMeta.lastSynced) : 'Not synced';
-            if (lastCheckEl) lastCheckEl.textContent = state.lastSyncCheck ? formatDateTime(state.lastSyncCheck) : 'No checks yet';
+            if (lastUpdateEl) {
+                const formatted = formatDate(state.databaseMeta?.lastUpdated, 'Unknown');
+                lastUpdateEl.textContent = formatted || 'Unknown';
+            }
+            if (lastSyncedEl) {
+                const formatted = formatDate(state.databaseMeta?.lastSynced, 'Not synced');
+                lastSyncedEl.textContent = formatted || 'Not synced';
+            }
+            if (lastCheckEl) {
+                const formatted = formatDateTime(state.lastSyncCheck, 'No checks yet');
+                lastCheckEl.textContent = formatted || 'No checks yet';
+            }
             if (nextSyncEl) {
                 if (state.autoUpdate === 'disabled') {
                     nextSyncEl.textContent = 'Auto update off';
                 } else if (state.nextSyncPlanned) {
-                    nextSyncEl.textContent = formatDateTime(state.nextSyncPlanned);
+                    nextSyncEl.textContent = formatDateTime(state.nextSyncPlanned, 'Scheduling…');
                 } else {
                     nextSyncEl.textContent = 'Scheduling…';
                 }
