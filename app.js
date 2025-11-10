@@ -1918,6 +1918,21 @@ import {
             document.getElementById('generatePricingBtn')?.addEventListener('click', () => updateWorksheetTotals({ announce: true }));
             document.getElementById('resetWorksheetBtn')?.addEventListener('click', resetWorksheet);
 
+            ['bidProjectName', 'clientName', 'completionDays'].forEach((id) => {
+                document.getElementById(id)?.addEventListener('input', updateBidInfoSummary);
+            });
+            const bidDateInput = document.getElementById('bidDate');
+            bidDateInput?.addEventListener('change', updateBidInfoSummary);
+            bidDateInput?.addEventListener('input', updateBidInfoSummary);
+            const bidInfoToggle = document.getElementById('bidInfoToggle');
+            if (bidInfoToggle) {
+                bidInfoToggle.addEventListener('click', () => {
+                    const card = document.getElementById('bidInfoCard');
+                    const currentlyCollapsed = card?.classList.contains('is-collapsed');
+                    setBidInfoCollapsed(!currentlyCollapsed);
+                });
+            }
+
             // Export Buttons
             document.getElementById('exportPdfBtn')?.addEventListener('click', exportAsPdf);
             document.getElementById('exportXlsxBtn')?.addEventListener('click', exportAsXlsx);
@@ -2036,6 +2051,9 @@ import {
             updateCalcMode(state.calcMode);
             updateLineItemEmptyState();
             refreshLineItemCategoryOptions();
+
+            updateBidInfoSummary();
+            setBidInfoCollapsed(false);
 
             handleSidebarResize();
         }
@@ -2644,6 +2662,8 @@ import {
             document.getElementById('lineItems').innerHTML = '';
             bid.lineItems.forEach(item => addLineItem(item, { position: 'bottom' }));
             updateBidTotal();
+            updateBidInfoSummary();
+            setBidInfoCollapsed(false);
             switchTab('detailed');
         }
 
@@ -2847,6 +2867,53 @@ import {
             wrapper.classList.toggle('empty', !hasRows);
             message.textContent = 'Add your first item to start building the bid.';
             message.style.display = hasRows ? 'none' : 'block';
+        }
+
+        function formatBidInfoDate(value) {
+            if (!value) {
+                return 'Bid: —';
+            }
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return `Bid: ${value}`;
+            }
+            return `Bid: ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        }
+
+        function updateBidInfoSummary() {
+            const summary = document.getElementById('bidInfoSummary');
+            if (!summary) return;
+            const projectName = document.getElementById('bidProjectName')?.value?.trim();
+            const clientName = document.getElementById('clientName')?.value?.trim();
+            const bidDate = document.getElementById('bidDate')?.value;
+            const completionDays = document.getElementById('completionDays')?.value;
+
+            const projectPart = `Project: ${projectName || '—'}`;
+            const clientPart = `Client: ${clientName || '—'}`;
+            const datePart = formatBidInfoDate(bidDate);
+            let timelinePart = 'Timeline: —';
+            if (completionDays) {
+                const days = Number.parseInt(completionDays, 10);
+                if (Number.isFinite(days)) {
+                    timelinePart = `Timeline: ${days} day${days === 1 ? '' : 's'}`;
+                } else {
+                    timelinePart = `Timeline: ${completionDays}`;
+                }
+            }
+
+            summary.textContent = [projectPart, clientPart, datePart, timelinePart].join(' • ');
+        }
+
+        function setBidInfoCollapsed(collapsed) {
+            const card = document.getElementById('bidInfoCard');
+            const toggle = document.getElementById('bidInfoToggle');
+            const body = document.getElementById('bidInfoBody');
+            if (!card || !toggle || !body) return;
+            const isCollapsed = Boolean(collapsed);
+            card.classList.toggle('is-collapsed', isCollapsed);
+            body.hidden = isCollapsed;
+            toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            toggle.textContent = isCollapsed ? 'Show details' : 'Hide details';
         }
 
         function handleLineItemSearch(value) {

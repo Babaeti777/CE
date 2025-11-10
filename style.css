@@ -484,6 +484,36 @@ button {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
+.estimate-content {
+    display: grid;
+    gap: var(--space-xl);
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    align-items: start;
+}
+
+.estimate-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+    min-width: 0;
+}
+
+#estimateSummary {
+    position: sticky;
+    top: calc(var(--space-xl) + 4.5rem);
+    align-self: start;
+}
+
+@media (max-width: 1100px) {
+    .estimate-content {
+        grid-template-columns: 1fr;
+    }
+
+    #estimateSummary {
+        position: static;
+    }
+}
+
 .card {
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid rgba(148, 163, 184, 0.18);
@@ -780,36 +810,69 @@ fieldset.material-fieldset {
 .line-item-table-wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-sm);
 }
 
 .line-item-header-row,
 .line-item-body > div {
     display: grid;
-    grid-template-columns: 1.2fr 2fr repeat(4, 1fr);
-    gap: var(--space-sm);
+    grid-template-columns: 1.1fr 2fr repeat(4, 1fr);
+    gap: var(--space-xs);
     align-items: center;
 }
 
 .line-item-header-row {
     font-weight: 600;
     color: var(--text-muted);
+    font-size: 0.9rem;
 }
 
 .line-item-body > div {
-    padding: var(--space-sm) 0;
+    padding: calc(var(--space-xs) * 0.75) 0;
     border-bottom: 1px solid var(--border);
+}
+
+.line-item-row .form-input,
+.line-item-row .form-select {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.95rem;
+}
+
+.line-item-row .remove-line-item {
+    justify-self: end;
+    width: 2rem;
+    height: 2rem;
+    line-height: 1;
+    padding: 0.35rem;
 }
 
 .takeoff-layout {
     display: grid;
     gap: var(--space-xl);
-    grid-template-columns: minmax(260px, 380px) 1fr;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    align-items: start;
+}
+
+.takeoff-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
 }
 
 .takeoff-drawings,
 .takeoff-plan-card {
     gap: var(--space-md);
+}
+
+.takeoff-plan-card .is-disabled {
+    opacity: 0.45;
+}
+
+.takeoff-plan {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    position: relative;
 }
 
 .takeoff-filters {
@@ -829,9 +892,13 @@ fieldset.material-fieldset {
     position: relative;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    background: #fff;
-    overflow: hidden;
     min-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    background: rgba(148, 163, 184, 0.12);
+    padding: var(--space-md);
 }
 
 .takeoff-plan-inner {
@@ -847,6 +914,105 @@ fieldset.material-fieldset {
 .takeoff-plan-inner canvas,
 .takeoff-plan-inner img {
     max-width: 100%;
+}
+
+.takeoff-plan.takeoff-plan-fullscreen {
+    position: fixed;
+    inset: calc(var(--space-xl) + 4rem) var(--space-xl) var(--space-xl) var(--space-xl);
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 1200;
+    box-shadow: 0 30px 60px rgba(15, 23, 42, 0.28);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.takeoff-plan.takeoff-plan-fullscreen .takeoff-plan-stage {
+    flex: 1;
+    min-height: 0;
+}
+
+.takeoff-plan.takeoff-plan-fullscreen .takeoff-fullscreen-toggle {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-md);
+    z-index: 10;
+}
+
+body.takeoff-fullscreen-active {
+    overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+    .takeoff-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .takeoff-workspace {
+        gap: var(--space-lg);
+    }
+}
+
+@media (max-width: 768px) {
+    .takeoff-plan.takeoff-plan-fullscreen {
+        inset: var(--space-lg);
+    }
+}
+
+.bid-info-card {
+    gap: var(--space-lg);
+}
+
+.bid-info-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+}
+
+.bid-info-toggle {
+    white-space: nowrap;
+}
+
+.bid-info-summary {
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.bid-info-body {
+    transition: opacity 0.2s ease;
+}
+
+.bid-info-card.is-collapsed .bid-info-body {
+    opacity: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.bid-info-card.is-collapsed .bid-info-summary {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+@media (max-width: 640px) {
+    .bid-info-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bid-info-toggle {
+        width: 100%;
+    }
 }
 
 .takeoff-status {
