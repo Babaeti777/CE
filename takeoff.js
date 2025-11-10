@@ -198,8 +198,9 @@ export class TakeoffManager {
         }
         this.lifecycle?.cleanup?.();
         this.closePdfViewer({ silent: true });
-        if (this.state.isFullscreen) {
-            this.setFullscreen(false);
+        this.setFullscreen(false);
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.remove('takeoff-fullscreen-active');
         }
         this.cleanupDrawings();
     }
