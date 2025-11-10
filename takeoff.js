@@ -31,25 +31,31 @@ function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
-function createId(prefix = 'id') {
-    return `${prefix}-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
-}
-
-function formatNumber(value, digits = 2) {
-    const parsed = Number.parseFloat(value);
-    if (!Number.isFinite(parsed)) {
-        return Number(0).toFixed(digits);
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
     }
-    return parsed.toFixed(digits);
+    return String(value).replace(/[&<>'"]/g, (char) => {
+        switch (char) {
+            case '&':
+                return '&amp;';
+            case '<':
+                return '&lt;';
+            case '>':
+                return '&gt;';
+            case '"':
+                return '&quot;';
+            case "'":
+                return '&#39;';
+            default:
+                return char;
+        }
+    });
 }
 
-function computePolygonArea(points) {
-    if (!points.length) return 0;
-    let sum = 0;
-    for (let i = 0; i < points.length; i += 1) {
-        const current = points[i];
-        const next = points[(i + 1) % points.length];
-        sum += (current.x * next.y) - (next.x * current.y);
+function formatMeta(drawing) {
+    if (!drawing) {
+        return '';
     }
     return Math.abs(sum) / 2;
 }
@@ -99,21 +105,19 @@ export class TakeoffManager {
             sortDir: 'asc',
             activeDrawingId: null,
             zoom: 1,
-            scale: 1,
-            mode: 'length',
-            previewPoint: null,
-            draftPoints: [],
-            pdfLoading: false,
-            countSettings: {
-                color: '#ef4444',
-                shape: 'circle',
-                label: ''
-            },
-            measurementCounters: {},
-            measurements: {}
+            isFullscreen: false,
+            previewPoint: null
         };
 
+        this.measurements = new Map();
+        this.labelCounters = new Map();
         this.previewToken = 0;
+        this.pointerSession = null;
+        this.handlers = {
+            windowResize: () => {
+                this.applyZoom();
+            }
+        };
     }
 
     init() {
@@ -129,10 +133,19 @@ export class TakeoffManager {
         this.updatePdfControls();
         this.updateFullscreenButton();
         this.updateStatus('Upload plan files to start measuring.');
+        this.refreshMeasurementTable();
+        this.updateQuickShapeFields();
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', this.handlers.windowResize);
+        }
     }
 
     destroy() {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('resize', this.handlers.windowResize);
+        }
         this.lifecycle?.cleanup?.();
+        this.closePdfViewer({ silent: true });
         this.cleanupDrawings();
     }
 
@@ -145,6 +158,8 @@ export class TakeoffManager {
             searchInput: byId('takeoffSearchInput'),
             drawingTableBody: byId('takeoffDrawingTableBody'),
             drawingEmpty: byId('takeoffDrawingEmpty'),
+            measurementTableBody: byId('takeoffMeasurementTableBody'),
+            measurementEmpty: byId('takeoffMeasurementEmpty'),
             planContainer: byId('takeoffPlanContainer'),
             planStage: byId('takeoffPlanStage'),
             planInner: byId('takeoffPlanInner'),
@@ -172,38 +187,54 @@ export class TakeoffManager {
             pdfModalOverlay: byId('takeoffPdfModalOverlay'),
             pdfModalClose: byId('takeoffPdfModalClose'),
             pdfFrame: byId('takeoffPdfFrame'),
-            measurementTableBody: byId('takeoffMeasurementTableBody'),
-            measurementEmpty: byId('takeoffMeasurementEmpty'),
+            fullscreenBtn: byId('takeoffFullscreenBtn'),
+            fullScreenToggle: byId('takeoffFullScreenToggle'),
+            quickCalcBtn: byId('takeoffQuickCalcBtn'),
+            shapeSelect: byId('takeoffShapeSelect'),
+            dim1Input: byId('takeoffDim1'),
+            dim2Input: byId('takeoffDim2'),
+            dim2Group: byId('takeoffDim2Group'),
+            quickResult: byId('takeoffQuickResult'),
             clearBtn: byId('takeoffClearBtn'),
-            exportBtn: byId('takeoffExportCsvBtn'),
-            pushBtn: byId('takeoffPushBtn'),
-            countToolbar: byId('takeoffCountToolbar'),
-            countColor: byId('takeoffCountColor'),
-            countShape: byId('takeoffCountShape'),
-            countLabel: byId('takeoffCountLabel'),
-            quickShape: byId('takeoffShapeSelect'),
-            quickDim1: byId('takeoffDim1'),
-            quickDim2: byId('takeoffDim2'),
-            quickDim2Group: byId('takeoffDim2Group'),
-            quickBtn: byId('takeoffQuickCalcBtn'),
-            quickResult: byId('takeoffQuickResult')
+            exportCsvBtn: byId('takeoffExportCsvBtn'),
+            pushBtn: byId('takeoffPushBtn')
         };
 
         this.canvasContext = this.elements.canvas?.getContext?.('2d') || null;
     }
 
     bindEvents() {
-        const on = (target, event, handler, options) => {
-            if (!target) return;
-            this.lifecycle.addEventListener(target, event, handler, options);
-        };
+        const {
+            drawingInput,
+            sortSelect,
+            sortDirection,
+            searchInput,
+            drawingTableBody,
+            measurementTableBody,
+            zoomOutBtn,
+            zoomInBtn,
+            zoomResetBtn,
+            pdfPrevBtn,
+            pdfNextBtn,
+            pdfPageInput,
+            pdfOpenBtn,
+            pdfDownloadBtn,
+            openPdfBtn,
+            pdfModalOverlay,
+            pdfModalClose,
+            fullscreenBtn,
+            fullScreenToggle,
+            quickCalcBtn,
+            shapeSelect,
+            dim1Input,
+            dim2Input,
+            clearBtn,
+            exportCsvBtn,
+            pushBtn
+        } = this.elements;
 
-        on(this.elements.drawingInput, 'change', (event) => this.handleFileSelection(event));
-        on(this.elements.searchInput, 'input', (event) => {
-            this.state.filter = event.target.value.trim().toLowerCase();
-            this.renderDrawingList();
-        });
-        on(this.elements.sortSelect, 'change', (event) => {
+        this.lifecycle.addEventListener(drawingInput, 'change', (event) => this.handleDrawingUpload(event));
+        this.lifecycle.addEventListener(sortSelect, 'change', (event) => {
             this.state.sortBy = event.target.value;
             this.renderDrawingList();
         });
@@ -228,39 +259,22 @@ export class TakeoffManager {
                 this.resetDraft();
             }
         });
-        on(this.elements.planStage, 'keydown', (event) => {
-            if (event.key === 'Escape' && this.state.draftPoints.length) {
-                this.resetDraft();
-            }
-        });
-        on(this.elements.fullscreenBtn, 'click', () => this.toggleFullscreen());
-        on(this.elements.fullscreenToggle, 'click', () => this.toggleFullscreen());
-        on(document, 'fullscreenchange', () => this.updateFullscreenButton());
-        on(this.elements.pdfPrevBtn, 'click', () => this.changePdfPage(-1));
-        on(this.elements.pdfNextBtn, 'click', () => this.changePdfPage(1));
-        on(this.elements.pdfPageInput, 'change', (event) => this.handlePdfPageInput(event));
-        on(this.elements.pdfOpenBtn, 'click', () => this.openPdfModal());
-        on(this.elements.pdfDownloadBtn, 'click', () => this.downloadPdf());
-        on(this.elements.openPdfBtn, 'click', () => this.openPdfModal());
-        on(this.elements.pdfModalClose, 'click', () => this.closePdfModal());
-        on(this.elements.pdfModalOverlay, 'click', () => this.closePdfModal());
-        on(this.elements.clearBtn, 'click', () => this.clearMeasurements());
-        on(this.elements.exportBtn, 'click', () => this.exportCsv());
-        on(this.elements.pushBtn, 'click', () => this.pushToEstimate());
-        on(this.elements.measurementTableBody, 'click', (event) => this.handleMeasurementTableClick(event));
-        on(this.elements.measurementTableBody, 'input', (event) => this.handleMeasurementNameInput(event));
-        on(this.elements.countColor, 'input', (event) => this.updateCountSetting('color', event.target.value));
-        on(this.elements.countShape, 'change', (event) => this.updateCountSetting('shape', event.target.value));
-        on(this.elements.countLabel, 'input', (event) => this.updateCountSetting('label', event.target.value));
-        on(this.elements.quickShape, 'change', () => this.updateQuickShapeInputs());
-        on(this.elements.quickBtn, 'click', () => this.calculateQuickShape());
-        on(window, 'resize', () => this.updateCanvasSize());
-    }
+        this.lifecycle.addEventListener(drawingTableBody, 'click', (event) => this.handleDrawingTableClick(event));
+        this.lifecycle.addEventListener(drawingTableBody, 'input', (event) => this.handleDrawingTableInput(event));
+        this.lifecycle.addEventListener(measurementTableBody, 'click', (event) => this.handleMeasurementTableClick(event));
 
-    cleanupDrawings() {
-        this.state.drawings.forEach((drawing) => {
-            if (drawing.url?.startsWith('blob:')) {
-                URL.revokeObjectURL(drawing.url);
+        this.lifecycle.addEventListener(zoomOutBtn, 'click', () => this.stepZoom(-ZOOM_STEP));
+        this.lifecycle.addEventListener(zoomInBtn, 'click', () => this.stepZoom(ZOOM_STEP));
+        this.lifecycle.addEventListener(zoomResetBtn, 'click', () => this.resetZoom());
+
+        this.lifecycle.addEventListener(pdfPrevBtn, 'click', () => this.navigatePdfPage(-1));
+        this.lifecycle.addEventListener(pdfNextBtn, 'click', () => this.navigatePdfPage(1));
+        this.lifecycle.addEventListener(pdfPageInput, 'change', (event) => {
+            const value = parseInt(event.target.value, 10);
+            if (Number.isFinite(value)) {
+                this.jumpToPdfPage(value);
+            } else {
+                this.updatePdfToolbar(this.getActiveDrawing());
             }
         });
     }
@@ -337,30 +351,439 @@ export class TakeoffManager {
                 const numB = Number.parseInt(valueB, 10) || 0;
                 return (numA - numB) * dir;
             }
-            if (valueA === valueB) return 0;
-            return valueA > valueB ? dir : -dir;
         });
 
-        if (this.elements.drawingTableBody) {
-            this.elements.drawingTableBody.innerHTML = sorted.map((drawing) => {
-                const isActive = drawing.id === activeDrawingId;
-                return `
-                    <tr data-id="${drawing.id}" class="${isActive ? 'is-active' : ''}">
-                        <td>${escapeHtml(drawing.name)}</td>
-                        <td>${escapeHtml(drawing.trade || '—')}</td>
-                        <td>${escapeHtml(drawing.floor || '—')}</td>
-                        <td>${escapeHtml(drawing.page || '—')}</td>
-                        <td class="text-right">
-                            <button type="button" class="btn btn-ghost btn-sm" data-action="activate">${isActive ? 'Active' : 'Open'}</button>
-                            <button type="button" class="btn btn-ghost btn-sm" data-action="remove">Remove</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+        this.lifecycle.addEventListener(shapeSelect, 'change', () => this.handleQuickShapeChange());
+        this.lifecycle.addEventListener(dim1Input, 'input', () => this.clearQuickResult());
+        this.lifecycle.addEventListener(dim2Input, 'input', () => this.clearQuickResult());
+        this.lifecycle.addEventListener(quickCalcBtn, 'click', (event) => {
+            event?.preventDefault?.();
+            this.handleQuickShapeCalc();
+        });
+
+        this.lifecycle.addEventListener(clearBtn, 'click', (event) => {
+            event?.preventDefault?.();
+            this.clearMeasurements();
+        });
+        this.lifecycle.addEventListener(exportCsvBtn, 'click', (event) => {
+            event?.preventDefault?.();
+            this.exportMeasurementsToCsv();
+        });
+        this.lifecycle.addEventListener(pushBtn, 'click', (event) => {
+            event?.preventDefault?.();
+            this.pushMeasurementsToEstimate();
+        });
+    }
+
+    getMeasurementStore(drawingId, { create = false } = {}) {
+        if (!drawingId) {
+            return null;
+        }
+        let store = this.measurements.get(drawingId);
+        if (!store) {
+            if (!create) {
+                return null;
+            }
+            store = { items: [] };
+            this.measurements.set(drawingId, store);
+            return store;
+        }
+        if (Array.isArray(store)) {
+            store = { items: [...store] };
+            this.measurements.set(drawingId, store);
+        } else if (!Array.isArray(store.items)) {
+            store.items = [];
+        }
+        return store;
+    }
+
+    getMeasurementItems(drawingId = this.state.currentDrawingId) {
+        if (!drawingId) {
+            return [];
+        }
+        const store = this.getMeasurementStore(drawingId);
+        const items = this.normalizeMeasurements(store);
+        if (!Array.isArray(items)) {
+            return [];
+        }
+        return items;
+    }
+
+    prepareMeasurement(measurement) {
+        if (!measurement || typeof measurement !== 'object') {
+            return null;
+        }
+        if (!measurement.id) {
+            measurement.id = createId('measurement');
+        }
+        return measurement;
+    }
+
+    setMeasurementItems(drawingId, items = []) {
+        if (!drawingId) {
+            return;
+        }
+        const store = this.getMeasurementStore(drawingId, { create: true });
+        const normalized = Array.isArray(items)
+            ? items.map((item) => this.prepareMeasurement(item)).filter(Boolean)
+            : [];
+        store.items = normalized;
+        if (drawingId === this.state.currentDrawingId) {
+            this.refreshMeasurementTable(drawingId);
+        }
+        this.drawMeasurements();
+    }
+
+    addMeasurement(drawingId, measurement) {
+        if (!drawingId || !measurement) {
+            return null;
+        }
+        const store = this.getMeasurementStore(drawingId, { create: true });
+        const prepared = this.prepareMeasurement(measurement);
+        if (!prepared) {
+            return null;
+        }
+        store.items.push(prepared);
+        if (drawingId === this.state.currentDrawingId) {
+            this.refreshMeasurementTable(drawingId);
+        }
+        this.drawMeasurements();
+        return prepared;
+    }
+
+    updateMeasurement(drawingId, measurementId, updates = {}) {
+        if (!drawingId || !measurementId) {
+            return null;
+        }
+        const store = this.getMeasurementStore(drawingId);
+        if (!store) {
+            return null;
+        }
+        const list = this.normalizeMeasurements(store);
+        const measurement = list.find((item) => item.id === measurementId);
+        if (!measurement) {
+            return null;
+        }
+        Object.assign(measurement, updates);
+        if (drawingId === this.state.currentDrawingId) {
+            this.refreshMeasurementTable(drawingId);
+        }
+        this.drawMeasurements();
+        return measurement;
+    }
+
+    removeMeasurement(drawingId, measurementId, { silent = false } = {}) {
+        if (!drawingId || !measurementId) {
+            return false;
+        }
+        const store = this.getMeasurementStore(drawingId);
+        if (!store) {
+            return false;
+        }
+        const list = this.normalizeMeasurements(store);
+        const index = list.findIndex((item) => item.id === measurementId);
+        if (index === -1) {
+            return false;
+        }
+        list.splice(index, 1);
+        if (drawingId === this.state.currentDrawingId) {
+            this.refreshMeasurementTable(drawingId);
+        }
+        this.drawMeasurements();
+        if (!silent) {
+            this.updateStatus('Measurement removed.');
+        }
+        return true;
+    }
+
+    clearMeasurements(drawingId = this.state.currentDrawingId) {
+        if (!drawingId) {
+            this.services.toast('Select a drawing to clear measurements.', 'warning');
+            return;
+        }
+        const store = this.getMeasurementStore(drawingId);
+        const list = this.normalizeMeasurements(store);
+        if (!list || list.length === 0) {
+            this.updateStatus('No measurements to clear.');
+            return;
+        }
+        store.items = [];
+        if (drawingId === this.state.currentDrawingId) {
+            this.refreshMeasurementTable(drawingId);
+        }
+        this.drawMeasurements();
+        this.updateStatus('Measurements cleared.');
+    }
+
+    refreshMeasurementTable(drawingId = this.state.currentDrawingId) {
+        const { measurementTableBody, measurementEmpty } = this.elements;
+        if (!measurementTableBody) {
+            return;
         }
 
-        if (this.elements.drawingEmpty) {
-            this.elements.drawingEmpty.classList.toggle('is-hidden', sorted.length > 0);
+        measurementTableBody.innerHTML = '';
+
+        if (!drawingId || drawingId !== this.state.currentDrawingId) {
+            if (measurementEmpty) {
+                measurementEmpty.classList.toggle('is-hidden', false);
+            }
+            return;
+        }
+
+        const measurements = this.getMeasurementItems(drawingId);
+        const fragment = document.createDocumentFragment();
+
+        measurements.forEach((measurement) => {
+            const prepared = this.prepareMeasurement(measurement);
+            if (!prepared) {
+                return;
+            }
+            const row = this.createMeasurementRow(prepared);
+            this.updateMeasurementRow(row, prepared);
+            fragment.appendChild(row);
+        });
+
+        measurementTableBody.appendChild(fragment);
+        if (measurementEmpty) {
+            measurementEmpty.classList.toggle('is-hidden', measurements.length > 0);
+        }
+    }
+
+    createMeasurementRow(measurement) {
+        const row = document.createElement('tr');
+        row.dataset.id = measurement?.id || '';
+        row.innerHTML = `
+            <td class="takeoff-measurement-name"></td>
+            <td class="takeoff-measurement-mode"></td>
+            <td class="takeoff-measurement-quantity"></td>
+            <td class="takeoff-measurement-units"></td>
+            <td class="takeoff-measurement-details"></td>
+            <td class="takeoff-measurement-actions">
+                <button type="button" class="btn btn-ghost btn-sm" data-action="remove">Remove</button>
+            </td>
+        `;
+        return row;
+    }
+
+    updateMeasurementRow(row, measurement) {
+        if (!row || !measurement) {
+            return;
+        }
+        row.dataset.id = measurement.id || '';
+        const nameCell = row.querySelector('.takeoff-measurement-name');
+        const modeCell = row.querySelector('.takeoff-measurement-mode');
+        const quantityCell = row.querySelector('.takeoff-measurement-quantity');
+        const unitsCell = row.querySelector('.takeoff-measurement-units');
+        const detailsCell = row.querySelector('.takeoff-measurement-details');
+
+        if (nameCell) {
+            nameCell.textContent = measurement.name || measurement.label || 'Measurement';
+        }
+        if (modeCell) {
+            modeCell.textContent = measurement.mode || measurement.type || '';
+        }
+        if (quantityCell) {
+            const value = measurement.quantity ?? measurement.value ?? measurement.area ?? null;
+            quantityCell.textContent = this.formatMeasurementValue(value);
+        }
+        if (unitsCell) {
+            unitsCell.textContent = measurement.units || measurement.unit || '';
+        }
+        if (detailsCell) {
+            detailsCell.textContent = measurement.details || measurement.description || '';
+        }
+    }
+
+    formatMeasurementValue(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (value === '') {
+            return '';
+        }
+        const number = Number(value);
+        if (!Number.isFinite(number)) {
+            return String(value);
+        }
+        const precision = Math.abs(number) < 1 ? 4 : 2;
+        return number.toLocaleString(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: precision
+        });
+    }
+
+    handleMeasurementTableClick(event) {
+        const button = event.target.closest('[data-action]');
+        if (!button) {
+            return;
+        }
+        const action = button.dataset.action;
+        if (action !== 'remove') {
+            return;
+        }
+        const row = button.closest('tr[data-id]');
+        const measurementId = row?.dataset?.id;
+        if (!measurementId) {
+            return;
+        }
+        const drawingId = this.state.currentDrawingId;
+        if (!drawingId) {
+            return;
+        }
+        this.removeMeasurement(drawingId, measurementId);
+    }
+
+    clearQuickResult() {
+        const { quickResult } = this.elements;
+        if (quickResult) {
+            quickResult.textContent = '';
+        }
+    }
+
+    handleQuickShapeChange() {
+        this.updateQuickShapeFields();
+        this.clearQuickResult();
+    }
+
+    updateQuickShapeFields() {
+        const { shapeSelect, dim1Input, dim2Input, dim2Group } = this.elements;
+        if (!shapeSelect || !dim1Input) {
+            return;
+        }
+        const shape = shapeSelect.value || 'rectangle';
+        const dim1Label = dim1Input.closest('.form-group')?.querySelector('label');
+        const dim2Label = dim2Input?.closest('.form-group')?.querySelector('label');
+
+        if (shape === 'circle') {
+            if (dim1Label) dim1Label.textContent = 'Radius';
+            dim1Input.placeholder = 'Radius';
+            if (dim2Group) {
+                dim2Group.classList.add('is-hidden');
+            }
+            if (dim2Input) {
+                dim2Input.value = '';
+            }
+            if (dim2Label) dim2Label.textContent = 'Dimension 2';
+        } else if (shape === 'triangle') {
+            if (dim1Label) dim1Label.textContent = 'Base';
+            dim1Input.placeholder = 'Base';
+            if (dim2Label) dim2Label.textContent = 'Height';
+            if (dim2Input) {
+                dim2Input.placeholder = 'Height';
+            }
+            if (dim2Group) {
+                dim2Group.classList.remove('is-hidden');
+            }
+        } else {
+            if (dim1Label) dim1Label.textContent = 'Length';
+            dim1Input.placeholder = 'Length';
+            if (dim2Label) dim2Label.textContent = 'Width';
+            if (dim2Input) {
+                dim2Input.placeholder = 'Width';
+            }
+            if (dim2Group) {
+                dim2Group.classList.remove('is-hidden');
+            }
+        }
+    }
+
+    handleQuickShapeCalc() {
+        const { shapeSelect, dim1Input, dim2Input, quickResult } = this.elements;
+        if (!shapeSelect || !dim1Input || !quickResult) {
+            return;
+        }
+
+        const shape = shapeSelect.value || 'rectangle';
+        const dim1 = parseFloat(dim1Input.value);
+        const dim2 = parseFloat(dim2Input?.value);
+
+        let area = null;
+        if (shape === 'circle') {
+            if (!Number.isFinite(dim1) || dim1 <= 0) {
+                quickResult.textContent = 'Enter a valid radius to calculate area.';
+                return;
+            }
+            area = Math.PI * (dim1 ** 2);
+        } else if (shape === 'triangle') {
+            if (!Number.isFinite(dim1) || dim1 <= 0 || !Number.isFinite(dim2) || dim2 <= 0) {
+                quickResult.textContent = 'Enter valid base and height to calculate area.';
+                return;
+            }
+            area = 0.5 * dim1 * dim2;
+        } else {
+            if (!Number.isFinite(dim1) || dim1 <= 0 || !Number.isFinite(dim2) || dim2 <= 0) {
+                quickResult.textContent = 'Enter valid dimensions to calculate area.';
+                return;
+            }
+            area = dim1 * dim2;
+        }
+
+        quickResult.textContent = `Area: ${this.formatMeasurementValue(area)} sq ft`;
+        this.updateStatus('Quick shape area calculated.');
+    }
+
+    exportMeasurementsToCsv() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            this.services.toast('Select a drawing to export measurements.', 'warning');
+            return;
+        }
+        const measurements = this.getMeasurementItems(drawing.id);
+        if (!measurements.length) {
+            this.services.toast('No measurements to export.', 'warning');
+            return;
+        }
+
+        const headers = ['Name', 'Mode', 'Quantity', 'Units', 'Details'];
+        const rows = measurements.map((measurement) => [
+            measurement.name || measurement.label || '',
+            measurement.mode || measurement.type || '',
+            this.formatMeasurementValue(measurement.quantity ?? measurement.value ?? measurement.area ?? ''),
+            measurement.units || measurement.unit || '',
+            measurement.details || measurement.description || ''
+        ].map((value) => {
+            const text = value === null || value === undefined ? '' : String(value);
+            if (/[",\n]/.test(text)) {
+                return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+        }).join(','));
+
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const baseName = drawing.name ? drawing.name.replace(/\.[^.]+$/, '') : 'takeoff';
+        link.download = `${baseName || 'takeoff'}-measurements.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        this.updateStatus('Measurements exported to CSV.');
+    }
+
+    pushMeasurementsToEstimate() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            this.services.toast('Select a drawing to send measurements to the estimate.', 'warning');
+            return;
+        }
+        const measurements = this.getMeasurementItems(drawing.id);
+        if (!measurements.length) {
+            this.services.toast('Add measurements before sending to the estimate.', 'warning');
+            return;
+        }
+        if (!this.services.estimate?.push) {
+            this.services.toast('Estimate service unavailable.', 'error');
+            return;
+        }
+        try {
+            this.services.estimate.push({ drawing, measurements });
+            this.updateStatus('Measurements sent to the estimate.');
+        } catch (error) {
+            console.error('Unable to push measurements to estimate', error);
+            this.services.toast('Unable to send measurements to the estimate.', 'error');
         }
     }
 
@@ -393,11 +816,12 @@ export class TakeoffManager {
             } else {
                 this.resetPreview();
             }
-        }
-        this.renderDrawingList();
-        this.renderMeasurementTable();
-        this.updatePlanVisibility();
-        this.services.toast(`${removed?.name || 'Drawing'} removed.`, 'info');
+            drawing.pdfDoc?.destroy?.();
+        });
+        this.state.drawings = [];
+        this.measurements.clear();
+        this.refreshMeasurementTable();
+        this.drawMeasurements();
     }
 
     setActiveDrawing(drawingId) {
@@ -535,10 +959,12 @@ export class TakeoffManager {
         this.updateStatus('Upload plan files to start measuring.');
     }
 
-    updateActiveMeta() {
-        if (!this.elements.activeMeta) return;
-        this.elements.activeMeta.textContent = formatMeta(this.getActiveDrawing());
-    }
+        this.renderDrawingList();
+        await this.updateActiveDrawingDisplay();
+        this.updatePlanVisibility();
+        this.refreshMeasurementTable();
+        this.drawMeasurements();
+        this.updateStatus(`${newDrawings.length} drawing${newDrawings.length === 1 ? '' : 's'} added.`);
 
     updatePlanVisibility() {
         const hasDrawing = Boolean(this.getActiveDrawing());
@@ -580,61 +1006,36 @@ export class TakeoffManager {
         this.elements.planInner.style.transform = `scale(${this.state.zoom})`;
     }
 
-    updateCanvasSize() {
-        if (!this.elements.planInner) return;
-        this.updateZoomTransform();
-        this.drawMeasurements();
-    }
+        const drawings = this.getFilteredDrawings();
+        const activeDrawingId = this.state.currentDrawingId;
 
-    updateMode(mode) {
-        if (!MODE_LABELS[mode]) return;
-        this.state.mode = mode;
-        this.resetDraft();
-        this.updateCountToolbarVisibility();
-        this.services.toast(`${MODE_LABELS[mode]} mode selected.`);
-    }
-
-    handleScaleChange(event) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing) {
-            this.updateScaleControls(null);
-            this.services.toast('Select a drawing before setting the scale.', 'warning');
-            return;
-        }
-        try {
-            const value = Validator.number(event.target.value, { min: 0.0001, fieldName: 'Scale' });
-            drawing.scale = value;
-            this.state.scale = value;
-            this.updateScaleControls(drawing);
-        } catch (error) {
-            if (error instanceof ValidationError) {
-                this.services.toast(error.message, 'error');
-            } else {
-                console.error(error);
-            }
-            this.updateScaleControls(drawing);
-        }
-    }
-
-    updateScaleControls(drawing = this.getActiveDrawing()) {
-        const { scaleInput } = this.elements;
-        if (!scaleInput) return;
-        const activeDrawing = drawing || null;
-        const scale = Number.isFinite(activeDrawing?.scale) && activeDrawing.scale > 0
-            ? activeDrawing.scale
-            : 1;
-        if (activeDrawing && (!Number.isFinite(activeDrawing.scale) || activeDrawing.scale <= 0)) {
-            activeDrawing.scale = scale;
-        }
-        this.state.scale = scale;
-        scaleInput.value = scale;
-    }
-
-    updateCountToolbarVisibility() {
-        if (!this.elements.countToolbar) return;
-        this.elements.countToolbar.classList.toggle('is-hidden', this.state.mode !== 'count');
-        this.syncCountControls();
-    }
+        drawingTableBody.innerHTML = drawings.map((drawing) => {
+            const isActive = drawing.id === activeDrawingId;
+            const typeLabel = drawing.type === 'pdf' ? 'PDF Document' : 'Image';
+            return `
+                <tr data-id="${escapeHtml(drawing.id)}" class="${isActive ? 'is-active' : ''}">
+                    <td>
+                        <div class="takeoff-drawing-name">
+                            <span class="takeoff-drawing-title">${escapeHtml(drawing.name)}</span>
+                            <span class="takeoff-drawing-subtitle">${typeLabel}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="text" class="form-input takeoff-input" data-field="trade" value="${escapeHtml(drawing.trade || '')}" placeholder="Trade">
+                    </td>
+                    <td>
+                        <input type="text" class="form-input takeoff-input" data-field="floor" value="${escapeHtml(drawing.floor || '')}" placeholder="Floor">
+                    </td>
+                    <td>
+                        <input type="text" class="form-input takeoff-input" data-field="page" value="${escapeHtml(drawing.page || '')}" placeholder="Page">
+                    </td>
+                    <td class="takeoff-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" data-action="select">View</button>
+                        <button type="button" class="btn btn-ghost btn-sm" data-action="remove" aria-label="Remove drawing">Remove</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
 
     syncCountControls() {
         if (!this.elements.countColor) return;
@@ -694,21 +1095,138 @@ export class TakeoffManager {
             this.state.previewPoint = null;
             return;
         }
-        this.state.previewPoint = point || null;
         this.drawMeasurements();
     }
 
-    clearPreviewPoint() {
-        this.state.previewPoint = null;
-        this.drawMeasurements();
+    drawMeasurements() {
+        const { canvas } = this.elements;
+        if (!canvas) {
+            return;
+        }
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+            return;
+        }
+
+        const width = Number.isFinite(canvas.width) ? canvas.width : canvas.clientWidth || 0;
+        const height = Number.isFinite(canvas.height) ? canvas.height : canvas.clientHeight || 0;
+        context.clearRect(0, 0, width, height);
+
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            return;
+        }
+
+        const overlay = this.measurements.get(drawing.id);
+        const measurements = this.normalizeMeasurements(overlay);
+        if (!measurements.length) {
+            return;
+        }
+
+        measurements.forEach((measurement) => this.renderMeasurement(context, measurement));
     }
 
-    handleDoubleClick(event) {
-        if (this.state.mode !== 'area' || this.state.draftPoints.length < 3) return;
-        this.finalizeMeasurement(this.state.draftPoints);
-        this.resetDraft();
-        this.drawMeasurements();
+    normalizeMeasurements(overlay) {
+        if (!overlay) {
+            return [];
+        }
+        if (Array.isArray(overlay)) {
+            return overlay;
+        }
+        if (Array.isArray(overlay?.items)) {
+            return overlay.items;
+        }
+        return [];
     }
+
+    renderMeasurement(context, measurement) {
+        if (!measurement || typeof measurement !== 'object') {
+            return;
+        }
+
+        const rawPoints = Array.isArray(measurement.points) ? measurement.points : [];
+        const scale = Number.isFinite(this.state.zoom) ? this.state.zoom : 1;
+        const points = rawPoints
+            .map((point) => this.toCanvasPoint(point, scale))
+            .filter(Boolean);
+
+        if (!points.length) {
+            return;
+        }
+
+        context.save();
+        context.lineWidth = measurement.lineWidth ?? 2;
+        context.strokeStyle = measurement.color || 'rgba(0, 123, 255, 0.85)';
+
+        context.beginPath();
+        points.forEach(({ x, y }, index) => {
+            if (index === 0) {
+                context.moveTo(x, y);
+            } else {
+                context.lineTo(x, y);
+            }
+        });
+
+        const shouldClosePath = Boolean(measurement.closed) || (measurement.fill && points.length > 2);
+        if (shouldClosePath) {
+            context.closePath();
+        }
+
+        if (measurement.fill) {
+            context.fillStyle = measurement.fill;
+            context.fill();
+        }
+
+        context.stroke();
+
+        if (measurement.label) {
+            const anchorPoint = this.getLabelAnchor(measurement, points, scale);
+            if (anchorPoint) {
+                context.fillStyle = measurement.labelColor || context.strokeStyle;
+                context.font = measurement.labelFont || '12px sans-serif';
+                const offsetX = measurement.labelOffsetX ?? 8;
+                const offsetY = measurement.labelOffsetY ?? -8;
+                context.fillText(
+                    measurement.label,
+                    anchorPoint.x + offsetX,
+                    anchorPoint.y + offsetY
+                );
+            }
+        }
+
+        context.restore();
+    }
+
+    toCanvasPoint(point, scale) {
+        if (!point) {
+            return null;
+        }
+        const x = Number.isFinite(point.x) ? point.x : Number.isFinite(point[0]) ? point[0] : null;
+        const y = Number.isFinite(point.y) ? point.y : Number.isFinite(point[1]) ? point[1] : null;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return null;
+        }
+        return { x: x * scale, y: y * scale };
+    }
+
+    getLabelAnchor(measurement, points, scale) {
+        if (measurement.labelPosition) {
+            return this.toCanvasPoint(measurement.labelPosition, scale);
+        }
+        return points[points.length - 1] || null;
+    }
+
+    removeDrawing(id) {
+        const index = this.state.drawings.findIndex((drawing) => drawing.id === id);
+        if (index === -1) return;
+
+        const [removed] = this.state.drawings.splice(index, 1);
+        if (removed?.objectUrl) {
+            URL.revokeObjectURL(removed.objectUrl);
+        }
+        removed?.pdfDoc?.destroy?.();
+        this.measurements.delete(id);
 
     resetDraft() {
         this.state.draftPoints = [];
@@ -716,16 +1234,12 @@ export class TakeoffManager {
         this.drawMeasurements();
     }
 
-    getPointerPosition(event) {
-        if (!this.elements.planInner || !this.elements.canvas) return null;
-        const rect = this.elements.planInner.getBoundingClientRect();
-        if (!rect.width || !rect.height) return null;
-        const x = (event.clientX - rect.left) / this.state.zoom;
-        const y = (event.clientY - rect.top) / this.state.zoom;
-        const width = this.elements.canvas.width;
-        const height = this.elements.canvas.height;
-        if (x < 0 || y < 0 || x > width || y > height) return null;
-        return { x, y };
+        this.renderDrawingList();
+        this.updateActiveDrawingDisplay();
+        this.updatePlanVisibility();
+        this.refreshMeasurementTable();
+        this.drawMeasurements();
+        this.updateStatus(`${removed?.name || 'Drawing'} removed.`);
     }
 
     finalizeMeasurement(points) {
@@ -753,8 +1267,14 @@ export class TakeoffManager {
             units = 'sq ft';
             details = `${formatNumber(sqft)} sq ft`;
         }
-
-        this.createMeasurement({ mode, points, quantity, units, details, label });
+        this.state.currentDrawingId = id;
+        this.state.zoom = 1;
+        this.renderDrawingList();
+        this.updateZoomIndicator();
+        this.updateActiveDrawingDisplay();
+        this.updatePlanVisibility();
+        this.refreshMeasurementTable();
+        this.drawMeasurements();
     }
 
     createMeasurement({ mode, points, quantity, units, details, color, shape, label }) {
