@@ -1554,7 +1554,7 @@ export class TakeoffManager {
         if (!Number.isFinite(x) || !Number.isFinite(y)) {
             return null;
         }
-        return { x: x * scale, y: y * scale };
+        return { x, y };
     }
 
     getLabelAnchor(measurement, points, scale) {
