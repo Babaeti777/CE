@@ -6,6 +6,12 @@
     <title>CE — Minimal Estimator Workspace</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-MxHGHk3+pwS0l3naXN65EJ2GPuP2dHsVJM4ynI0/29Gx5SdEC4YdVXBoW+XvXtkiISpAOZr74SrF3eGqJ06ZjA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+        if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
     <script src="/__/firebase/10.12.2/firebase-app-compat.js"></script>
     <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
     <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
@@ -14,12 +20,7 @@
 </head>
 <body>
     <div class="app-shell">
-        <nav class="workspace-header" id="sidebar" role="navigation">
-            <button class="workspace-menu-toggle" id="menuToggle" aria-controls="workspaceTabBar" aria-expanded="false" aria-label="Open navigation" title="Open navigation">
-                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                </svg>
-            </button>
+        <header class="workspace-header" role="banner">
             <div class="workspace-brand">
                 <span class="brand-mark">CE</span>
                 <div class="brand-copy">
@@ -27,7 +28,40 @@
                     <span class="brand-tagline">Plan, price, and deliver with clarity.</span>
                 </div>
             </div>
-            <div class="workspace-tab-bar" id="workspaceTabBar">
+            <div class="workspace-meta">
+                <h1 class="workspace-title" id="pageTitle">Dashboard</h1>
+                <p class="workspace-description">Your estimating and takeoff hub for every pursuit.</p>
+            </div>
+            <div class="workspace-actions">
+                <div class="nav-dropdown">
+                    <button class="btn btn-secondary nav-dropdown-toggle" id="navDropdownToggle" aria-haspopup="true" aria-expanded="false">
+                        Navigate
+                        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="currentColor" d="M6.293 8.293a1 1 0 011.414 0L12 12.586l4.293-4.293a1 1 0 111.414 1.414l-5 5a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414z"></path>
+                        </svg>
+                    </button>
+                    <div class="nav-dropdown-menu" id="navDropdownMenu" role="menu" aria-label="Navigate workspace">
+                        <button type="button" class="nav-item nav-dropdown-item" data-tab="dashboard" role="menuitem">Dashboard</button>
+                        <button type="button" class="nav-item nav-dropdown-item" data-tab="estimator" role="menuitem">Quick Estimator</button>
+                        <button type="button" class="nav-item nav-dropdown-item" data-tab="detailed" role="menuitem">Detailed Bidding</button>
+                        <button type="button" class="nav-item nav-dropdown-item" data-tab="takeoff" role="menuitem">Takeoff Manager</button>
+                        <button type="button" class="nav-item nav-dropdown-item" data-tab="projects" role="menuitem">Projects</button>
+                        <button type="button" class="nav-item nav-dropdown-item" data-tab="materials" role="menuitem">Materials</button>
+                        <button type="button" class="nav-item nav-dropdown-item" data-tab="settings" role="menuitem">Settings</button>
+                    </div>
+                </div>
+                <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                </button>
+                <button class="btn btn-primary" id="newProjectBtn" type="button">New Project</button>
+                <div class="sync-badge" id="syncStatus">
+                    <div class="sync-dot"></div>
+                    <span>Database synced</span>
+                </div>
+            </div>
+        </header>
+        <nav class="workspace-nav" aria-label="Primary workspace navigation">
+            <div class="workspace-nav-inner" id="workspaceTabBar">
                 <button type="button" class="nav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true">
                     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
                     <span class="nav-label">Dashboard</span>
@@ -53,44 +87,39 @@
                     <span class="nav-label">Materials</span>
                 </button>
                 <button type="button" class="nav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false">
-                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31-.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.072 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="nav-label">Settings</span>
                 </button>
             </div>
-            <div class="workspace-actions">
-                <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Collapse navigation" aria-expanded="true">
-                    <svg class="sidebar-toggle-icon icon-expanded" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                    </svg>
-                    <svg class="sidebar-toggle-icon icon-collapsed" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                    <span class="sr-only" data-toggle-label>Collapse navigation</span>
-                </button>
-                <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                </button>
-                <button class="btn btn-primary" id="newProjectBtn" type="button">New Project</button>
-                <div class="sync-badge" id="syncStatus">
-                    <div class="sync-dot"></div>
-                    <span>Database synced</span>
-                </div>
-            </div>
         </nav>
 
+
         <main class="main-content">
-        <section class="header-insights" aria-label="Workflow highlights">
-            <article class="insight-card">
-                <h2 class="insight-title">Focus your effort</h2>
-                <p class="insight-body">Pin critical pursuits, monitor pricing updates, and spotlight risk items before the next stand-up.</p>
-            </article>
-            <article class="insight-card">
-                <h2 class="insight-title">Stay in sync</h2>
-                <ul class="insight-list">
-                    <li>Capture takeoffs from the field and publish directly to estimates.</li>
-                    <li>Share curated pricing feeds with teammates in real time.</li>
-                </ul>
-            </article>
+        <section class="dashboard-hero" aria-label="Workflow highlights">
+            <div class="hero-overview">
+                <span class="hero-kicker">Workspace overview</span>
+                <h2 class="hero-title">Work smarter across every bid</h2>
+                <p class="hero-body">Spot opportunities, coordinate with field teams, and keep pricing aligned before bid day hits.</p>
+                <div class="hero-tags">
+                    <span class="hero-tag">Live pricing feed</span>
+                    <span class="hero-tag">Collaborative takeoffs</span>
+                    <span class="hero-tag">Performance insights</span>
+                </div>
+            </div>
+            <div class="hero-highlights">
+                <article class="hero-panel">
+                    <h3 class="hero-panel-title">Focus your effort</h3>
+                    <p class="hero-panel-body">Pin critical pursuits, monitor pricing updates, and spotlight risk items before the next stand-up.</p>
+                </article>
+                <article class="hero-panel">
+                    <h3 class="hero-panel-title">Stay in sync</h3>
+                    <ul class="hero-panel-list">
+                        <li>Capture takeoffs from the field and publish directly to estimates.</li>
+                        <li>Share curated pricing feeds with teammates in real time.</li>
+                        <li>Log coordination notes alongside plan markups.</li>
+                    </ul>
+                </article>
+            </div>
         </section>
 
         <div class="content">
@@ -429,7 +458,7 @@
                                 <h3 class="card-title">Drawing Pages</h3>
                                 <label class="btn btn-secondary takeoff-upload-label">
                                     Upload
-                                <input type="file" id="takeoffDrawingInput" accept="image/*" multiple class="hidden-input">
+                                <input type="file" id="takeoffDrawingInput" accept="application/pdf,.pdf,image/*" multiple class="hidden-input">
                                 </label>
                             </div>
                             <button class="btn btn-secondary" id="takeoffAddDrawingBtn" type="button">Add Drawing</button>
@@ -503,6 +532,12 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
                                     </div>
+                                    <div class="takeoff-toolbar-group takeoff-doc-controls">
+                                        <span class="takeoff-toolbar-label">Document</span>
+                                        <button type="button" class="btn btn-ghost takeoff-rotate-btn" id="takeoffRotateLeftBtn" aria-label="Rotate counterclockwise">↺</button>
+                                        <button type="button" class="btn btn-ghost takeoff-rotate-btn" id="takeoffRotateRightBtn" aria-label="Rotate clockwise">↻</button>
+                                        <button type="button" class="btn btn-secondary takeoff-open-btn" id="takeoffOpenDocumentBtn">Open Original</button>
+                                    </div>
                                     <div class="takeoff-toolbar-group takeoff-count-toolbar is-hidden" id="takeoffCountToolbar">
                                         <span class="takeoff-toolbar-label">Count marker</span>
                                         <label class="takeoff-count-setting">
@@ -531,6 +566,18 @@
                                         <canvas id="takeoffCanvas"></canvas>
                                     </div>
                                     <button type="button" class="btn btn-secondary takeoff-fullscreen-toggle" id="takeoffFullScreenToggle" aria-pressed="false">Full View</button>
+                                </div>
+                                <div class="takeoff-note-panel">
+                                    <div class="takeoff-note-header">
+                                        <h4 class="takeoff-note-title">Plan notes</h4>
+                                        <p class="takeoff-note-subtitle">Track clarifications and assumptions while reviewing markups.</p>
+                                    </div>
+                                    <div class="takeoff-note-form">
+                                        <label class="sr-only" for="takeoffNoteInput">Add note</label>
+                                        <textarea id="takeoffNoteInput" class="form-input takeoff-note-input" placeholder="Add a note for this drawing"></textarea>
+                                        <button type="button" class="btn btn-secondary" id="takeoffAddNoteBtn">Add Note</button>
+                                    </div>
+                                    <ul class="takeoff-note-list" id="takeoffNoteList" aria-live="polite"></ul>
                                 </div>
                             </div>
                             <p id="takeoffStatus" class="takeoff-status"></p>

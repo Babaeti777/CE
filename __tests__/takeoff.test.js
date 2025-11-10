@@ -1,180 +1,184 @@
 /** @jest-environment jsdom */
 
 import { jest, describe, expect, test, beforeEach } from '@jest/globals';
-
 import { TakeoffManager } from '../takeoff.js';
 
 function createStorageMock() {
     const store = new Map();
     return {
-        getItem: jest.fn((key) => store.get(key) || null),
-        setItem: jest.fn((key, value) => store.set(key, value)),
-        removeItem: jest.fn((key) => store.delete(key))
+        getItem: jest.fn((key) => (store.has(key) ? store.get(key) : null)),
+        setItem: jest.fn((key, value) => {
+            store.set(key, value);
+        }),
+        removeItem: jest.fn((key) => {
+            store.delete(key);
+        })
     };
+}
 
-    ({ TakeoffManager } = await import('../takeoff.js'));
-});
-
-describe('TakeoffManager measurements', () => {
-    let restoreGetContext;
-    let mockContext;
+describe('TakeoffManager workspace basics', () => {
+    let manager;
+    let toast;
+    let storage;
 
     beforeEach(() => {
         document.body.innerHTML = `
-            <input id="takeoffDrawingInput" />
-            <select id="takeoffSortSelect"></select>
-            <button id="takeoffSortDirection"></button>
-            <input id="takeoffSearchInput" />
-            <table><tbody id="takeoffDrawingTableBody"></tbody></table>
-            <div id="takeoffDrawingEmpty"></div>
+            <form id="takeoffDrawingForm">
+                <input id="takeoffDrawingName" />
+                <input id="takeoffDrawingTrade" />
+                <input id="takeoffDrawingFloor" />
+                <input id="takeoffDrawingNotes" />
+            </form>
             <div class="card takeoff-plan-card">
-                <div id="takeoffPlanContainer" class="takeoff-plan">
-                    <div id="takeoffToolbarMount">
-                        <select id="takeoffModeSelect"></select>
-                        <input id="takeoffScaleInput" />
-                    </div>
-                    <div class="takeoff-plan-stage" id="takeoffPlanStage">
-                        <div id="takeoffPlanInner">
-                            <img id="takeoffPlanPreview" />
-                            <canvas id="takeoffCanvas" width="200" height="200"></canvas>
-                        </div>
-                    </div>
+                <div id="takeoffPlanContainer">
+                    <div id="takeoffPlanInner"></div>
+                    <img id="takeoffPlanPreview" />
+                    <canvas id="takeoffCanvas" width="400" height="300"></canvas>
                 </div>
             </div>
-            <button id="takeoffZoomOutBtn"></button>
-            <button id="takeoffZoomInBtn"></button>
-            <button id="takeoffZoomResetBtn"></button>
-            <div id="takeoffZoomIndicator"></div>
-            <div id="takeoffStatus"></div>
+            <input type="file" id="takeoffDrawingInput" />
+            <select id="takeoffSortSelect"></select>
+            <button id="takeoffSortDirection" type="button"></button>
+            <input id="takeoffSearchInput" />
+            <select id="takeoffModeSelect"></select>
+            <input id="takeoffScaleInput" />
+            <div id="takeoffToolbarMount"></div>
+            <div id="takeoffPlanStage"></div>
+            <table><tbody id="takeoffDrawingTableBody"></tbody></table>
+            <p id="takeoffDrawingEmpty"></p>
             <div id="takeoffActiveMeta"></div>
-            <button id="takeoffFullscreenBtn"></button>
-            <button id="takeoffFullScreenToggle"></button>
-            <div id="takeoffCountToolbar"></div>
+            <div id="takeoffStatus"></div>
+            <button id="takeoffZoomOutBtn" type="button"></button>
+            <button id="takeoffZoomInBtn" type="button"></button>
+            <button id="takeoffZoomResetBtn" type="button"></button>
+            <span id="takeoffZoomIndicator"></span>
+            <button id="takeoffFullscreenBtn" type="button"></button>
+            <button id="takeoffFullScreenToggle" type="button"></button>
+            <button id="takeoffRotateLeftBtn" type="button"></button>
+            <button id="takeoffRotateRightBtn" type="button"></button>
+            <button id="takeoffOpenDocumentBtn" type="button"></button>
+            <div id="takeoffCountToolbar" class="is-hidden"></div>
             <input id="takeoffCountColor" />
             <select id="takeoffCountShape"></select>
             <input id="takeoffCountLabel" />
-            <div class="card">
-                <table><tbody id="takeoffMeasurementTableBody"></tbody></table>
-                <div id="takeoffMeasurementEmpty" class="takeoff-empty"></div>
-            </div>
-            <button id="takeoffClearBtn"></button>
-            <button id="takeoffExportCsvBtn"></button>
-            <button id="takeoffPushBtn"></button>
-            <select id="takeoffShapeSelect">
-                <option value="rectangle">Rectangle</option>
-                <option value="circle">Circle</option>
-                <option value="triangle">Triangle</option>
-            </select>
-            <input id="measurementValueInput" />
-            <input id="measurementUnitInput" />
-            <button type="submit">Add</button>
-        </form>
-        <div id="takeoffMeasurementList"></div>
-        <div id="takeoffSummary"></div>
-        <div id="takeoffActiveMeta"></div>
-    `;
-}
+            <button id="takeoffQuickCalcBtn" type="button"></button>
+            <input id="takeoffDim1" />
+            <input id="takeoffDim2" />
+            <div id="takeoffDim2Group"></div>
+            <div id="takeoffQuickResult"></div>
+            <button id="takeoffClearBtn" type="button"></button>
+            <button id="takeoffExportCsvBtn" type="button"></button>
+            <button id="takeoffPushBtn" type="button"></button>
+            <form id="takeoffMeasurementForm">
+                <input id="measurementLabelInput" />
+                <select id="measurementModeSelect">
+                    <option value="length">Length</option>
+                    <option value="area">Area</option>
+                    <option value="count">Count</option>
+                </select>
+                <input id="measurementValueInput" type="number" />
+                <input id="measurementUnitInput" />
+            </form>
+            <table><tbody id="takeoffMeasurementTableBody"></tbody></table>
+            <p id="takeoffMeasurementEmpty"></p>
+            <div id="takeoffMeasurementList"></div>
+            <div id="takeoffSummary"></div>
+            <textarea id="takeoffNoteInput"></textarea>
+            <button id="takeoffAddNoteBtn" type="button"></button>
+            <ul id="takeoffNoteList"></ul>
+        `;
 
-describe('TakeoffManager (simplified workspace)', () => {
-    let manager;
-    let storage;
-    const toast = jest.fn();
+        // Provide a simple canvas context mock for draw operations.
+        HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+            clearRect: jest.fn(),
+            beginPath: jest.fn(),
+            moveTo: jest.fn(),
+            lineTo: jest.fn(),
+            closePath: jest.fn(),
+            stroke: jest.fn(),
+            fill: jest.fn(),
+            save: jest.fn(),
+            restore: jest.fn(),
+            setLineDash: jest.fn(),
+            arc: jest.fn(),
+            fillText: jest.fn(),
+            strokeRect: jest.fn(),
+            rect: jest.fn()
+        }));
 
-        const input = manager.elements.drawingTableBody.querySelector('input[data-field="trade"]');
-        input.value = 'Electrical';
-
-        manager.measurements.set(drawing.id, [
-            {
-                id: 'm1',
-                points: [
-                    { x: 0, y: 0 },
-                    { x: 10, y: 0 },
-                    { x: 10, y: 5 }
-                ],
-                label: '15 ft'
-            }
-        ]);
-
-        manager.handleDrawingTableInput({ target: input });
-
-        expect(drawing.trade).toBe('Electrical');
-        expect(mockContext.clearRect).toHaveBeenCalledWith(0, 0, 200, 200);
-        expect(mockContext.beginPath).toHaveBeenCalled();
-        expect(mockContext.moveTo).toHaveBeenCalledWith(0, 0);
-        expect(mockContext.lineTo).toHaveBeenCalledWith(10, 0);
-        expect(mockContext.lineTo).toHaveBeenCalledWith(10, 5);
-        expect(mockContext.fillText).toHaveBeenCalledWith('15 ft', 18, -3);
-    });
-
-    test('renders measurement rows for active drawing', () => {
-        const manager = new TakeoffManager({ toastService: jest.fn() });
+        storage = createStorageMock();
+        toast = jest.fn();
+        manager = new TakeoffManager({ toastService: toast, storageService: storage });
         manager.cacheDom();
-
-        const drawing = { id: 'drawing-1', name: 'Floor 1' };
-        manager.state.drawings = [drawing];
-        manager.state.currentDrawingId = drawing.id;
-
-        manager.setMeasurementItems(drawing.id, [
-            { id: 'm1', name: 'Main Area', mode: 'Area', quantity: 120.5, units: 'sq ft' }
-        ]);
-
-        const { measurementTableBody, measurementEmpty } = manager.elements;
-        expect(measurementTableBody.children).toHaveLength(1);
-        expect(measurementTableBody.querySelector('.takeoff-measurement-name').textContent).toBe('Main Area');
-        expect(measurementEmpty.classList.contains('is-hidden')).toBe(true);
+        Object.assign(manager.elements, {
+            drawingForm: document.getElementById('takeoffDrawingForm'),
+            drawingName: document.getElementById('takeoffDrawingName'),
+            drawingTrade: document.getElementById('takeoffDrawingTrade'),
+            drawingFloor: document.getElementById('takeoffDrawingFloor'),
+            drawingNotes: document.getElementById('takeoffDrawingNotes'),
+            measurementForm: document.getElementById('takeoffMeasurementForm'),
+            measurementLabel: document.getElementById('measurementLabelInput'),
+            measurementMode: document.getElementById('measurementModeSelect'),
+            measurementValue: document.getElementById('measurementValueInput'),
+            measurementUnit: document.getElementById('measurementUnitInput'),
+            measurementList: document.getElementById('takeoffMeasurementList'),
+            summaryContainer: document.getElementById('takeoffSummary'),
+            drawingEmptyState: document.getElementById('takeoffDrawingEmpty'),
+            noteInput: document.getElementById('takeoffNoteInput'),
+            addNoteBtn: document.getElementById('takeoffAddNoteBtn'),
+            noteList: document.getElementById('takeoffNoteList')
+        });
     });
 
-    test('adds drawings from the entry form and updates the table', () => {
-        document.getElementById('takeoffDrawingName').value = 'Floor Plan';
-        document.getElementById('takeoffDrawingTrade').value = 'Architectural';
+    const submitEvent = () => new Event('submit', { bubbles: true, cancelable: true });
 
-        manager.handleDrawingFormSubmit(new Event('submit'));
+    test('handleDrawingFormSubmit creates a drawing and updates UI', () => {
+        manager.elements.drawingName.value = 'Floor Plan';
+        manager.elements.drawingTrade.value = 'Architectural';
+        manager.elements.drawingFloor.value = 'Level 1';
+        manager.elements.drawingNotes.value = 'Main scope';
+
+        manager.handleDrawingFormSubmit(submitEvent());
 
         expect(manager.state.drawings).toHaveLength(1);
-        expect(manager.state.currentDrawingId).toBe(manager.state.drawings[0].id);
-        expect(document.getElementById('takeoffDrawingTableBody').children).toHaveLength(1);
-        expect(document.getElementById('takeoffActiveMeta').textContent).toContain('Floor Plan');
-        expect(storage.setItem).toHaveBeenCalled();
+        const drawing = manager.state.drawings[0];
+        expect(drawing.name).toBe('Floor Plan');
+        expect(manager.state.currentDrawingId).toBe(drawing.id);
+        expect(manager.elements.drawingTableBody.children).toHaveLength(1);
+        expect(manager.elements.activeMeta.textContent).toContain('Floor Plan');
+        expect(manager.elements.measurementList.textContent).toContain('Add measurements');
+        expect(storage.setItem).toHaveBeenCalledWith(expect.any(String), expect.any(String));
     });
 
-    test('captures measurements for the active drawing and updates summary', () => {
-        document.getElementById('takeoffDrawingName').value = 'Roof';
-        manager.handleDrawingFormSubmit(new Event('submit'));
+    test('handleMeasurementFormSubmit adds measurement to active drawing', () => {
+        manager.elements.drawingName.value = 'Roof';
+        manager.handleDrawingFormSubmit(submitEvent());
 
-        document.getElementById('measurementLabelInput').value = 'Roof Area';
-        document.getElementById('measurementModeSelect').value = 'area';
-        document.getElementById('measurementValueInput').value = '120.5';
-        document.getElementById('measurementUnitInput').value = 'sq ft';
+        manager.elements.measurementLabel.value = 'Roof Area';
+        manager.elements.measurementMode.value = 'area';
+        manager.elements.measurementValue.value = '120.5';
+        manager.elements.measurementUnit.value = 'sq ft';
 
-        manager.handleMeasurementFormSubmit(new Event('submit'));
+        manager.handleMeasurementFormSubmit(submitEvent());
 
-        const measurementList = document.getElementById('takeoffMeasurementList').textContent;
-        const summaryText = document.getElementById('takeoffSummary').textContent;
-
-        expect(measurementList).toContain('Roof Area');
-        expect(summaryText).toContain('sq ft');
-        expect(summaryText).toContain('120.5');
+        const activeDrawing = manager.getActiveDrawing();
+        expect(activeDrawing.measurements).toHaveLength(1);
+        expect(manager.elements.measurementList.textContent).toContain('Roof Area');
+        expect(manager.elements.summaryContainer.textContent).toContain('sq ft');
         expect(toast).toHaveBeenCalledWith('Measurement saved.', 'success');
     });
 
-    test('removes drawings and measurements from the active workspace', () => {
-        document.getElementById('takeoffDrawingName').value = 'Site Plan';
-        manager.handleDrawingFormSubmit(new Event('submit'));
+    test('handleAddNote stores note and renders list for active drawing', () => {
+        manager.elements.drawingName.value = 'Elevation';
+        manager.handleDrawingFormSubmit(submitEvent());
 
-        document.getElementById('measurementLabelInput').value = 'Perimeter';
-        document.getElementById('measurementModeSelect').value = 'length';
-        document.getElementById('measurementValueInput').value = '45';
-        document.getElementById('measurementUnitInput').value = 'lf';
-        manager.handleMeasurementFormSubmit(new Event('submit'));
+        manager.elements.noteInput.value = 'Confirm siding finish.';
+        manager.handleAddNote();
 
-        const drawingId = manager.state.drawings[0].id;
-        const measurementId = manager.state.drawings[0].measurements[0].id;
-
-        manager.removeMeasurement(measurementId);
-        manager.removeDrawing(drawingId);
-
-        expect(manager.state.drawings).toHaveLength(0);
-        expect(document.getElementById('takeoffMeasurementList').textContent).toContain('Select a drawing');
-        expect(toast).toHaveBeenCalledWith('Drawing removed.', 'success');
+        const drawing = manager.getActiveDrawing();
+        expect(Array.isArray(drawing.notes)).toBe(true);
+        expect(drawing.notes).toHaveLength(1);
+        expect(manager.elements.noteList.textContent).toContain('Confirm siding finish.');
+        expect(toast).toHaveBeenCalledWith('Note added to drawing.', 'success');
     });
 });
