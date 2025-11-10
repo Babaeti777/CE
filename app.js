@@ -1297,6 +1297,7 @@ import {
                 loadSavedData();
                 setupEventListeners();
                 setupNavigation();
+                setEstimatePanelsVisibility({ showWorkspace: false, showSummary: false });
                 enhanceAccessibility();
                 updateAuthUI();
                 populateMaterialsTable();
@@ -2241,13 +2242,27 @@ import {
             displayEstimate(state.currentEstimate);
         }
 
+        function setEstimatePanelsVisibility({ showWorkspace, showSummary }) {
+            const workspace = document.getElementById('estimateWorkspace');
+            const summary = document.getElementById('estimateSummary');
+            if (workspace) {
+                workspace.classList.toggle('is-hidden', !showWorkspace);
+            }
+            if (summary) {
+                summary.classList.toggle('is-hidden', !showSummary);
+            }
+        }
+
         function displayEstimate(estimate) {
-            if (!estimate) return;
+            if (!estimate) {
+                setEstimatePanelsVisibility({ showWorkspace: false, showSummary: false });
+                return;
+            }
             ensureWorksheet(estimate);
             renderWorksheet(estimate);
             updateWorksheetTotals();
-            document.getElementById('estimateWorkspace').style.display = estimate.worksheet?.length ? 'block' : 'none';
-            document.getElementById('estimateSummary').style.display = 'block';
+            const hasWorksheet = Boolean(estimate.worksheet?.length);
+            setEstimatePanelsVisibility({ showWorkspace: hasWorksheet, showSummary: true });
             applyMaterialSelections(estimate.selected || {}, { force: true });
         }
 
