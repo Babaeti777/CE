@@ -2,7 +2,8 @@ import { LifecycleManager } from './services/lifecycle-manager.js';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
 if (pdfjsLib?.GlobalWorkerOptions) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.mjs';
+    const workerUrl = new URL('./vendor/pdfjs/pdf.worker.mjs', import.meta.url);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl.toString();
     pdfjsLib.GlobalWorkerOptions.workerType = 'module';
 }
 
@@ -89,10 +90,19 @@ export class TakeoffManager {
         this.measurements = new Map();
         this.labelCounters = new Map();
         this.previewToken = 0;
+        this.resizeScheduled = false;
         this.pointerSession = null;
         this.handlers = {
             windowResize: () => {
-                this.applyZoom();
+                if (this.resizeScheduled) return;
+                this.resizeScheduled = true;
+                const scheduler = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+                    ? window.requestAnimationFrame.bind(window)
+                    : (fn) => setTimeout(fn, 16);
+                scheduler(() => {
+                    this.resizeScheduled = false;
+                    this.applyZoom();
+                });
             }
         };
     }
