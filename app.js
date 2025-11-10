@@ -17,7 +17,8 @@ import {
     replaceAllProjects as replaceAllProjectsInCloud,
     onAuthStateChange,
     signInWithGoogle,
-    signOutFromGoogle
+    signOutFromGoogle,
+    setFirebaseConfig
 } from './firebase.js';
 
 (function() {
@@ -27,6 +28,7 @@ import {
         const SETTINGS_STORAGE_KEY = 'ce:settings';
         const SYNC_STATUS_RESET_DELAY = 2500;
         const SYNC_PROFILE_STORAGE_KEY = 'ce:cloud:profile-id';
+        const FIREBASE_CONFIG_STORAGE_KEY = 'ce:firebase-config';
         const FREQUENCY_INTERVALS = {
             daily: 24 * 60 * 60 * 1000,
             weekly: 7 * 24 * 60 * 60 * 1000,
@@ -108,6 +110,7 @@ import {
             remoteSyncEnabled: false,
             remoteSyncStatus: 'disabled',
             authUser: null,
+            firebaseConfig: null,
         };
 
         const stateManager = new StateManager(initialState);
@@ -118,6 +121,7 @@ import {
         const DATABASE_SOURCE_URL = 'data/database.json';
         const loadingManager = new LoadingManager();
         const commandHistory = new CommandHistory();
+        let priceTrendChart = null;
         const lifecycle = new LifecycleManager();
 
         let takeoffManager = null;
@@ -127,7 +131,7 @@ import {
         let unsubscribeAuth = null;
         let applyingRemoteProjects = false;
         let firebaseReady = false;
-        let lastScreenIsMobile = window.matchMedia('(max-width: 1024px)').matches;
+        let lastScreenIsMobile = window.matchMedia('(max-width: 960px)').matches;
         let wasSidebarCollapsedDesktop = false;
 
         function loadCachedDatabase() {
@@ -1405,8 +1409,12 @@ import {
                 if (autoUpdateSelect) autoUpdateSelect.value = state.autoUpdate;
                 const frequencySelect = document.getElementById('updateFrequency');
                 if (frequencySelect) frequencySelect.value = state.updateFrequency;
-                const theme = storage.getItem('darkMode');
-                if (theme === 'on') document.body.classList.add('dark-mode');
+                const firebaseConfig = loadFirebaseConfigFromStorage();
+                if (firebaseConfig) {
+                    applyFirebaseConfig(firebaseConfig, { persistLocal: false, silent: true });
+                } else {
+                    populateFirebaseConfigFields();
+                }
                 const storedSidebarState = storage.getItem('sidebarCollapsed');
                 const isSidebarCollapsed = storedSidebarState === '1';
                 document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
@@ -1556,6 +1564,28 @@ import {
             }
         }
 
+        function loadFirebaseConfigFromStorage() {
+            try {
+                const raw = storage.getItem(FIREBASE_CONFIG_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (error) {
+                console.warn('Unable to read stored Firebase config', error);
+                return null;
+            }
+        }
+
+        function persistFirebaseConfig(config) {
+            try {
+                if (config) {
+                    storage.setItem(FIREBASE_CONFIG_STORAGE_KEY, JSON.stringify(config));
+                } else {
+                    storage.removeItem(FIREBASE_CONFIG_STORAGE_KEY);
+                }
+            } catch (error) {
+                console.warn('Unable to persist Firebase config locally', error);
+            }
+        }
+
         function populateCompanyInfoFields() {
             const { name, address, phone, email } = state.companyInfo || {};
             const nameInput = document.getElementById('companyName');
@@ -1568,12 +1598,94 @@ import {
             if (emailInput) emailInput.value = email || '';
         }
 
+        function populateFirebaseConfigFields(config = state.firebaseConfig) {
+            const fields = {
+                firebaseApiKey: config?.apiKey || '',
+                firebaseAuthDomain: config?.authDomain || '',
+                firebaseProjectId: config?.projectId || '',
+                firebaseStorageBucket: config?.storageBucket || '',
+                firebaseMessagingSenderId: config?.messagingSenderId || '',
+                firebaseAppId: config?.appId || ''
+            };
+            Object.entries(fields).forEach(([id, value]) => {
+                const input = document.getElementById(id);
+                if (input) input.value = value;
+            });
+        }
+
         function applyCompanyInfo(info = {}, { persistLocal = true } = {}) {
             state.companyInfo = { ...state.companyInfo, ...(info || {}) };
             populateCompanyInfoFields();
             if (persistLocal) {
                 persistCompanyInfoLocal();
             }
+        }
+
+        function normalizeFirebaseConfig(config = null) {
+            if (!config) return null;
+            const normalized = {};
+            let hasValue = false;
+            ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'].forEach((key) => {
+                const value = config[key];
+                if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    if (trimmed) {
+                        normalized[key] = trimmed;
+                        hasValue = true;
+                    }
+                } else if (value) {
+                    normalized[key] = value;
+                    hasValue = true;
+                }
+            });
+            return hasValue ? normalized : null;
+        }
+
+        function applyFirebaseConfig(config = null, { persistLocal = true, silent = false } = {}) {
+            const normalized = normalizeFirebaseConfig(config);
+            state.firebaseConfig = normalized;
+            populateFirebaseConfigFields(normalized || {});
+            setFirebaseConfig(normalized || null);
+            if (persistLocal) {
+                persistFirebaseConfig(normalized);
+            }
+            if (!silent) {
+                firebaseReady = false;
+                stopAuthListener();
+                stopCloudSubscription();
+                state.authUser = null;
+                updateAuthUI();
+                safeInitCloudSync();
+            }
+        }
+
+        function handleFirebaseConfigSave(event) {
+            event?.preventDefault?.();
+            const config = {
+                apiKey: document.getElementById('firebaseApiKey')?.value,
+                authDomain: document.getElementById('firebaseAuthDomain')?.value,
+                projectId: document.getElementById('firebaseProjectId')?.value,
+                storageBucket: document.getElementById('firebaseStorageBucket')?.value,
+                messagingSenderId: document.getElementById('firebaseMessagingSenderId')?.value,
+                appId: document.getElementById('firebaseAppId')?.value,
+            };
+
+            const normalized = normalizeFirebaseConfig(config);
+            if (!normalized) {
+                applyFirebaseConfig(null, { persistLocal: true });
+                showToast('Firebase configuration cleared.', 'info');
+                return;
+            }
+
+            const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'appId'];
+            const missing = requiredKeys.filter(key => !normalized[key]);
+            if (missing.length) {
+                showToast('API Key, Auth Domain, Project ID, and App ID are required.', 'warning');
+                return;
+            }
+
+            applyFirebaseConfig(normalized, { persistLocal: true });
+            showToast('Firebase settings saved. Sign in to enable sync.', 'success');
         }
 
         function hasCompanyInfo(info) {
@@ -1916,6 +2028,7 @@ import {
                     }
                 });
             });
+            document.getElementById('manualLineItemForm')?.addEventListener('submit', handleManualLineItemSubmit);
             document.getElementById('generatePricingBtn')?.addEventListener('click', () => updateWorksheetTotals({ announce: true }));
             document.getElementById('resetWorksheetBtn')?.addEventListener('click', resetWorksheet);
 
@@ -1941,11 +2054,11 @@ import {
 
             document.getElementById('saveBidBtn')?.addEventListener('click', saveBid);
             document.getElementById('saveCompanyBtn')?.addEventListener('click', saveCompanyInfo);
+            document.getElementById('saveFirebaseConfigBtn')?.addEventListener('click', handleFirebaseConfigSave);
             document.getElementById('checkUpdatesBtn')?.addEventListener('click', checkForUpdates);
             document.getElementById('applyUpdateBtn')?.addEventListener('click', applyUpdate);
             document.getElementById('laterBtn')?.addEventListener('click', () => closeModal('updateModal'));
             document.getElementById('newProjectBtn')?.addEventListener('click', () => openModal('newProjectModal'));
-            document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
             document.getElementById('projectSearch')?.addEventListener('input', (e) => loadProjects(e.target.value));
 
             document.getElementById('exportProjectsBtn')?.addEventListener('click', exportProjects);
@@ -2104,13 +2217,10 @@ import {
         }
 
         function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return false;
-
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+            const isMobile = window.matchMedia('(max-width: 960px)').matches;
             if (isMobile) {
-                const shouldOpen = !sidebar.classList.contains('open');
-                sidebar.classList.toggle('open', shouldOpen);
+                const willOpen = !document.body.classList.contains('sidebar-open');
+                document.body.classList.toggle('sidebar-open', willOpen);
             } else {
                 const shouldCollapse = !document.body.classList.contains('sidebar-collapsed');
                 document.body.classList.toggle('sidebar-collapsed', shouldCollapse);
@@ -2122,36 +2232,30 @@ import {
         }
 
         function closeSidebarOnMobile() {
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return;
-            if (window.matchMedia('(max-width: 1024px)').matches) {
-                sidebar.classList.remove('open');
-                updateSidebarToggleState();
+            if (window.matchMedia('(max-width: 960px)').matches) {
+                if (document.body.classList.contains('sidebar-open')) {
+                    document.body.classList.remove('sidebar-open');
+                    updateSidebarToggleState();
+                }
             }
         }
 
         function isSidebarCollapsed() {
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return false;
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-            return isMobile ? !sidebar.classList.contains('open') : document.body.classList.contains('sidebar-collapsed');
+            const isMobile = window.matchMedia('(max-width: 960px)').matches;
+            return isMobile ? !document.body.classList.contains('sidebar-open') : document.body.classList.contains('sidebar-collapsed');
         }
 
         function updateSidebarToggleState() {
             const collapseButton = document.getElementById('sidebarCollapseBtn');
             const menuToggle = document.getElementById('menuToggle');
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) return;
-
             const collapsed = isSidebarCollapsed();
-            const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
 
             if (collapseButton) {
+                const label = collapsed ? 'Show navigation' : 'Hide navigation';
                 collapseButton.classList.toggle('collapsed', collapsed);
                 collapseButton.setAttribute('aria-label', label);
                 collapseButton.setAttribute('aria-expanded', String(!collapsed));
                 collapseButton.setAttribute('title', label);
-
                 const textEl = collapseButton.querySelector('[data-toggle-label]');
                 if (textEl) {
                     textEl.textContent = label;
@@ -2159,38 +2263,34 @@ import {
             }
 
             if (menuToggle) {
+                const isMobile = window.matchMedia('(max-width: 960px)').matches;
                 const mobileLabel = collapsed ? 'Open navigation' : 'Close navigation';
                 menuToggle.setAttribute('aria-expanded', String(!collapsed));
                 menuToggle.setAttribute('aria-label', mobileLabel);
                 menuToggle.setAttribute('title', mobileLabel);
+                menuToggle.classList.toggle('is-hidden', !isMobile);
             }
         }
 
         function handleSidebarResize() {
-            const sidebar = document.getElementById('sidebar');
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+            const isMobile = window.matchMedia('(max-width: 960px)').matches;
 
             if (isMobile !== lastScreenIsMobile) {
                 if (isMobile) {
                     wasSidebarCollapsedDesktop = document.body.classList.contains('sidebar-collapsed');
                     document.body.classList.remove('sidebar-collapsed');
                 } else {
+                    document.body.classList.remove('sidebar-open');
                     if (wasSidebarCollapsedDesktop) {
                         document.body.classList.add('sidebar-collapsed');
                     } else {
                         document.body.classList.remove('sidebar-collapsed');
                     }
-                    sidebar?.classList.remove('open');
                 }
                 lastScreenIsMobile = isMobile;
             }
 
             updateSidebarToggleState();
-        }
-
-        function toggleTheme() {
-            document.body.classList.toggle('dark-mode');
-            storage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'on' : 'off');
         }
 
         async function handleAutoUpdateChange(event) {
@@ -2766,6 +2866,42 @@ import {
         }
 
         // --- DETAILED BIDDING ---
+        function handleManualLineItemSubmit(event) {
+            event?.preventDefault?.();
+            const form = event?.target;
+            if (!form) return;
+
+            const categoryRaw = form.manualCategory?.value?.trim();
+            const description = form.manualDescription?.value?.trim();
+            if (!description) {
+                showToast('Enter a description for the manual item.', 'warning');
+                form.manualDescription?.focus();
+                return;
+            }
+
+            const category = categoryRaw || 'Manual';
+            const quantity = parseFloat(form.manualQuantity?.value) || 0;
+            const unit = form.manualUnit?.value?.trim() || '';
+            const rate = parseFloat(form.manualRate?.value) || 0;
+
+            const row = addLineItem({
+                category,
+                description,
+                quantity,
+                unit,
+                rate
+            }, { position: 'bottom' });
+
+            updateLineItemTotal(row);
+            refreshLineItemCategoryOptions();
+
+            form.reset();
+            if (form.manualQuantity) form.manualQuantity.value = 1;
+            if (form.manualRate) form.manualRate.value = 0;
+            form.manualDescription?.focus();
+            showToast('Manual line item added.', 'success');
+        }
+
         function addLineItem(item = null, { position = 'top', reuseId = null } = {}) {
             if (item?.category && !state.lineItemCategories[item.category]) {
                 state.lineItemCategories[item.category] = [];
@@ -3977,19 +4113,67 @@ import {
 
         // --- CHARTS ---
         function initCharts() {
-            const ctxPrice = document.getElementById('priceChart')?.getContext('2d');
-            if (ctxPrice) new Chart(ctxPrice, {
+            const canvas = document.getElementById('priceChart');
+            if (!canvas) return;
+
+            const context = canvas.getContext('2d');
+            if (!context) return;
+
+            if (canvas.height < 240) {
+                canvas.height = 260;
+            }
+
+            if (priceTrendChart) {
+                priceTrendChart.destroy();
+            }
+
+            priceTrendChart = new Chart(context, {
                 type: 'line',
                 data: {
                     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                     datasets: [
-                        { label: 'Lumber', data: [12, 19, 13, 15, 12, 13], borderColor: 'rgba(99, 102, 241, 1)', tension: 0.4, fill: false },
-                        { label: 'Steel', data: [20, 22, 21, 24, 25, 23], borderColor: 'rgba(16, 185, 129, 1)', tension: 0.4, fill: false }
+                        {
+                            label: 'Lumber',
+                            data: [12, 19, 13, 15, 12, 13],
+                            borderColor: 'rgba(99, 102, 241, 1)',
+                            backgroundColor: 'rgba(99, 102, 241, 0.25)',
+                            tension: 0.35,
+                            fill: true,
+                        },
+                        {
+                            label: 'Steel',
+                            data: [20, 22, 21, 24, 25, 23],
+                            borderColor: 'rgba(34, 211, 238, 1)',
+                            backgroundColor: 'rgba(34, 211, 238, 0.2)',
+                            tension: 0.35,
+                            fill: true,
+                        }
                     ]
                 },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#cbd5f5',
+                                usePointStyle: true,
+                                boxWidth: 10,
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(148, 163, 184, 0.12)' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
             });
-
         }
 
         // --- SETTINGS & UPDATES ---

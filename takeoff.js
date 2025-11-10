@@ -1,11 +1,4 @@
 import { LifecycleManager } from './services/lifecycle-manager.js';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-
-if (pdfjsLib?.GlobalWorkerOptions) {
-    const workerUrl = new URL('./vendor/pdfjs/pdf.worker.mjs', import.meta.url);
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl.toString();
-    pdfjsLib.GlobalWorkerOptions.workerType = 'module';
-}
 
 const SUPPORTED_IMAGE_TYPES = new Set([
     'image/png',
@@ -114,9 +107,6 @@ function formatMeta(drawing) {
     if (drawing.trade) parts.push(drawing.trade);
     if (drawing.floor) parts.push(`Floor ${drawing.floor}`);
     if (drawing.page) parts.push(`Page ${drawing.page}`);
-    if (drawing.type === 'pdf' && drawing.totalPages) {
-        parts.push(`${drawing.totalPages} page${drawing.totalPages > 1 ? 's' : ''}`);
-    }
     return parts.filter(Boolean).join(' • ');
 }
 
@@ -180,7 +170,6 @@ export class TakeoffManager {
         this.updateActiveDrawingDisplay();
         this.updatePlanVisibility();
         this.updateZoomIndicator();
-        this.updatePdfControls();
         this.updateScaleControls();
         this.updateCountToolbarVisibility();
         this.updateFullscreenButton();
@@ -197,7 +186,6 @@ export class TakeoffManager {
             window.removeEventListener('resize', this.handlers.windowResize);
         }
         this.lifecycle?.cleanup?.();
-        this.closePdfViewer({ silent: true });
         if (this.state.isFullscreen) {
             this.setFullscreen(false);
         }
@@ -229,17 +217,6 @@ export class TakeoffManager {
             zoomIndicator: byId('takeoffZoomIndicator'),
             status: byId('takeoffStatus'),
             activeMeta: byId('takeoffActiveMeta'),
-            pdfControls: byId('takeoffPdfControls'),
-            pdfPrevBtn: byId('takeoffPdfPrev'),
-            pdfNextBtn: byId('takeoffPdfNext'),
-            pdfPageInput: byId('takeoffPdfPageInput'),
-            pdfPageTotal: byId('takeoffPdfPageTotal'),
-            pdfOpenBtn: byId('takeoffPdfOpen'),
-            pdfDownloadBtn: byId('takeoffPdfDownload'),
-            pdfModal: byId('takeoffPdfModal'),
-            pdfModalOverlay: byId('takeoffPdfModalOverlay'),
-            pdfModalClose: byId('takeoffPdfModalClose'),
-            pdfFrame: byId('takeoffPdfFrame'),
             fullscreenBtn: byId('takeoffFullscreenBtn'),
             fullScreenToggle: byId('takeoffFullScreenToggle'),
             countToolbar: byId('takeoffCountToolbar'),
@@ -272,13 +249,6 @@ export class TakeoffManager {
             planStage,
             modeSelect,
             scaleInput,
-            pdfPrevBtn,
-            pdfNextBtn,
-            pdfPageInput,
-            pdfOpenBtn,
-            pdfDownloadBtn,
-            pdfModalOverlay,
-            pdfModalClose,
             fullscreenBtn,
             fullScreenToggle,
             countColor,
@@ -321,24 +291,6 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(planStage, 'pointerleave', () => this.clearPreviewPoint());
         this.lifecycle.addEventListener(planStage, 'dblclick', (event) => this.handleDoubleClick(event));
         this.lifecycle.addEventListener(planStage, 'contextmenu', (event) => this.handleContextMenu(event));
-
-        this.lifecycle.addEventListener(pdfPrevBtn, 'click', () => this.navigatePdfPage(-1));
-        this.lifecycle.addEventListener(pdfNextBtn, 'click', () => this.navigatePdfPage(1));
-        this.lifecycle.addEventListener(pdfPageInput, 'change', (event) => {
-            const value = parseInt(event.target.value, 10);
-            if (Number.isFinite(value)) {
-                this.jumpToPdfPage(value);
-            } else {
-                this.updatePdfToolbar(this.getActiveDrawing());
-            }
-        });
-        const openPdfHandler = () => this.openActivePdfInViewer();
-        this.lifecycle.addEventListener(pdfOpenBtn, 'click', openPdfHandler);
-        this.lifecycle.addEventListener(pdfDownloadBtn, 'click', () => this.downloadActivePdf());
-
-        const closeModalHandler = () => this.closePdfViewer();
-        this.lifecycle.addEventListener(pdfModalOverlay, 'click', closeModalHandler);
-        this.lifecycle.addEventListener(pdfModalClose, 'click', closeModalHandler);
 
         this.lifecycle.addEventListener(fullscreenBtn, 'click', () => this.toggleFullscreen());
         this.lifecycle.addEventListener(fullScreenToggle, 'click', () => this.toggleFullscreen());
@@ -1129,7 +1081,6 @@ export class TakeoffManager {
                 URL.revokeObjectURL(drawing.previewUrl);
                 drawing.previewUrl = null;
             }
-            drawing.pdfDoc?.destroy?.();
         });
         this.state.drawings = [];
         this.measurements.clear();
@@ -1148,7 +1099,9 @@ export class TakeoffManager {
         for (const file of files) {
             try {
                 const drawing = await this.createDrawingFromFile(file);
-                newDrawings.push(drawing);
+                if (drawing) {
+                    newDrawings.push(drawing);
+                }
             } catch (error) {
                 this.services.toast(`Unable to load ${file.name}: ${error.message}`, 'error');
                 console.error('Failed to load drawing', error);
@@ -1179,34 +1132,24 @@ export class TakeoffManager {
     async createDrawingFromFile(file) {
         const id = createId();
         const objectUrl = URL.createObjectURL(file);
-        const base = {
+        if (!SUPPORTED_IMAGE_TYPES.has(file.type)) {
+            URL.revokeObjectURL(objectUrl);
+            throw new Error('Unsupported file type. Upload PNG, JPG, GIF, or WebP plans.');
+        }
+
+        return {
             id,
             name: file.name,
             trade: '',
             floor: '',
             page: '',
             createdAt: Date.now(),
-            type: SUPPORTED_IMAGE_TYPES.has(file.type) ? 'image' : 'pdf',
+            type: 'image',
             objectUrl,
-            file
-        };
-
-        if (base.type === 'image') {
-            return {
-                ...base,
-                previewUrl: objectUrl,
-                naturalWidth: null,
-                naturalHeight: null
-            };
-        }
-
-        const pdfDoc = await pdfjsLib.getDocument({ url: objectUrl }).promise;
-        return {
-            ...base,
-            pdfDoc,
-            totalPages: pdfDoc.numPages,
-            currentPage: 1,
-            previewUrl: null
+            file,
+            previewUrl: objectUrl,
+            naturalWidth: null,
+            naturalHeight: null
         };
     }
 
@@ -1249,7 +1192,7 @@ export class TakeoffManager {
 
         drawingTableBody.innerHTML = drawings.map((drawing) => {
             const isActive = drawing.id === activeDrawingId;
-            const typeLabel = drawing.type === 'pdf' ? 'PDF Document' : 'Image';
+            const typeLabel = 'Image Plan';
             return `
                 <tr data-id="${escapeHtml(drawing.id)}" class="${isActive ? 'is-active' : ''}">
                     <td>
@@ -1569,7 +1512,6 @@ export class TakeoffManager {
         if (removed?.objectUrl) {
             URL.revokeObjectURL(removed.objectUrl);
         }
-        removed?.pdfDoc?.destroy?.();
         this.measurements.delete(id);
         this.measurementCounters.delete(id);
 
@@ -1807,7 +1749,7 @@ export class TakeoffManager {
         this.updatePdfControls(drawing);
     }
 
-    async updatePlanPreview(drawing) {
+        async updatePlanPreview(drawing) {
         const token = ++this.previewToken;
         const { planPreview, planInner, canvas } = this.elements;
         if (!planPreview || !planInner) {
@@ -1826,12 +1768,14 @@ export class TakeoffManager {
             return;
         }
 
-        if (drawing.type === 'image') {
-            await this.loadImagePreview(drawing, token);
-        } else {
-            await this.loadPdfPreview(drawing, token);
+        if (!drawing.previewUrl) {
+            planPreview.removeAttribute('src');
+            return;
         }
+
+        await this.loadImagePreview(drawing, token);
     }
+
 
     async loadImagePreview(drawing, token) {
         const { planPreview, canvas, planInner } = this.elements;
@@ -1864,38 +1808,6 @@ export class TakeoffManager {
         });
     }
 
-    async loadPdfPreview(drawing, token) {
-        const { planPreview, planInner } = this.elements;
-        if (!planPreview || !drawing?.pdfDoc) return;
-
-        const pageNumber = clamp(drawing.currentPage || 1, 1, drawing.totalPages || 1);
-        try {
-            const page = await drawing.pdfDoc.getPage(pageNumber);
-            if (token !== this.previewToken) return;
-            const viewport = page.getViewport({ scale: 1.25 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            await page.render({ canvasContext: context, viewport }).promise;
-            if (token !== this.previewToken) return;
-            const dataUrl = canvas.toDataURL();
-            drawing.previewUrl = dataUrl;
-            drawing.currentPage = pageNumber;
-            planPreview.src = dataUrl;
-            this.sizeCanvasToDrawing({
-                naturalWidth: viewport.width,
-                naturalHeight: viewport.height
-            });
-            if (planInner) {
-                planInner.style.transform = `scale(${this.state.zoom})`;
-            }
-        } catch (error) {
-            if (token !== this.previewToken) return;
-            console.error('Unable to render PDF page', error);
-            this.services.toast('Unable to render PDF preview.', 'error');
-        }
-    }
 
     sizeCanvasToDrawing(drawing) {
         const { canvas, planInner } = this.elements;
@@ -1912,30 +1824,6 @@ export class TakeoffManager {
         }
     }
 
-    updatePdfControls(drawing = this.getActiveDrawing()) {
-        const { pdfControls, pdfPageInput, pdfPageTotal, pdfDownloadBtn, pdfOpenBtn } = this.elements;
-        const isPdf = Boolean(drawing && drawing.type === 'pdf');
-        const totalPages = drawing?.totalPages || 1;
-        if (pdfControls) {
-            pdfControls.classList.toggle('is-hidden', !isPdf);
-        }
-        if (pdfPageInput) {
-            pdfPageInput.value = drawing ? drawing.currentPage || 1 : 1;
-            pdfPageInput.max = totalPages;
-            pdfPageInput.disabled = !isPdf;
-        }
-        if (pdfPageTotal) {
-            pdfPageTotal.textContent = `of ${totalPages}`;
-        }
-        const buttons = [pdfDownloadBtn, pdfOpenBtn];
-        buttons.forEach((btn) => {
-            if (btn) {
-                btn.toggleAttribute('aria-hidden', !isPdf);
-                btn.disabled = !isPdf;
-                btn.classList.toggle('is-hidden', !isPdf && btn === pdfOpenBtn);
-            }
-        });
-    }
 
     updateStatus(message) {
         const { status } = this.elements;
@@ -1969,92 +1857,6 @@ export class TakeoffManager {
     resetZoom() {
         this.state.zoom = 1;
         this.applyZoom();
-    }
-
-    async navigatePdfPage(delta) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing || drawing.type !== 'pdf') {
-            return;
-        }
-        const nextPage = clamp((drawing.currentPage || 1) + delta, 1, drawing.totalPages || 1);
-        if (nextPage === drawing.currentPage) return;
-        drawing.currentPage = nextPage;
-        await this.updateActiveDrawingDisplay();
-    }
-
-    async jumpToPdfPage(pageNumber) {
-        const drawing = this.getActiveDrawing();
-        if (!drawing || drawing.type !== 'pdf') {
-            return;
-        }
-        const nextPage = clamp(pageNumber, 1, drawing.totalPages || 1);
-        if (nextPage === drawing.currentPage) {
-            this.updatePdfToolbar(drawing);
-            return;
-        }
-        drawing.currentPage = nextPage;
-        await this.updateActiveDrawingDisplay();
-    }
-
-    updatePdfToolbar(drawing) {
-        const { pdfPageInput, pdfPageTotal } = this.elements;
-        if (!pdfPageInput || !pdfPageTotal) return;
-        const totalPages = drawing?.totalPages || 1;
-        pdfPageInput.value = drawing?.currentPage || 1;
-        pdfPageInput.max = totalPages;
-        pdfPageTotal.textContent = `of ${totalPages}`;
-    }
-
-    openActivePdfInViewer() {
-        const drawing = this.getActiveDrawing();
-        if (!drawing || drawing.type !== 'pdf') {
-            this.services.toast('Select a PDF drawing first.', 'warning');
-            return;
-        }
-        const { pdfModal, pdfFrame } = this.elements;
-        if (!pdfModal || !pdfFrame) return;
-        const page = drawing.currentPage || 1;
-        pdfFrame.src = `${drawing.objectUrl}#page=${page}`;
-        pdfModal.setAttribute('aria-hidden', 'false');
-        pdfModal.classList.add('is-open');
-    }
-
-    openActivePdfInNewTab() {
-        const drawing = this.getActiveDrawing();
-        if (!drawing || drawing.type !== 'pdf') {
-            this.services.toast('Select a PDF drawing first.', 'warning');
-            return;
-        }
-        const page = drawing.currentPage || 1;
-        const url = `${drawing.objectUrl}#page=${page}`;
-        if (typeof window !== 'undefined') {
-            window.open(url, '_blank', 'noopener');
-        }
-        this.updateStatus('PDF opened in a new browser tab.');
-    }
-
-    closePdfViewer({ silent = false } = {}) {
-        const { pdfModal, pdfFrame } = this.elements;
-        if (!pdfModal || !pdfFrame) return;
-        pdfModal.setAttribute('aria-hidden', 'true');
-        pdfModal.classList.remove('is-open');
-        pdfFrame.removeAttribute('src');
-        if (!silent) {
-            this.updateStatus('PDF reader closed.');
-        }
-    }
-
-    downloadActivePdf() {
-        const drawing = this.getActiveDrawing();
-        if (!drawing || drawing.type !== 'pdf') {
-            this.services.toast('Select a PDF drawing first.', 'warning');
-            return;
-        }
-        const link = document.createElement('a');
-        link.href = drawing.objectUrl;
-        link.download = drawing.name || 'drawing.pdf';
-        link.click();
-        this.updateStatus('PDF download started.');
     }
 
     toggleFullscreen() {

@@ -3,8 +3,12 @@ let firestoreInstance = null;
 let authInstance = null;
 let firebaseApi = null;
 let firebaseModulePromise = null;
+let firebaseOptions = null;
 
 function resolveFirebaseOptions() {
+    if (firebaseOptions) {
+        return firebaseOptions;
+    }
     if (typeof window === 'undefined') return null;
     try {
         const compatApp = window.firebase?.app?.();
@@ -59,9 +63,26 @@ async function loadFirebaseModules() {
     return firebaseModulePromise;
 }
 
+function hasRequiredConfig(options) {
+    if (!options) return false;
+    const required = ['apiKey', 'authDomain', 'projectId', 'appId'];
+    return required.every(key => typeof options[key] === 'string' && options[key].trim().length > 0);
+}
+
+export function setFirebaseConfig(options) {
+    const normalized = hasRequiredConfig(options) ? { ...options } : null;
+    const previous = firebaseOptions ? JSON.stringify(firebaseOptions) : null;
+    const next = normalized ? JSON.stringify(normalized) : null;
+    firebaseOptions = normalized;
+    if (previous !== next) {
+        appInstance = null;
+        firestoreInstance = null;
+        authInstance = null;
+    }
+}
+
 export function isFirebaseConfigured() {
-    const options = resolveFirebaseOptions();
-    return Boolean(options && options.projectId);
+    return hasRequiredConfig(resolveFirebaseOptions());
 }
 
 function requireFirebaseApi() {
@@ -85,7 +106,7 @@ export async function initializeFirebase() {
 
     const options = resolveFirebaseOptions();
     if (!options) {
-        throw new Error('Firebase configuration is missing. Confirm that Firebase Hosting has injected the SDK.');
+        throw new Error('Firebase configuration is missing. Add your web app credentials in the settings panel.');
     }
 
     const api = await loadFirebaseModules();
