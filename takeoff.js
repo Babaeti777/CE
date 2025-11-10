@@ -329,13 +329,33 @@ export class TakeoffManager {
             const row = document.createElement('tr');
             row.dataset.id = drawing.id;
             row.className = drawing.id === this.state.currentDrawingId ? 'is-active' : '';
-            row.innerHTML = `
-                <td>${drawing.name || 'Untitled'}</td>
-                <td>${drawing.trade || '—'}</td>
-                <td>${drawing.floor || '—'}</td>
-                <td>${drawing.notes || ''}</td>
-                <td class="text-right"><button type="button" class="btn btn-ghost" data-action="remove-drawing">Remove</button></td>
-            `;
+
+            const nameCell = document.createElement('td');
+            nameCell.textContent = drawing.name || 'Untitled';
+            row.appendChild(nameCell);
+
+            const tradeCell = document.createElement('td');
+            tradeCell.textContent = drawing.trade || '—';
+            row.appendChild(tradeCell);
+
+            const floorCell = document.createElement('td');
+            floorCell.textContent = drawing.floor || '—';
+            row.appendChild(floorCell);
+
+            const notesCell = document.createElement('td');
+            notesCell.textContent = drawing.notes || '';
+            row.appendChild(notesCell);
+
+            const actionsCell = document.createElement('td');
+            actionsCell.className = 'text-right';
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn btn-ghost';
+            removeButton.dataset.action = 'remove-drawing';
+            removeButton.textContent = 'Remove';
+            actionsCell.appendChild(removeButton);
+            row.appendChild(actionsCell);
+
             body.appendChild(row);
         });
 
@@ -365,15 +385,32 @@ export class TakeoffManager {
             .forEach(measurement => {
                 const item = document.createElement('div');
                 item.className = 'takeoff-measurement-item';
-                item.innerHTML = `
-                    <div class="takeoff-measurement-meta">
-                        <span>${measurement.label}</span>
-                        <span class="text-muted text-sm">${measurement.mode.toUpperCase()} • ${formatNumber(measurement.value)} ${measurement.unit}</span>
-                    </div>
-                    <div class="takeoff-measurement-actions">
-                        <button type="button" class="btn btn-ghost" data-action="remove-measurement" data-id="${measurement.id}">Remove</button>
-                    </div>
-                `;
+                const meta = document.createElement('div');
+                meta.className = 'takeoff-measurement-meta';
+
+                const labelSpan = document.createElement('span');
+                labelSpan.textContent = measurement.label || '';
+                meta.appendChild(labelSpan);
+
+                const detailSpan = document.createElement('span');
+                detailSpan.className = 'text-muted text-sm';
+                detailSpan.textContent = `${measurement.mode.toUpperCase()} • ${formatNumber(measurement.value)}${measurement.unit ? ` ${measurement.unit}` : ''}`;
+                meta.appendChild(detailSpan);
+
+                const actions = document.createElement('div');
+                actions.className = 'takeoff-measurement-actions';
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn btn-ghost';
+                removeBtn.dataset.action = 'remove-measurement';
+                removeBtn.dataset.id = measurement.id;
+                removeBtn.textContent = 'Remove';
+                actions.appendChild(removeBtn);
+
+                item.appendChild(meta);
+                item.appendChild(actions);
+
                 container.appendChild(item);
             });
     }
@@ -401,10 +438,15 @@ export class TakeoffManager {
         byUnit.forEach((entry, unit) => {
             const summaryItem = document.createElement('div');
             summaryItem.className = 'takeoff-summary-item';
-            summaryItem.innerHTML = `
-                <span>${unit}</span>
-                <span>${formatNumber(entry.total)} (${entry.count} item${entry.count === 1 ? '' : 's'})</span>
-            `;
+
+            const unitSpan = document.createElement('span');
+            unitSpan.textContent = unit;
+            summaryItem.appendChild(unitSpan);
+
+            const totalSpan = document.createElement('span');
+            totalSpan.textContent = `${formatNumber(entry.total)} (${entry.count} item${entry.count === 1 ? '' : 's'})`;
+            summaryItem.appendChild(totalSpan);
+
             container.appendChild(summaryItem);
         });
     }
