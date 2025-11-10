@@ -2932,10 +2932,35 @@ import {
 
             let bidDateText = 'Date TBD';
             if (bidDateValue) {
-                const parsed = new Date(bidDateValue);
-                bidDateText = Number.isFinite(parsed.getTime())
-                    ? parsed.toLocaleDateString()
-                    : bidDateValue;
+                let parsed = null;
+                const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(bidDateValue);
+                if (isoMatch) {
+                    const [, yearStr, monthStr, dayStr] = isoMatch;
+                    const year = Number.parseInt(yearStr, 10);
+                    const month = Number.parseInt(monthStr, 10);
+                    const day = Number.parseInt(dayStr, 10);
+
+                    if (
+                        Number.isFinite(year)
+                        && Number.isFinite(month)
+                        && Number.isFinite(day)
+                        && month >= 1
+                        && month <= 12
+                        && day >= 1
+                        && day <= 31
+                    ) {
+                        parsed = new Date(year, month - 1, day);
+                    }
+                }
+
+                if (!parsed) {
+                    const fallback = new Date(bidDateValue);
+                    if (Number.isFinite(fallback.getTime())) {
+                        parsed = fallback;
+                    }
+                }
+
+                bidDateText = parsed ? parsed.toLocaleDateString() : bidDateValue;
             }
 
             const completionNumber = Number.parseInt(completionRaw, 10);
