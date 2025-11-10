@@ -172,6 +172,9 @@ import {
             try {
                 setSyncState('syncing', 'Checking for updates…');
                 const manifest = await fetchUpdateManifest();
+                if (manifest?.dataUrl) {
+                    state.databaseMeta.updateUrl = manifest.dataUrl;
+                }
                 const latestVersion = manifest?.latestVersion || null;
                 const currentVersion = getInstalledDatabaseVersion(cached);
                 const dataUrl = manifest?.dataUrl || DATABASE_SOURCE_URL;
@@ -218,17 +221,37 @@ import {
             state.laborRates = data.laborRates || {};
             state.equipmentRates = data.equipmentRates || {};
             state.regionalAdjustments = data.regionalAdjustments || {};
+
+            const previousMeta = state.databaseMeta || {};
+            const metadata = data.metadata || {};
             state.databaseMeta = {
-                version: data.version || '0.0.0',
-                lastUpdated: data.lastUpdated || null,
-                releaseNotes: data.releaseNotes || [],
-                sources: data.sources || [],
+                ...previousMeta,
+                version: data.version || metadata.version || previousMeta.version || '0.0.0',
+                lastUpdated: data.lastUpdated || metadata.lastUpdated || previousMeta.lastUpdated || null,
+                releaseNotes: data.releaseNotes || metadata.releaseNotes || previousMeta.releaseNotes || [],
+                sources: data.sources || metadata.sources || previousMeta.sources || [],
+                updateUrl: metadata.updateUrl || data.updateUrl || previousMeta.updateUrl || null,
+                description: metadata.description || previousMeta.description || '',
+                primarySource: metadata.primarySource || previousMeta.primarySource || '',
+                highlights: metadata.highlights || previousMeta.highlights || [],
             };
 
             if (persist) {
+                const persistedMetadata = {
+                    ...(data.metadata || {}),
+                    version: state.databaseMeta.version,
+                    lastUpdated: state.databaseMeta.lastUpdated,
+                    updateUrl: state.databaseMeta.updateUrl,
+                    description: state.databaseMeta.description,
+                    primarySource: state.databaseMeta.primarySource,
+                    highlights: state.databaseMeta.highlights,
+                    releaseNotes: state.databaseMeta.releaseNotes,
+                    sources: state.databaseMeta.sources,
+                };
                 const payload = {
                     ...data,
                     materialPrices: normalizedMaterials,
+                    metadata: persistedMetadata,
                 };
                 storage.setItem(DATABASE_STORAGE_KEY, JSON.stringify(payload));
                 persistDatabaseVersion(payload.version || state.databaseMeta.version);
@@ -418,18 +441,30 @@ import {
         function renderEstimatorItems() {
             const tbody = document.getElementById('estimatorItemsBody');
             const emptyState = document.getElementById('estimatorEmptyState');
+            const table = document.getElementById('quickEstimatorTable');
+            const wrapper = document.getElementById('quickEstimatorTableWrapper');
             if (!tbody) return;
 
             tbody.innerHTML = '';
             const items = getOrderedEstimatorItems();
 
             if (!items.length) {
-                if (emptyState) emptyState.style.display = 'block';
+                if (emptyState) emptyState.hidden = false;
+                if (table) {
+                    table.classList.add('is-hidden');
+                    table.setAttribute('aria-hidden', 'true');
+                }
+                if (wrapper) wrapper.classList.add('empty');
                 updateEstimatorSummaryTotals();
                 return;
             }
 
-            if (emptyState) emptyState.style.display = 'none';
+            if (emptyState) emptyState.hidden = true;
+            if (table) {
+                table.classList.remove('is-hidden');
+                table.setAttribute('aria-hidden', 'false');
+            }
+            if (wrapper) wrapper.classList.remove('empty');
             items.forEach(item => {
                 tbody.appendChild(buildEstimatorRow(item));
             });
@@ -871,6 +906,11 @@ import {
             return null;
         }
 
+        function getProjectDate(project) {
+            if (!project) return null;
+            return coerceDate(project.date) || coerceDate(project.updatedAt) || null;
+        }
+
         function formatDate(value, fallback = 'Invalid date') {
             try {
                 const date = coerceDate(value);
@@ -1065,8 +1105,27 @@ import {
                 state.pendingReleaseNotes = payload.metadata || null;
             }
 
-            if (persist && fromRemote) {
-                persistDatabase(payload);
+            if (persist) {
+                try {
+                    const persistedPayload = {
+                        ...payload,
+                        metadata: {
+                            ...(payload.metadata || {}),
+                            version: state.databaseMeta.version,
+                            lastUpdated: state.databaseMeta.lastUpdated,
+                            updateUrl: state.databaseMeta.updateUrl,
+                            description: state.databaseMeta.description,
+                            primarySource: state.databaseMeta.primarySource,
+                            highlights: state.databaseMeta.highlights,
+                            sources: state.databaseMeta.sources,
+                            releaseNotes: state.databaseMeta.releaseNotes,
+                        },
+                    };
+                    storage.setItem(DATABASE_STORAGE_KEY, JSON.stringify(persistedPayload));
+                    persistDatabaseVersion(state.databaseMeta.version);
+                } catch (error) {
+                    console.warn('Unable to persist material database payload.', error);
+                }
             }
 
             refreshMaterialDependentViews();
@@ -1147,53 +1206,6 @@ import {
                 scheduleAutoSync();
                 if (!autoApply && !state.pendingUpdate) {
                     setTimeout(() => setSyncBadge('Database synced', 'success'), SYNC_STATUS_RESET_DELAY);
-                }
-            }
-        }
-
-        function populateUpdateModal(metadata) {
-            const titleEl = document.getElementById('updateModalTitle');
-            const metaEl = document.getElementById('updateModalMeta');
-            const descriptionEl = document.getElementById('updateModalDescription');
-            const listEl = document.getElementById('updateChangeList');
-
-            if (!metadata) {
-                if (descriptionEl) descriptionEl.textContent = 'No update information available.';
-                if (listEl) listEl.innerHTML = '';
-                return;
-            }
-
-            if (titleEl) {
-                titleEl.textContent = metadata.releaseTitle || `Database Version ${metadata.version || ''}`;
-            }
-
-            if (metaEl) {
-                const details = [];
-                if (metadata.version) details.push(`Version ${metadata.version}`);
-                if (metadata.lastUpdated) details.push(formatDate(metadata.lastUpdated));
-                if (metadata.primarySource) details.push(metadata.primarySource);
-                metaEl.textContent = details.join(' • ');
-            }
-
-            if (descriptionEl) {
-                descriptionEl.textContent = metadata.description || 'The latest cost data is ready to apply.';
-            }
-
-            if (listEl) {
-                listEl.innerHTML = '';
-                const highlights = metadata.highlights || [];
-                if (highlights.length === 0) {
-                    const li = document.createElement('li');
-                    li.className = 'update-item';
-                    li.innerHTML = `<span class="update-icon">•</span><span>No release notes were provided.</span>`;
-                    listEl.appendChild(li);
-                } else {
-                    highlights.forEach(item => {
-                        const li = document.createElement('li');
-                        li.className = 'update-item';
-                        li.innerHTML = `<span class="update-icon">✓</span><span>${item}</span>`;
-                        listEl.appendChild(li);
-                    });
                 }
             }
         }
@@ -1869,6 +1881,14 @@ import {
                 toggleSidebar();
             });
             document.getElementById('estimatorForm')?.addEventListener('submit', handleEstimatorSubmit);
+            const quickEstimatorTable = document.getElementById('quickEstimatorTable');
+            quickEstimatorTable?.addEventListener('input', handleEstimatorItemInput);
+            quickEstimatorTable?.addEventListener('change', handleEstimatorItemChange);
+            quickEstimatorTable?.addEventListener('click', handleEstimatorItemClick);
+            document.getElementById('addCustomEstimatorBtn')?.addEventListener('click', (event) => {
+                event.preventDefault();
+                addCustomEstimatorItem();
+            });
             document.getElementById('laborCost')?.addEventListener('input', handleLaborMultiplierChange);
             document.querySelectorAll('.material-input').forEach(input => input.addEventListener('change', handleMaterialSelection));
             document.getElementById('saveProjectBtn')?.addEventListener('click', saveProject);
@@ -2015,6 +2035,7 @@ import {
             lifecycle.addEventListener(document, 'keydown', handleCalculatorKeydown);
             updateCalcMode(state.calcMode);
             updateLineItemEmptyState();
+            refreshLineItemCategoryOptions();
 
             handleSidebarResize();
         }
@@ -2653,6 +2674,14 @@ import {
 
         function refreshLineItemCategoryOptions() {
             const categories = getSortedLineItemCategories();
+            const addItemButton = document.getElementById('addLineItemBtn');
+            if (addItemButton) {
+                const hasCategories = categories.length > 0;
+                addItemButton.disabled = !hasCategories;
+                addItemButton.setAttribute('aria-disabled', hasCategories ? 'false' : 'true');
+                addItemButton.classList.toggle('is-loading', !hasCategories);
+                addItemButton.setAttribute('aria-busy', hasCategories ? 'false' : 'true');
+            }
             document.querySelectorAll('.line-item-row').forEach(row => {
                 const categorySelect = row.querySelector('[data-field="category"]');
                 const descriptionSelect = row.querySelector('[data-field="description"]');
@@ -3381,15 +3410,18 @@ import {
             div.style.borderRadius = '12px';
             div.style.marginBottom = '1rem';
             const typeLabel = project.estimateType === 'detailed' ? 'Detailed' : 'Quick';
+            const projectDate = getProjectDate(project);
+            const dateLabel = projectDate ? projectDate.toLocaleDateString() : 'Date unavailable';
+            const projectName = project.name || 'Untitled Project';
             div.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
                     <div style="flex: 1 1 auto; min-width: 0;">
-                        <h4 style="font-weight: 600; margin: 0; word-break: break-word; overflow-wrap: anywhere;">${project.name}</h4>
+                        <h4 style="font-weight: 600; margin: 0; word-break: break-word; overflow-wrap: anywhere;">${projectName}</h4>
                         <p style="color: var(--gray-600); font-size: 0.875rem; margin: 0.25rem 0 0; word-break: break-word; overflow-wrap: anywhere;">${project.type || ''}${project.sqft ? ' • ' + project.sqft + ' sqft' : ''} • ${typeLabel}</p>
                     </div>
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; text-align: right;">
                         <p style="font-weight: 700; color: var(--primary); margin: 0;">${formatCurrency(project.total)}</p>
-                        <p style="color: var(--gray-600); font-size: 0.75rem; margin: 0;">${new Date(project.date).toLocaleDateString()}</p>
+                        <p style="color: var(--gray-600); font-size: 0.75rem; margin: 0;">${dateLabel}</p>
                         <select class="form-select project-status" data-id="${project.id}">
                             <option value="review" ${project.status === 'review' ? 'selected' : ''}>Under Review</option>
                             <option value="won" ${project.status === 'won' ? 'selected' : ''}>Won</option>
@@ -3410,9 +3442,14 @@ import {
             const list = document.getElementById('projectsList');
             if (!list) return;
 
-            const filteredProjects = state.savedProjects.filter(p =>
-                p.name.toLowerCase().includes(searchTerm.toLowerCase())
-            );
+            const normalizedTerm = typeof searchTerm === 'string'
+                ? searchTerm.trim().toLowerCase()
+                : '';
+            const filteredProjects = state.savedProjects.filter(p => {
+                const name = typeof p?.name === 'string' ? p.name.toLowerCase() : '';
+                const type = typeof p?.type === 'string' ? p.type.toLowerCase() : '';
+                return !normalizedTerm || name.includes(normalizedTerm) || type.includes(normalizedTerm);
+            });
 
             if (filteredProjects.length === 0) {
                 list.innerHTML = `<p style="color: var(--gray-600);">No saved projects found.</p>`;
@@ -3737,7 +3774,14 @@ import {
 
             if (!recentList) return;
             recentList.innerHTML = '';
-            const recent = state.savedProjects.slice().sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0,3);
+            const recent = state.savedProjects
+                .slice()
+                .sort((a, b) => {
+                    const aTime = getProjectDate(a)?.getTime() ?? 0;
+                    const bTime = getProjectDate(b)?.getTime() ?? 0;
+                    return bTime - aTime;
+                })
+                .slice(0, 3);
             if (recent.length === 0) {
                 recentList.innerHTML = `<p style="color: var(--gray-600);">No saved projects.</p>`;
                 return;
@@ -3746,15 +3790,19 @@ import {
                 const div = document.createElement('div');
                 div.style = "padding: 1rem; background: var(--gray-100); border-radius: 12px; margin-bottom: 1rem; cursor:pointer;";
                 const typeLabel = p.estimateType === 'detailed' ? 'Detailed' : 'Quick';
+                const projectDate = getProjectDate(p);
+                const dateLabel = projectDate ? projectDate.toLocaleDateString() : 'Date unavailable';
+                const projectName = p.name || 'Untitled Project';
+
                 div.innerHTML = `
                     <div style="display:flex; justify-content: space-between; align-items:center;">
                         <div>
-                            <h4 style="font-weight:600;">${p.name}</h4>
+                            <h4 style="font-weight:600;">${projectName}</h4>
                             <p style="color: var(--gray-600); font-size:0.875rem;">${p.type || ''}${p.sqft ? ' • ' + p.sqft + ' sqft' : ''} • ${typeLabel}</p>
                         </div>
                         <div style="text-align:right;">
                             <p style="font-weight:700; color: var(--primary);">${formatCurrency(p.total)}</p>
-                            <p style="color: var(--gray-600); font-size:0.75rem;">${new Date(p.date).toLocaleDateString()}</p>
+                            <p style="color: var(--gray-600); font-size:0.75rem;">${dateLabel}</p>
                         </div>
                     </div>
                 `;
@@ -3842,24 +3890,44 @@ import {
             return res.json();
         }
 
-        function populateUpdateModal(manifest) {
+        function populateUpdateModal(manifestOrMetadata = {}) {
+            const rawMetadata = manifestOrMetadata.metadata || manifestOrMetadata;
             const titleEl = document.getElementById('updateTitle');
             const metaEl = document.getElementById('updateMeta');
             const summaryEl = document.getElementById('updateSummary');
             const highlightsEl = document.getElementById('updateHighlights');
 
-            if (titleEl) titleEl.textContent = manifest.title || 'Material Cost Update Available';
+            if (!titleEl && !metaEl && !summaryEl && !highlightsEl) {
+                return;
+            }
+
+            const title = rawMetadata.title || rawMetadata.releaseTitle || 'Material Cost Update Available';
+            const lastUpdated = rawMetadata.lastUpdated || manifestOrMetadata.lastUpdated || null;
+            const latestVersion = manifestOrMetadata.latestVersion || rawMetadata.latestVersion || rawMetadata.version || null;
+            const summary = rawMetadata.summary || rawMetadata.description || 'Apply the update to synchronize with the latest regional pricing feed.';
+            const highlights = Array.isArray(rawMetadata.highlights) && rawMetadata.highlights.length
+                ? rawMetadata.highlights
+                : ['Pricing aligned with latest market releases.'];
+
+            if (titleEl) {
+                titleEl.textContent = title;
+            }
+
             if (metaEl) {
                 const metaParts = [];
-                if (manifest.lastUpdated) metaParts.push(`Published ${formatDateForDisplay(manifest.lastUpdated)}`);
+                if (lastUpdated) metaParts.push(`Published ${formatDateForDisplay(lastUpdated)}`);
                 if (state.databaseMeta.version) metaParts.push(`Current: v${state.databaseMeta.version}`);
-                if (manifest.latestVersion) metaParts.push(`New: v${manifest.latestVersion}`);
+                if (latestVersion) metaParts.push(`New: v${latestVersion}`);
+                if (rawMetadata.primarySource) metaParts.push(rawMetadata.primarySource);
                 metaEl.textContent = metaParts.join(' • ');
             }
-            if (summaryEl) summaryEl.textContent = manifest.summary || 'Apply the update to synchronize with the latest regional pricing feed.';
+
+            if (summaryEl) {
+                summaryEl.textContent = summary;
+            }
+
             if (highlightsEl) {
                 highlightsEl.innerHTML = '';
-                const highlights = manifest.highlights && manifest.highlights.length ? manifest.highlights : ['Pricing aligned with latest market releases.'];
                 highlights.forEach(item => {
                     const li = document.createElement('li');
                     li.className = 'update-item';

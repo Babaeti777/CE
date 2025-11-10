@@ -244,6 +244,34 @@
                         </form>
                     </div>
                     <div>
+                        <div class="card" id="quickEstimatorCard">
+                            <div class="card-header align-start">
+                                <div>
+                                    <h3 class="card-title">Quick Scope Builder</h3>
+                                    <p class="card-subtitle">Review generated scopes or add allowances before finalizing totals.</p>
+                                </div>
+                                <button type="button" class="btn btn-secondary" id="addCustomEstimatorBtn">Add Custom Scope</button>
+                            </div>
+                            <div class="quick-estimator-table-wrapper" id="quickEstimatorTableWrapper">
+                                <table class="worksheet-table quick-estimator-table is-hidden" id="quickEstimatorTable" aria-describedby="quickEstimatorSummary">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Scope</th>
+                                            <th scope="col">Assembly</th>
+                                            <th scope="col">Quantity</th>
+                                            <th scope="col">Unit Cost</th>
+                                            <th scope="col" class="text-right">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="estimatorItemsBody"></tbody>
+                                </table>
+                                <p class="worksheet-empty" id="estimatorEmptyState">Generate pricing to populate the quick estimator or add a custom scope.</p>
+                            </div>
+                            <div class="quick-estimator-footer" id="quickEstimatorSummary">
+                                <span class="summary-label">Quick estimate subtotal</span>
+                                <span class="summary-value" id="estimatorMaterialsSubtotal">$0</span>
+                            </div>
+                        </div>
                         <div class="card" id="estimateWorkspace">
                             <div class="card-header align-start">
                                 <div>
@@ -591,6 +619,7 @@
                             <h4 class="section-subtitle">Preferences</h4>
                             <div class="form-group"><label class="form-label">Currency</label><select class="form-select"><option>USD ($)</option><option>EUR (€)</option><option>GBP (£)</option></select></div>
                             <div class="form-group"><label class="form-label">Default Tax Rate (%)</label><input type="number" class="form-input" value="8.5" step="0.1"></div>
+                            <div class="form-group"><label class="form-label" for="themeToggle">Appearance</label><button type="button" class="btn btn-secondary" id="themeToggle">Toggle Dark Mode</button><p class="form-hint">Switch between light and dark themes.</p></div>
                         </div>
                     </div>
                 </div>

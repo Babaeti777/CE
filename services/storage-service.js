@@ -6,8 +6,10 @@ function createScopedKey(prefix, key) {
 
 export function createStorageService({ prefix = 'ce' } = {}) {
     const availableDrivers = [];
-    const persistenceAllowed = typeof window !== 'undefined' && window?.__CE_ALLOW_PERSISTENCE === true;
-    if (persistenceAllowed && typeof window.localStorage !== 'undefined') {
+    const persistenceAllowed = typeof window !== 'undefined'
+        ? window?.__CE_ALLOW_PERSISTENCE !== false
+        : false;
+    if (persistenceAllowed && typeof window?.localStorage !== 'undefined') {
         availableDrivers.push(window.localStorage);
     }
 

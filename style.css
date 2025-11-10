@@ -984,6 +984,146 @@ body.sidebar-collapsed .main-content {
     gap: var(--space-md);
 }
 
+.quick-estimator-table-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.quick-estimator-table td {
+    vertical-align: top;
+}
+
+.estimator-scope-title {
+    font-weight: 600;
+}
+
+.estimator-scope-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.estimator-quantity-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.estimator-unit-input {
+    min-width: 120px;
+}
+
+.unit-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.unit-hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.estimator-total {
+    font-weight: 600;
+    text-align: right;
+}
+
+.link-btn {
+    border: none;
+    background: none;
+    color: var(--accent);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0;
+}
+
+.link-btn:hover,
+.link-btn:focus-visible {
+    text-decoration: underline;
+}
+
+.link-btn.danger {
+    color: var(--danger);
+}
+
+.quick-estimator-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-alt);
+}
+
+.quick-estimator-footer .summary-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.btn:disabled,
+.btn[disabled],
+.btn.is-loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn.is-loading::after {
+    content: '';
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    margin-left: 0.5rem;
+    animation: spin 0.8s linear infinite;
+}
+
+.global-loading-indicator {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18);
+    font-weight: 500;
+    color: var(--text);
+    z-index: 2000;
+}
+
+.global-loading-indicator::before {
+    content: '';
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .takeoff-plan-stage button.takeoff-fullscreen-toggle {
     position: absolute;
     top: var(--space-sm);
