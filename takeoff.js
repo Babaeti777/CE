@@ -27,6 +27,28 @@ function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value).replace(/[&<>'"]/g, (char) => {
+        switch (char) {
+            case '&':
+                return '&amp;';
+            case '<':
+                return '&lt;';
+            case '>':
+                return '&gt;';
+            case '"':
+                return '&quot;';
+            case "'":
+                return '&#39;';
+            default:
+                return char;
+        }
+    });
+}
+
 function formatMeta(drawing) {
     if (!drawing) {
         return '';
@@ -205,31 +227,7 @@ export class TakeoffManager {
             if (event.key === 'Escape' && this.state.isFullscreen) {
                 this.setFullscreen(false);
             }
-            if (valueA === valueB) return 0;
-            return valueA > valueB ? dir : -dir;
         });
-
-        if (this.elements.drawingTableBody) {
-            this.elements.drawingTableBody.innerHTML = sorted.map((drawing) => {
-                const isActive = drawing.id === activeDrawingId;
-                return `
-                    <tr data-id="${drawing.id}" class="${isActive ? 'is-active' : ''}">
-                        <td>${escapeHtml(drawing.name)}</td>
-                        <td>${escapeHtml(drawing.trade || '—')}</td>
-                        <td>${escapeHtml(drawing.floor || '—')}</td>
-                        <td>${escapeHtml(drawing.page || '—')}</td>
-                        <td class="text-right">
-                            <button type="button" class="btn btn-ghost btn-sm" data-action="activate">${isActive ? 'Active' : 'Open'}</button>
-                            <button type="button" class="btn btn-ghost btn-sm" data-action="remove">Remove</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        if (this.elements.drawingEmpty) {
-            this.elements.drawingEmpty.classList.toggle('is-hidden', sorted.length > 0);
-        }
     }
 
     cleanupDrawings() {
@@ -351,40 +349,36 @@ export class TakeoffManager {
             return;
         }
 
-        drawingTableBody.innerHTML = '';
         const drawings = this.getFilteredDrawings();
+        const activeDrawingId = this.state.currentDrawingId;
 
-        drawings.forEach((drawing) => {
-            const row = document.createElement('tr');
-            row.dataset.id = drawing.id;
-            if (drawing.id === this.state.currentDrawingId) {
-                row.classList.add('is-active');
-            }
-
-            row.innerHTML = `
-                <td>
-                    <div class="takeoff-drawing-name">
-                        <span class="takeoff-drawing-title">${drawing.name}</span>
-                        <span class="takeoff-drawing-subtitle">${drawing.type === 'pdf' ? 'PDF Document' : 'Image'}</span>
-                    </div>
-                </td>
-                <td>
-                    <input type="text" class="form-input takeoff-input" data-field="trade" value="${drawing.trade || ''}" placeholder="Trade">
-                </td>
-                <td>
-                    <input type="text" class="form-input takeoff-input" data-field="floor" value="${drawing.floor || ''}" placeholder="Floor">
-                </td>
-                <td>
-                    <input type="text" class="form-input takeoff-input" data-field="page" value="${drawing.page || ''}" placeholder="Page">
-                </td>
-                <td class="takeoff-actions">
-                    <button type="button" class="btn btn-secondary btn-sm" data-action="select">View</button>
-                    <button type="button" class="btn btn-ghost btn-sm" data-action="remove" aria-label="Remove drawing">Remove</button>
-                </td>
+        drawingTableBody.innerHTML = drawings.map((drawing) => {
+            const isActive = drawing.id === activeDrawingId;
+            const typeLabel = drawing.type === 'pdf' ? 'PDF Document' : 'Image';
+            return `
+                <tr data-id="${escapeHtml(drawing.id)}" class="${isActive ? 'is-active' : ''}">
+                    <td>
+                        <div class="takeoff-drawing-name">
+                            <span class="takeoff-drawing-title">${escapeHtml(drawing.name)}</span>
+                            <span class="takeoff-drawing-subtitle">${typeLabel}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="text" class="form-input takeoff-input" data-field="trade" value="${escapeHtml(drawing.trade || '')}" placeholder="Trade">
+                    </td>
+                    <td>
+                        <input type="text" class="form-input takeoff-input" data-field="floor" value="${escapeHtml(drawing.floor || '')}" placeholder="Floor">
+                    </td>
+                    <td>
+                        <input type="text" class="form-input takeoff-input" data-field="page" value="${escapeHtml(drawing.page || '')}" placeholder="Page">
+                    </td>
+                    <td class="takeoff-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" data-action="select">View</button>
+                        <button type="button" class="btn btn-ghost btn-sm" data-action="remove" aria-label="Remove drawing">Remove</button>
+                    </td>
+                </tr>
             `;
-
-            drawingTableBody.appendChild(row);
-        });
+        }).join('');
 
         if (drawingEmpty) {
             drawingEmpty.classList.toggle('is-hidden', drawings.length > 0);
