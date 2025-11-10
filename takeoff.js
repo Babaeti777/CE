@@ -1782,9 +1782,19 @@ export class TakeoffManager {
 
     updatePlanVisibility() {
         const drawing = this.getActiveDrawing();
-        const { planContainer } = this.elements;
+        const { planContainer, fullscreenBtn, fullScreenToggle } = this.elements;
+        const hasDrawing = Boolean(drawing);
         if (!planContainer) return;
-        planContainer.classList.toggle('is-hidden', !drawing);
+        planContainer.classList.toggle('is-hidden', !hasDrawing);
+        [fullscreenBtn, fullScreenToggle].forEach((btn) => {
+            if (btn) {
+                btn.disabled = !hasDrawing;
+                btn.classList.toggle('is-disabled', !hasDrawing);
+            }
+        });
+        if (!hasDrawing && this.state.isFullscreen) {
+            this.setFullscreen(false);
+        }
     }
 
     async updateActiveDrawingDisplay() {
@@ -2009,6 +2019,20 @@ export class TakeoffManager {
         pdfModal.classList.add('is-open');
     }
 
+    openActivePdfInNewTab() {
+        const drawing = this.getActiveDrawing();
+        if (!drawing || drawing.type !== 'pdf') {
+            this.services.toast('Select a PDF drawing first.', 'warning');
+            return;
+        }
+        const page = drawing.currentPage || 1;
+        const url = `${drawing.objectUrl}#page=${page}`;
+        if (typeof window !== 'undefined') {
+            window.open(url, '_blank', 'noopener');
+        }
+        this.updateStatus('PDF opened in a new browser tab.');
+    }
+
     closePdfViewer({ silent = false } = {}) {
         const { pdfModal, pdfFrame } = this.elements;
         if (!pdfModal || !pdfFrame) return;
@@ -2034,6 +2058,10 @@ export class TakeoffManager {
     }
 
     toggleFullscreen() {
+        if (!this.getActiveDrawing()) {
+            this.services.toast('Select a drawing before entering full view.', 'warning');
+            return;
+        }
         this.setFullscreen(!this.state.isFullscreen);
     }
 
@@ -2052,6 +2080,9 @@ export class TakeoffManager {
         }
         if (fullscreenBtn) {
             fullscreenBtn.textContent = this.state.isFullscreen ? 'Exit Full Screen' : 'Full Screen';
+        }
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.toggle('takeoff-fullscreen-active', this.state.isFullscreen);
         }
         if (!this.state.isFullscreen && document.fullscreenElement) {
             document.exitFullscreen?.();
