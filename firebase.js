@@ -6,83 +6,12 @@ let firestoreInstance = null;
 let authInstance = null;
 let firebaseApi = null;
 let firebaseModulePromise = null;
-let manualConfig = null;
-
-function normalizeConfig(config = {}) {
-    const normalized = {};
-    Object.keys(config).forEach(key => {
-        const value = config[key];
-        if (value !== undefined && value !== null && value !== '') {
-            normalized[key] = String(value).trim();
-        }
-    });
-    return normalized;
-}
-
-function loadStoredConfig() {
-    if (manualConfig) return manualConfig;
-    if (typeof window === 'undefined') return null;
-    try {
-        const raw = window.localStorage?.getItem(CONFIG_STORAGE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-            manualConfig = normalizeConfig(parsed);
-            return manualConfig;
-        }
-    } catch (error) {
-        console.warn('Unable to parse stored Firebase configuration', error);
-    }
-    return null;
-}
-
-function persistConfig(config) {
-    if (typeof window === 'undefined') return;
-    try {
-        window.localStorage?.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
-    } catch (error) {
-        console.warn('Unable to persist Firebase configuration', error);
-    }
-}
-
-function clearCachedInstances() {
-    appInstance = null;
-    firestoreInstance = null;
-    authInstance = null;
-    firebaseApi = null;
-    firebaseModulePromise = null;
-}
-
-export function setFirebaseConfig(config = {}) {
-    const normalized = normalizeConfig(config);
-    const missing = REQUIRED_CONFIG_KEYS.filter(key => !normalized[key]);
-    if (missing.length) {
-        throw new Error(`Firebase configuration is missing: ${missing.join(', ')}`);
-    }
-    manualConfig = normalized;
-    persistConfig(manualConfig);
-    clearCachedInstances();
-}
-
-export function getFirebaseConfig() {
-    return loadStoredConfig();
-}
-
-export function clearFirebaseConfig() {
-    manualConfig = null;
-    clearCachedInstances();
-    if (typeof window !== 'undefined') {
-        try {
-            window.localStorage?.removeItem(CONFIG_STORAGE_KEY);
-        } catch (error) {
-            console.warn('Unable to clear stored Firebase configuration', error);
-        }
-    }
-}
+let firebaseOptions = null;
 
 function resolveFirebaseOptions() {
-    const stored = loadStoredConfig();
-    if (stored) return stored;
+    if (firebaseOptions) {
+        return firebaseOptions;
+    }
     if (typeof window === 'undefined') return null;
     try {
         const compatApp = window.firebase?.app?.();
@@ -138,9 +67,26 @@ async function loadFirebaseModules() {
     return firebaseModulePromise;
 }
 
+function hasRequiredConfig(options) {
+    if (!options) return false;
+    const required = ['apiKey', 'authDomain', 'projectId', 'appId'];
+    return required.every(key => typeof options[key] === 'string' && options[key].trim().length > 0);
+}
+
+export function setFirebaseConfig(options) {
+    const normalized = hasRequiredConfig(options) ? { ...options } : null;
+    const previous = firebaseOptions ? JSON.stringify(firebaseOptions) : null;
+    const next = normalized ? JSON.stringify(normalized) : null;
+    firebaseOptions = normalized;
+    if (previous !== next) {
+        appInstance = null;
+        firestoreInstance = null;
+        authInstance = null;
+    }
+}
+
 export function isFirebaseConfigured() {
-    const options = resolveFirebaseOptions();
-    return Boolean(options && options.projectId);
+    return hasRequiredConfig(resolveFirebaseOptions());
 }
 
 function requireFirebaseApi() {
@@ -164,7 +110,7 @@ export async function initializeFirebase() {
 
     const options = resolveFirebaseOptions();
     if (!options) {
-        throw new Error('Firebase configuration is missing. Add your Firebase web app keys in the settings tab.');
+        throw new Error('Firebase configuration is missing. Add your web app credentials in the settings panel.');
     }
 
     manualConfig = normalizeConfig(options);
