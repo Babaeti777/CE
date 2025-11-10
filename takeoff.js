@@ -1302,7 +1302,8 @@ export class TakeoffManager {
                 naturalHeight: null,
                 rotation: 0,
                 annotations: [],
-                notes: ''
+                notes: '',
+                planNotes: []
             };
         }
 
@@ -1343,6 +1344,7 @@ export class TakeoffManager {
             rotation: 0,
             annotations: [],
             notes: '',
+            planNotes: [],
             pdfData: arrayBuffer,
             pdfPageCount: pdf.numPages,
             currentPage: pageNumber,
@@ -1611,6 +1613,23 @@ export class TakeoffManager {
         }
     }
 
+    ensurePlanNotesCollection(drawing) {
+        if (!drawing) {
+            return [];
+        }
+
+        if (!Array.isArray(drawing.planNotes)) {
+            if (Array.isArray(drawing.notes)) {
+                drawing.planNotes = [...drawing.notes];
+                drawing.notes = '';
+            } else {
+                drawing.planNotes = [];
+            }
+        }
+
+        return drawing.planNotes;
+    }
+
     renderNotes(drawing) {
         const { noteList } = this.elements;
         if (!noteList) {
@@ -1622,7 +1641,7 @@ export class TakeoffManager {
             return;
         }
 
-        const notes = Array.isArray(drawing.notes) ? drawing.notes : [];
+        const notes = this.ensurePlanNotesCollection(drawing);
         if (!notes.length) {
             noteList.innerHTML = '<li class="takeoff-note-item takeoff-note-empty">No notes yet. Add context before sharing takeoffs.</li>';
             return;
@@ -1656,11 +1675,9 @@ export class TakeoffManager {
             return;
         }
 
-        if (!Array.isArray(drawing.notes)) {
-            drawing.notes = [];
-        }
+        const notes = this.ensurePlanNotesCollection(drawing);
 
-        drawing.notes.unshift({
+        notes.unshift({
             id: createId('note'),
             text,
             createdAt: Date.now()
@@ -1682,7 +1699,7 @@ export class TakeoffManager {
         }
 
         const noteId = item.getAttribute('data-note-id');
-        drawing.notes = (drawing.notes || []).filter((note) => note.id !== noteId);
+        drawing.planNotes = this.ensurePlanNotesCollection(drawing).filter((note) => note.id !== noteId);
         this.renderNotes(drawing);
         this.showToast('Note removed.', 'info');
     }
