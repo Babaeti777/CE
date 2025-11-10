@@ -479,9 +479,8 @@ export class TakeoffManager {
         }
 
         const rawPoints = Array.isArray(measurement.points) ? measurement.points : [];
-        const scale = Number.isFinite(this.state.zoom) ? this.state.zoom : 1;
         const points = rawPoints
-            .map((point) => this.toCanvasPoint(point, scale))
+            .map((point) => this.toCanvasPoint(point))
             .filter(Boolean);
 
         if (!points.length) {
@@ -514,7 +513,7 @@ export class TakeoffManager {
         context.stroke();
 
         if (measurement.label) {
-            const anchorPoint = this.getLabelAnchor(measurement, points, scale);
+            const anchorPoint = this.getLabelAnchor(measurement, points);
             if (anchorPoint) {
                 context.fillStyle = measurement.labelColor || context.strokeStyle;
                 context.font = measurement.labelFont || '12px sans-serif';
@@ -531,7 +530,7 @@ export class TakeoffManager {
         context.restore();
     }
 
-    toCanvasPoint(point, scale) {
+    toCanvasPoint(point) {
         if (!point) {
             return null;
         }
@@ -540,12 +539,12 @@ export class TakeoffManager {
         if (!Number.isFinite(x) || !Number.isFinite(y)) {
             return null;
         }
-        return { x: x * scale, y: y * scale };
+        return { x, y };
     }
 
-    getLabelAnchor(measurement, points, scale) {
+    getLabelAnchor(measurement, points) {
         if (measurement.labelPosition) {
-            return this.toCanvasPoint(measurement.labelPosition, scale);
+            return this.toCanvasPoint(measurement.labelPosition);
         }
         return points[points.length - 1] || null;
     }
