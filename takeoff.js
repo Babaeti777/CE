@@ -29,8 +29,6 @@ const MODE_LABELS = {
     diameter: 'Diameter'
 };
 
-const STORAGE_KEY = 'takeoff::drawings';
-
 const DEFAULT_COUNT_SETTINGS = {
     color: '#ef4444',
     shape: 'circle',
@@ -58,10 +56,6 @@ function normalizeString(value) {
 
 function createId(prefix = 'drawing') {
     return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
-}
-
-function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
 }
 
 function distance(a, b) {
@@ -135,17 +129,6 @@ function escapeHtml(value) {
     });
 }
 
-function normalizeString(value) {
-    return (value ?? '').toString().toLowerCase().trim();
-}
-
-function byId(id) {
-    if (typeof document === 'undefined') {
-        return null;
-    }
-    return document.getElementById(id);
-}
-
 function formatMeta(drawing) {
     if (!drawing) {
         return '';
@@ -155,18 +138,6 @@ function formatMeta(drawing) {
     if (drawing.floor) parts.push(`Floor ${drawing.floor}`);
     if (drawing.page) parts.push(`Page ${drawing.page}`);
     return parts.filter(Boolean).join(' • ');
-}
-
-function escapeHtml(value) {
-    if (value === null || value === undefined) {
-        return '';
-    }
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 export class TakeoffManager {
@@ -295,8 +266,21 @@ export class TakeoffManager {
             clearBtn: byId('takeoffClearBtn'),
             exportCsvBtn: byId('takeoffExportCsvBtn'),
             pushBtn: byId('takeoffPushBtn'),
-            rotateLeftBtn: byId('takeoffRotateLeftBtn'),
-            rotateRightBtn: byId('takeoffRotateRightBtn'),
+            drawingForm: byId('takeoffDrawingForm'),
+            drawingName: byId('takeoffDrawingName'),
+            drawingTrade: byId('takeoffDrawingTrade'),
+            drawingFloor: byId('takeoffDrawingFloor'),
+            drawingNotes: byId('takeoffDrawingNotes'),
+            measurementForm: byId('takeoffMeasurementForm'),
+            measurementLabel: byId('measurementLabelInput'),
+            measurementMode: byId('measurementModeSelect'),
+            measurementValue: byId('measurementValueInput'),
+            measurementUnit: byId('measurementUnitInput'),
+            measurementList: byId('takeoffMeasurementList'),
+            summaryContainer: byId('takeoffSummary'),
+            noteInput: byId('takeoffNoteInput'),
+            addNoteBtn: byId('takeoffAddNoteBtn'),
+            noteList: byId('takeoffNoteList'),
             openSourceBtn: byId('takeoffOpenSourceBtn'),
             noteModeBtn: byId('takeoffNoteModeBtn'),
             annotationLayer: byId('takeoffAnnotationLayer')
@@ -332,13 +316,17 @@ export class TakeoffManager {
             clearBtn,
             exportCsvBtn,
             pushBtn,
-            rotateLeftBtn,
-            rotateRightBtn,
+            drawingForm,
+            measurementForm,
+            addNoteBtn,
+            noteList,
             openSourceBtn,
             noteModeBtn,
             annotationLayer
         } = this.elements;
 
+        this.lifecycle.addEventListener(drawingForm, 'submit', (event) => this.handleDrawingFormSubmit(event));
+        this.lifecycle.addEventListener(measurementForm, 'submit', (event) => this.handleMeasurementFormSubmit(event));
         this.lifecycle.addEventListener(drawingInput, 'change', (event) => this.handleDrawingUpload(event));
         this.lifecycle.addEventListener(sortSelect, 'change', (event) => {
             this.state.sortBy = event.target.value;
@@ -406,6 +394,163 @@ export class TakeoffManager {
         this.lifecycle.addEventListener(openSourceBtn, 'click', () => this.openActiveDrawingSource());
         this.lifecycle.addEventListener(noteModeBtn, 'click', () => this.toggleNoteMode());
         this.lifecycle.addEventListener(annotationLayer, 'click', (event) => this.handleAnnotationClick(event));
+        this.lifecycle.addEventListener(addNoteBtn, 'click', () => this.handleAddNote());
+        this.lifecycle.addEventListener(noteList, 'click', (event) => this.handleNoteListClick(event));
+    }
+
+    showToast(message, type = 'info') {
+        try {
+            this.services.toast?.(message, type);
+        } catch (error) {
+            console.info(`[${type}] ${message}`);
+            console.error('Toast service error', error);
+        }
+    }
+
+    renderMeasurementSummary(drawing = this.getActiveDrawing()) {
+        const { measurementList, summaryContainer } = this.elements;
+        if (!measurementList && !summaryContainer) {
+            return;
+        }
+
+        if (!drawing) {
+            if (measurementList) {
+                measurementList.textContent = 'Select a drawing to view measurements.';
+            }
+            if (summaryContainer) {
+                summaryContainer.textContent = '';
+            }
+            return;
+        }
+
+        const measurements = Array.isArray(drawing.measurements) ? drawing.measurements : [];
+        if (!measurements.length) {
+            if (measurementList) {
+                measurementList.textContent = 'Add measurements to this drawing to build your takeoff.';
+            }
+            if (summaryContainer) {
+                summaryContainer.textContent = '';
+            }
+            return;
+        }
+
+        const entries = measurements.map((measurement) => {
+            const label = measurement.name || measurement.label || 'Measurement';
+            const value = this.formatMeasurementValue(
+                measurement.quantity ?? measurement.value ?? measurement.area ?? null
+            );
+            const units = measurement.units || measurement.unit || '';
+            const detail = measurement.details || measurement.description || '';
+            const parts = [label];
+            if (value) {
+                parts.push(units ? `${value} ${units}` : value);
+            }
+            if (!value && units) {
+                parts.push(units);
+            }
+            if (detail && detail !== label) {
+                parts.push(detail);
+            }
+            return parts.join(' — ');
+        });
+
+        if (measurementList) {
+            measurementList.textContent = entries.join('\n');
+        }
+        if (summaryContainer) {
+            summaryContainer.textContent = entries.join(' • ');
+        }
+    }
+
+    handleDrawingFormSubmit(event) {
+        event?.preventDefault?.();
+
+        const { drawingName, drawingTrade, drawingFloor, drawingNotes } = this.elements;
+        const name = drawingName?.value?.trim();
+        if (!name) {
+            this.showToast('Enter a drawing name before saving.', 'warning');
+            return null;
+        }
+
+        const drawing = {
+            id: createId('drawing'),
+            name,
+            trade: drawingTrade?.value?.trim() || '',
+            floor: drawingFloor?.value?.trim() || '',
+            page: '',
+            notes: drawingNotes?.value?.trim() || '',
+            createdAt: Date.now(),
+            type: 'manual',
+            rotation: 0,
+            annotations: [],
+            measurements: []
+        };
+
+        this.state.drawings.push(drawing);
+        this.state.currentDrawingId = drawing.id;
+        this.setMeasurementItems(drawing.id, []);
+        this.renderDrawingList();
+        this.updateActiveDrawingDisplay();
+        this.updatePlanVisibility();
+        this.refreshMeasurementTable(drawing.id);
+        this.drawMeasurements();
+        this.renderMeasurementSummary(drawing);
+        this.renderNotes(drawing);
+        this.updateStatus('Drawing saved.');
+        this.persistState();
+
+        return drawing;
+    }
+
+    handleMeasurementFormSubmit(event) {
+        event?.preventDefault?.();
+
+        const drawing = this.getActiveDrawing();
+        if (!drawing) {
+            this.showToast('Select a drawing before adding measurements.', 'warning');
+            return null;
+        }
+
+        const { measurementLabel, measurementMode, measurementValue, measurementUnit } = this.elements;
+        const label = measurementLabel?.value?.trim();
+        if (!label) {
+            this.showToast('Enter a measurement label before saving.', 'warning');
+            return null;
+        }
+
+        const mode = measurementMode?.value || 'length';
+        const rawValue = measurementValue?.value;
+        const numericValue = rawValue === '' || rawValue === undefined ? NaN : Number(rawValue);
+        if (!Number.isFinite(numericValue)) {
+            this.showToast('Enter a valid measurement value.', 'warning');
+            return null;
+        }
+        const units = measurementUnit?.value?.trim() || '';
+
+        const payload = {
+            id: createId('measurement'),
+            name: label,
+            mode,
+            quantity: numericValue,
+            units,
+            details: label
+        };
+
+        const saved = this.addMeasurement(drawing.id, { ...payload });
+        if (!saved) {
+            this.showToast('Unable to save measurement.', 'error');
+            return null;
+        }
+
+        this.renderMeasurementSummary(drawing);
+        this.updateStatus('Measurement saved.');
+        this.showToast('Measurement saved.', 'success');
+
+        if (measurementLabel) measurementLabel.value = '';
+        if (measurementValue) measurementValue.value = '';
+        if (measurementUnit) measurementUnit.value = '';
+
+        return saved;
     }
 
     restoreState() {
@@ -578,9 +723,14 @@ export class TakeoffManager {
             ? items.map((item) => this.prepareMeasurement(item)).filter(Boolean)
             : [];
         store.items = normalized;
+        const drawing = this.state.drawings.find((entry) => entry.id === drawingId);
+        if (drawing) {
+            drawing.measurements = store.items;
+        }
         this.measurementCounters.set(drawingId, this.recalculateCounters(normalized));
         if (drawingId === this.state.currentDrawingId) {
             this.refreshMeasurementTable(drawingId);
+            this.renderMeasurementSummary(drawing);
         }
         this.drawMeasurements();
         this.persistState();
@@ -596,8 +746,13 @@ export class TakeoffManager {
             return null;
         }
         store.items.push(prepared);
+        const drawing = this.state.drawings.find((entry) => entry.id === drawingId);
+        if (drawing) {
+            drawing.measurements = store.items;
+        }
         if (drawingId === this.state.currentDrawingId) {
             this.refreshMeasurementTable(drawingId);
+            this.renderMeasurementSummary(drawing);
         }
         this.drawMeasurements();
         this.persistState();
@@ -746,8 +901,13 @@ export class TakeoffManager {
             return false;
         }
         list.splice(index, 1);
+        const drawing = this.state.drawings.find((entry) => entry.id === drawingId);
+        if (drawing) {
+            drawing.measurements = list;
+        }
         if (drawingId === this.state.currentDrawingId) {
             this.refreshMeasurementTable(drawingId);
+            this.renderMeasurementSummary(drawing);
         }
         this.drawMeasurements();
         if (!silent) {
@@ -771,8 +931,13 @@ export class TakeoffManager {
         store.items = [];
         this.measurementCounters.set(drawingId, this.createEmptyCounters());
         this.resetDraft();
+        const drawing = this.state.drawings.find((entry) => entry.id === drawingId);
+        if (drawing) {
+            drawing.measurements = store.items;
+        }
         if (drawingId === this.state.currentDrawingId) {
             this.refreshMeasurementTable(drawingId);
+            this.renderMeasurementSummary(drawing);
         }
         this.drawMeasurements();
         this.updateStatus('Measurements cleared.');
@@ -1611,35 +1776,55 @@ export class TakeoffManager {
         }
     }
 
-    renderNotes(drawing) {
-        const { noteList } = this.elements;
-        if (!noteList) {
-            return;
+    renderNotes(drawing = this.getActiveDrawing()) {
+        const { noteList, annotationLayer, noteModeBtn } = this.elements;
+
+        if (noteList) {
+            if (!drawing) {
+                noteList.innerHTML = '<li class="takeoff-note-item takeoff-note-empty">Select a drawing to capture plan notes.</li>';
+            } else {
+                const notes = Array.isArray(drawing.notes) ? drawing.notes : [];
+                if (!notes.length) {
+                    noteList.innerHTML = '<li class="takeoff-note-item takeoff-note-empty">No notes yet. Add context before sharing takeoffs.</li>';
+                } else {
+                    noteList.innerHTML = notes.map((note) => {
+                        const timestamp = note.createdAt ? new Date(note.createdAt).toLocaleString() : '';
+                        return `
+                            <li class="takeoff-note-item" data-note-id="${escapeHtml(note.id)}">
+                                <div class="takeoff-note-text">${escapeHtml(note.text)}</div>
+                                <div class="takeoff-note-meta">
+                                    ${escapeHtml(timestamp)}
+                                    <button type="button" class="btn btn-ghost takeoff-note-remove" data-action="remove-note" aria-label="Remove note">Remove</button>
+                                </div>
+                            </li>
+                        `;
+                    }).join('');
+                }
+            }
+        }
+
+        if (annotationLayer) {
+            annotationLayer.innerHTML = '';
+            if (drawing && Array.isArray(drawing.annotations)) {
+                drawing.annotations.forEach((note) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'takeoff-note';
+                    button.dataset.id = note.id;
+                    button.style.left = `${note.x}px`;
+                    button.style.top = `${note.y}px`;
+                    button.textContent = note.text || 'Note';
+                    annotationLayer.appendChild(button);
+                });
+            }
         }
 
         if (!drawing) {
-            noteList.innerHTML = '<li class="takeoff-note-item takeoff-note-empty">Select a drawing to capture plan notes.</li>';
-            return;
+            this.state.noteMode = false;
         }
-
-        const notes = Array.isArray(drawing.notes) ? drawing.notes : [];
-        if (!notes.length) {
-            noteList.innerHTML = '<li class="takeoff-note-item takeoff-note-empty">No notes yet. Add context before sharing takeoffs.</li>';
-            return;
+        if (noteModeBtn) {
+            noteModeBtn.setAttribute('aria-pressed', this.state.noteMode ? 'true' : 'false');
         }
-
-        noteList.innerHTML = notes.map((note) => {
-            const timestamp = note.createdAt ? new Date(note.createdAt).toLocaleString() : '';
-            return `
-                <li class="takeoff-note-item" data-note-id="${escapeHtml(note.id)}">
-                    <div class="takeoff-note-text">${escapeHtml(note.text)}</div>
-                    <div class="takeoff-note-meta">
-                        ${escapeHtml(timestamp)}
-                        <button type="button" class="btn btn-ghost takeoff-note-remove" data-action="remove-note" aria-label="Remove note">Remove</button>
-                    </div>
-                </li>
-            `;
-        }).join('');
     }
 
     handleAddNote() {
@@ -2052,40 +2237,9 @@ export class TakeoffManager {
         };
         drawing.annotations = Array.isArray(drawing.annotations) ? drawing.annotations : [];
         drawing.annotations.push(annotation);
-        this.renderNotes();
+        this.renderNotes(drawing);
         this.persistState();
         this.updateStatus('Note added.');
-    }
-
-    renderNotes() {
-        const { annotationLayer, noteModeBtn } = this.elements;
-        if (!annotationLayer) {
-            return;
-        }
-        annotationLayer.innerHTML = '';
-        const drawing = this.getActiveDrawing();
-        if (!drawing || !Array.isArray(drawing.annotations)) {
-            if (noteModeBtn) {
-                noteModeBtn.setAttribute('aria-pressed', 'false');
-            }
-            this.state.noteMode = false;
-            return;
-        }
-
-        drawing.annotations.forEach((note) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'takeoff-note';
-            button.dataset.id = note.id;
-            button.style.left = `${note.x}px`;
-            button.style.top = `${note.y}px`;
-            button.textContent = note.text || 'Note';
-            annotationLayer.appendChild(button);
-        });
-
-        if (noteModeBtn) {
-            noteModeBtn.setAttribute('aria-pressed', this.state.noteMode ? 'true' : 'false');
-        }
     }
 
     handleAnnotationClick(event) {
@@ -2113,7 +2267,7 @@ export class TakeoffManager {
             note.text = trimmed;
             this.updateStatus('Note updated.');
         }
-        this.renderNotes();
+        this.renderNotes(drawing);
         this.persistState();
     }
 
@@ -2180,7 +2334,7 @@ export class TakeoffManager {
             await this.updatePlanPreview(drawing);
             this.refreshMeasurementTable(drawing.id);
             this.drawMeasurements();
-            this.renderNotes();
+            this.renderNotes(drawing);
             this.updateStatus(`Rotated drawing to ${rotation}°. Existing measurements were cleared.`);
             this.persistState();
         } catch (error) {
@@ -2478,7 +2632,7 @@ export class TakeoffManager {
         this.updatePlanVisibility();
         this.refreshMeasurementTable();
         this.drawMeasurements();
-        this.renderNotes();
+        this.renderNotes(drawing);
     }
 
     updatePlanVisibility() {
@@ -2519,12 +2673,11 @@ export class TakeoffManager {
             activeMeta.textContent = formatMeta(drawing);
         }
         await this.updatePlanPreview(drawing);
-        this.renderNotes();
         this.updatePdfControls(drawing);
         this.renderNotes(drawing);
     }
 
-        async updatePlanPreview(drawing) {
+    async updatePlanPreview(drawing) {
         const token = ++this.previewToken;
         const { planPreview, planInner, canvas } = this.elements;
         if (!planPreview || !planInner) {
