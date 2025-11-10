@@ -10,112 +10,75 @@
     <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
     <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
     <script src="/__/firebase/init.js"></script>
-    <script type="importmap">
-        {
-            "imports": {
-                "pdfjs-dist/build/pdf": "./vendor/pdfjs/pdf.mjs"
-            }
-        }
-    </script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app-shell">
-        <!-- Mobile Menu Toggle -->
-        <button class="menu-toggle" id="menuToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation" title="Open navigation">
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-        </button>
-
-        <!-- Sidebar -->
-        <nav class="sidebar" id="sidebar" role="navigation">
-            <div class="sidebar-inner">
-                <div class="brand">
-                    <div class="brand-mark">CE</div>
-                    <div class="brand-copy">
-                        <h1>Construct Estimate</h1>
-                        <p>Plan, price, and present with confidence.</p>
-                    </div>
-                </div>
-
-                <div class="sidebar-section">
-                    <p class="sidebar-section-label">Workspace</p>
-                    <div class="sidebar-nav">
-                        <button type="button" class="nav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-                            <span class="nav-label">Dashboard</span>
-                        </button>
-                        <button type="button" class="nav-item" data-tab="estimator" aria-controls="estimatorTab" aria-selected="false">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                            <span class="nav-label">Quick Estimator</span>
-                        </button>
-                        <button type="button" class="nav-item" data-tab="detailed" aria-controls="detailedTab" aria-selected="false">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                            <span class="nav-label">Detailed Bidding</span>
-                        </button>
-                        <button type="button" class="nav-item" data-tab="takeoff" aria-controls="takeoffTab" aria-selected="false">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
-                            <span class="nav-label">Takeoff Manager</span>
-                        </button>
-                        <button type="button" class="nav-item" data-tab="projects" aria-controls="projectsTab" aria-selected="false">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                            <span class="nav-label">Projects</span>
-                        </button>
-                        <button type="button" class="nav-item" data-tab="materials" aria-controls="materialsTab" aria-selected="false">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
-                            <span class="nav-label">Materials Database</span>
-                        </button>
-                        <button type="button" class="nav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                            <span class="nav-label">Settings</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="sidebar-footer">
-                    <div class="sidebar-card">
-                        <h2>Project pulse</h2>
-                        <p>Visualize trends, collaborate instantly, and keep every stakeholder aligned.</p>
-                    </div>
-                    <div class="sidebar-help">
-                        <p class="sidebar-help-label">Need a hand?</p>
-                        <a class="sidebar-help-link" href="#settingsTab">Visit the settings & help center</a>
-                    </div>
+        <nav class="workspace-header" id="sidebar" role="navigation">
+            <button class="workspace-menu-toggle" id="menuToggle" aria-controls="workspaceTabBar" aria-expanded="false" aria-label="Open navigation" title="Open navigation">
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+            </button>
+            <div class="workspace-brand">
+                <span class="brand-mark">CE</span>
+                <div class="brand-copy">
+                    <span class="brand-title">Construct Estimate</span>
+                    <span class="brand-tagline">Plan, price, and deliver with clarity.</span>
                 </div>
             </div>
-        </nav>
-
-        <!-- Main Content -->
-        <main class="main-content">
-        <header class="header">
-            <div class="page-heading">
-                <h1 class="page-title" id="pageTitle">Dashboard</h1>
-                <p class="page-subtitle">A unified command center for estimating, takeoffs, and bid delivery.</p>
+            <div class="workspace-tab-bar" id="workspaceTabBar">
+                <button type="button" class="nav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                    <span class="nav-label">Dashboard</span>
+                </button>
+                <button type="button" class="nav-item" data-tab="estimator" aria-controls="estimatorTab" aria-selected="false">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    <span class="nav-label">Quick Estimator</span>
+                </button>
+                <button type="button" class="nav-item" data-tab="detailed" aria-controls="detailedTab" aria-selected="false">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                    <span class="nav-label">Detailed Bidding</span>
+                </button>
+                <button type="button" class="nav-item" data-tab="takeoff" aria-controls="takeoffTab" aria-selected="false">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
+                    <span class="nav-label">Takeoff Manager</span>
+                </button>
+                <button type="button" class="nav-item" data-tab="projects" aria-controls="projectsTab" aria-selected="false">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                    <span class="nav-label">Projects</span>
+                </button>
+                <button type="button" class="nav-item" data-tab="materials" aria-controls="materialsTab" aria-selected="false">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
+                    <span class="nav-label">Materials</span>
+                </button>
+                <button type="button" class="nav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false">
+                    <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <span class="nav-label">Settings</span>
+                </button>
             </div>
-            <div class="header-actions">
-                <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Hide sidebar" aria-expanded="true">
-                    <svg class="sidebar-toggle-icon icon-expanded" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <div class="workspace-actions">
+                <button class="btn btn-ghost" id="sidebarCollapseBtn" aria-label="Collapse navigation" aria-expanded="true">
+                    <svg class="sidebar-toggle-icon icon-expanded" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                     </svg>
-                    <svg class="sidebar-toggle-icon icon-collapsed" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <svg class="sidebar-toggle-icon icon-collapsed" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                     </svg>
-                    <span class="sr-only" data-toggle-label>Hide sidebar</span>
+                    <span class="sr-only" data-toggle-label>Collapse navigation</span>
                 </button>
                 <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                 </button>
-                <button class="btn btn-primary" id="newProjectBtn" type="button">
-                    New Project
-                </button>
+                <button class="btn btn-primary" id="newProjectBtn" type="button">New Project</button>
                 <div class="sync-badge" id="syncStatus">
                     <div class="sync-dot"></div>
                     <span>Database synced</span>
                 </div>
             </div>
-        </header>
+        </nav>
 
+        <main class="main-content">
         <section class="header-insights" aria-label="Workflow highlights">
             <article class="insight-card">
                 <h2 class="insight-title">Focus your effort</h2>
@@ -382,8 +345,18 @@
                                     <p class="card-subtitle">Build your bid with curated assemblies and custom entries.</p>
                                 </div>
                                 <div class="line-item-tools">
-                                    <input type="search" class="form-input" id="lineItemSearch" placeholder="Filter items..." aria-label="Filter line items">
-                                    <button class="btn btn-secondary" id="addLineItemBtn">+ Add Item</button>
+                                    <div class="line-item-search">
+                                        <input type="search" class="form-input" id="lineItemSearch" placeholder="Filter items..." aria-label="Filter line items">
+                                        <button class="btn btn-secondary" id="addLineItemBtn">Browse Catalog</button>
+                                    </div>
+                                    <form class="manual-line-item-form" id="manualLineItemForm">
+                                        <input type="text" class="form-input" name="manualCategory" placeholder="Category" aria-label="Manual category">
+                                        <input type="text" class="form-input" name="manualDescription" placeholder="Description" aria-label="Manual description" required>
+                                        <input type="number" class="form-input" name="manualQuantity" placeholder="Qty" aria-label="Manual quantity" min="0" step="0.01" value="1">
+                                        <input type="text" class="form-input" name="manualUnit" placeholder="Unit" aria-label="Manual unit">
+                                        <input type="number" class="form-input" name="manualRate" placeholder="Rate" aria-label="Manual rate" min="0" step="0.01" value="0">
+                                        <button type="submit" class="btn btn-primary manual-submit">Add Manual Item</button>
+                                    </form>
                                 </div>
                             </div>
                             <div class="line-item-table-wrapper">
@@ -448,7 +421,7 @@
                                 <h3 class="card-title">Drawing Pages</h3>
                                 <label class="btn btn-secondary takeoff-upload-label">
                                     Upload
-                                <input type="file" id="takeoffDrawingInput" accept="application/pdf,image/*" multiple class="hidden-input">
+                                <input type="file" id="takeoffDrawingInput" accept="image/*" multiple class="hidden-input">
                                 </label>
                             </div>
                         <div class="takeoff-filters">
@@ -512,17 +485,6 @@
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomInBtn" aria-label="Zoom in">+</button>
                                         <button type="button" class="btn btn-ghost takeoff-zoom-btn" id="takeoffZoomResetBtn">Reset</button>
                                         <button type="button" class="btn btn-secondary takeoff-fullscreen-btn" id="takeoffFullscreenBtn">Full Screen</button>
-                                    </div>
-                                    <div class="takeoff-toolbar-group takeoff-pdf-controls is-hidden" id="takeoffPdfControls">
-                                        <span class="takeoff-toolbar-label">PDF</span>
-                                        <button type="button" class="btn btn-ghost takeoff-pdf-nav-btn" id="takeoffPdfPrev" aria-label="Previous page">Prev</button>
-                                        <div class="takeoff-pdf-page">
-                                            <input type="number" class="form-input takeoff-pdf-page-input" id="takeoffPdfPageInput" value="1" min="1" aria-label="Page number">
-                                            <span class="takeoff-pdf-page-total" id="takeoffPdfPageTotal">of 1</span>
-                                        </div>
-                                        <button type="button" class="btn btn-ghost takeoff-pdf-nav-btn" id="takeoffPdfNext" aria-label="Next page">Next</button>
-                                        <button type="button" class="btn btn-secondary" id="takeoffPdfOpen">Open in New Tab</button>
-                                        <button type="button" class="btn btn-secondary" id="takeoffPdfDownload">Download</button>
                                     </div>
                                     <div class="takeoff-toolbar-group takeoff-count-toolbar is-hidden" id="takeoffCountToolbar">
                                         <span class="takeoff-toolbar-label">Count marker</span>
@@ -668,7 +630,6 @@
                             <h4 class="section-subtitle">Preferences</h4>
                             <div class="form-group"><label class="form-label">Currency</label><select class="form-select"><option>USD ($)</option><option>EUR (€)</option><option>GBP (£)</option></select></div>
                             <div class="form-group"><label class="form-label">Default Tax Rate (%)</label><input type="number" class="form-input" value="8.5" step="0.1"></div>
-                            <div class="form-group"><label class="form-label" for="themeToggle">Appearance</label><button type="button" class="btn btn-secondary" id="themeToggle">Toggle Dark Mode</button><p class="form-hint">Switch between light and dark themes.</p></div>
                         </div>
                     </div>
                 </div>
@@ -709,6 +670,37 @@
                         </div>
                     </div>
                     <div class="cloud-status" id="cloudSyncStatus">Cloud sync offline</div>
+                    <div class="firebase-config">
+                        <h4 class="section-subtitle mt-lg">Firebase Web App Config</h4>
+                        <p class="form-hint">Copy the configuration snippet from your Firebase console and paste each value below.</p>
+                        <div class="firebase-config-grid">
+                            <label class="form-group">
+                                <span class="form-label">API Key</span>
+                                <input type="text" class="form-input" id="firebaseApiKey" autocomplete="off">
+                            </label>
+                            <label class="form-group">
+                                <span class="form-label">Auth Domain</span>
+                                <input type="text" class="form-input" id="firebaseAuthDomain" autocomplete="off">
+                            </label>
+                            <label class="form-group">
+                                <span class="form-label">Project ID</span>
+                                <input type="text" class="form-input" id="firebaseProjectId" autocomplete="off">
+                            </label>
+                            <label class="form-group">
+                                <span class="form-label">Storage Bucket</span>
+                                <input type="text" class="form-input" id="firebaseStorageBucket" autocomplete="off">
+                            </label>
+                            <label class="form-group">
+                                <span class="form-label">Messaging Sender ID</span>
+                                <input type="text" class="form-input" id="firebaseMessagingSenderId" autocomplete="off">
+                            </label>
+                            <label class="form-group">
+                                <span class="form-label">App ID</span>
+                                <input type="text" class="form-input" id="firebaseAppId" autocomplete="off">
+                            </label>
+                        </div>
+                        <button class="btn btn-secondary mt-sm" id="saveFirebaseConfigBtn" type="button">Save Firebase Settings</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -810,17 +802,6 @@
 </div>
 
 <script type="module" src="app.js"></script>
-<div id="takeoffPdfModal" class="takeoff-pdf-modal" aria-hidden="true">
-    <div class="takeoff-pdf-modal-overlay" id="takeoffPdfModalOverlay"></div>
-    <div class="takeoff-pdf-modal-window" role="dialog" aria-modal="true" aria-labelledby="takeoffPdfModalTitle">
-        <div class="takeoff-pdf-modal-header">
-            <h2 id="takeoffPdfModalTitle">PDF Reader</h2>
-            <button type="button" class="btn btn-ghost takeoff-pdf-modal-close" id="takeoffPdfModalClose" aria-label="Close PDF reader">×</button>
-        </div>
-        <div class="takeoff-pdf-modal-tools is-hidden" id="takeoffPdfModalTools" aria-label="Takeoff tools"></div>
-        <iframe id="takeoffPdfFrame" title="PDF reader" loading="lazy"></iframe>
-        <p class="takeoff-pdf-modal-hint">Use the built-in PDF controls for search, download, zoom, and printing.</p>
-    </div>
-</div>
+
 </body>
 </html>

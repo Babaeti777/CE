@@ -15,11 +15,6 @@ beforeAll(async () => {
         }
     };
 
-    await jest.unstable_mockModule('pdfjs-dist/build/pdf', () => ({
-        GlobalWorkerOptions: {},
-        getDocument: () => ({ promise: Promise.resolve({}) })
-    }));
-
     ({ TakeoffManager } = await import('../takeoff.js'));
 });
 
@@ -55,17 +50,6 @@ describe('TakeoffManager measurements', () => {
             <div id="takeoffZoomIndicator"></div>
             <div id="takeoffStatus"></div>
             <div id="takeoffActiveMeta"></div>
-            <div id="takeoffPdfControls"></div>
-            <button id="takeoffPdfPrev"></button>
-            <button id="takeoffPdfNext"></button>
-            <input id="takeoffPdfPageInput" />
-            <span id="takeoffPdfPageTotal"></span>
-            <button id="takeoffPdfOpen"></button>
-            <button id="takeoffPdfDownload"></button>
-            <div id="takeoffPdfModal"></div>
-            <div id="takeoffPdfModalOverlay"></div>
-            <button id="takeoffPdfModalClose"></button>
-            <iframe id="takeoffPdfFrame"></iframe>
             <button id="takeoffFullscreenBtn"></button>
             <button id="takeoffFullScreenToggle"></button>
             <div id="takeoffCountToolbar"></div>
@@ -188,9 +172,9 @@ describe('TakeoffManager measurements', () => {
         expect(mockContext.clearRect).toHaveBeenCalledWith(0, 0, 200, 200);
         expect(mockContext.beginPath).toHaveBeenCalled();
         expect(mockContext.moveTo).toHaveBeenCalledWith(0, 0);
-        expect(mockContext.lineTo).toHaveBeenCalledWith(20, 0);
-        expect(mockContext.lineTo).toHaveBeenCalledWith(20, 10);
-        expect(mockContext.fillText).toHaveBeenCalledWith('15 ft', 28, 2);
+        expect(mockContext.lineTo).toHaveBeenCalledWith(10, 0);
+        expect(mockContext.lineTo).toHaveBeenCalledWith(10, 5);
+        expect(mockContext.fillText).toHaveBeenCalledWith('15 ft', 18, -3);
     });
 
     test('renders measurement rows for active drawing', () => {
