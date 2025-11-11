@@ -1541,8 +1541,7 @@ export class TakeoffManager {
 
     async createDrawingFromFile(file) {
         const id = createId();
-        const objectUrl = URL.createObjectURL(file);
-        const sourceDataUrl = await this.readFileAsDataURL(file);
+        const sourceUrl = await this.readFileAsDataURL(file);
 
         if (SUPPORTED_IMAGE_TYPES.has(file.type)) {
             return {
@@ -1553,11 +1552,10 @@ export class TakeoffManager {
                 page: '',
                 createdAt: Date.now(),
                 type: 'image',
-                objectUrl,
-                sourceUrl: sourceDataUrl,
-                sourceDataUrl,
-                file,
-                previewUrl: sourceDataUrl,
+                objectUrl: sourceUrl,
+                sourceUrl,
+                file: null,
+                previewUrl: sourceUrl,
                 naturalWidth: null,
                 naturalHeight: null,
                 rotation: 0,
@@ -1567,17 +1565,18 @@ export class TakeoffManager {
         }
 
         if (SUPPORTED_PDF_TYPES.has(file.type)) {
-            return this.createPdfDrawing(file, id, { objectUrl, sourceDataUrl });
+            return this.createPdfDrawing(file, id, sourceUrl);
         }
 
         URL.revokeObjectURL(objectUrl);
         throw new Error('Unsupported file type. Upload PDF, PNG, JPG, GIF, SVG, or WebP plans.');
     }
 
-    async createPdfDrawing(file, id, { objectUrl, sourceDataUrl } = {}) {
+    async createPdfDrawing(file, id, sourceUrl) {
         await this.ensurePdfWorker();
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pdfData = new Uint8Array(arrayBuffer);
+        const pdf = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
         const pageNumber = 1;
         const page = await pdf.getPage(pageNumber);
         const viewport = page.getViewport({ scale: DEFAULT_PDF_SCALE });
@@ -1587,8 +1586,9 @@ export class TakeoffManager {
         canvas.height = viewport.height;
         await page.render({ canvasContext: context, viewport }).promise;
         const previewUrl = canvas.toDataURL('image/png');
-        const resolvedObjectUrl = objectUrl || URL.createObjectURL(file);
-        const resolvedDataUrl = sourceDataUrl || await this.readFileAsDataURL(file);
+        const pageCount = pdf.numPages;
+        pdf.cleanup?.();
+        pdf.destroy?.();
 
         return {
             id,
@@ -1598,84 +1598,38 @@ export class TakeoffManager {
             page: String(pageNumber),
             createdAt: Date.now(),
             type: 'pdf',
-            objectUrl: resolvedObjectUrl,
-            sourceUrl: resolvedDataUrl,
-            sourceDataUrl: resolvedDataUrl,
-            file,
+            objectUrl: sourceUrl,
+            sourceUrl,
+            file: null,
             previewUrl,
             rotation: 0,
             annotations: [],
             notes: '',
-            pdfData: arrayBuffer,
-            pdfPageCount: pdf.numPages,
+            pdfData,
+            pdfPageCount: pageCount,
             currentPage: pageNumber,
             naturalWidth: canvas.width,
             naturalHeight: canvas.height
         };
-
-        try {
-            if (SUPPORTED_IMAGE_TYPES.has(file.type) || extension.match(/\.(png|jpe?g|webp|gif|svg)$/)) {
-                drawing.type = 'image';
-                await this.prepareImagePreview(drawing, { rotation: 0 });
-                return drawing;
-            }
-
-            if (SUPPORTED_PDF_TYPES.has(file.type) || extension.endsWith('.pdf')) {
-                drawing.type = 'pdf';
-                await this.preparePdfPreview(drawing, { rotation: 0 });
-                return drawing;
-            }
-        } catch (error) {
-            URL.revokeObjectURL(objectUrl);
-            throw error;
-        }
-
-        URL.revokeObjectURL(objectUrl);
-        throw new Error('Unsupported file type. Upload PDF, PNG, JPG, GIF, or WebP plans.');
     }
 
     async prepareImagePreview(drawing, { rotation = 0 } = {}) {
         if (!drawing) return;
-        if (!drawing.sourceDataUrl) {
-            drawing.sourceDataUrl = await this.readFileAsDataURL(drawing.file);
+        if (!drawing.sourceUrl && drawing.file) {
+            drawing.sourceUrl = await this.readFileAsDataURL(drawing.file);
+        }
+        if (!drawing.sourceUrl) {
+            return;
         }
 
-        const image = await this.loadImage(drawing.sourceDataUrl);
-        drawing.originalWidth = image.naturalWidth;
-        drawing.originalHeight = image.naturalHeight;
         drawing.rotation = ((rotation % 360) + 360) % 360;
-
-        const { dataUrl, width, height } = await this.renderImageWithRotation(image, drawing.rotation);
-        drawing.previewUrl = dataUrl;
-        drawing.naturalWidth = width;
-        drawing.naturalHeight = height;
+        await this.renderImagePreview(drawing);
     }
 
     async preparePdfPreview(drawing, { rotation = 0 } = {}) {
-        if (typeof window === 'undefined' || !window.pdfjsLib) {
-            throw new Error('PDF preview support is not available.');
-        }
-
-        const loadingTask = window.pdfjsLib.getDocument({ url: drawing.objectUrl });
-        const pdf = await loadingTask.promise;
-        try {
-            const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 1.5, rotation: ((rotation % 360) + 360) % 360 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = Math.ceil(viewport.width);
-            canvas.height = Math.ceil(viewport.height);
-            await page.render({ canvasContext: context, viewport }).promise;
-
-            drawing.previewUrl = canvas.toDataURL('image/png');
-            drawing.naturalWidth = canvas.width;
-            drawing.naturalHeight = canvas.height;
-            drawing.rotation = ((rotation % 360) + 360) % 360;
-            drawing.pageCount = pdf.numPages;
-        } finally {
-            pdf.cleanup?.();
-            pdf.destroy?.();
-        }
+        if (!drawing) return;
+        drawing.rotation = ((rotation % 360) + 360) % 360;
+        await this.renderPdfPreview(drawing, { scale: drawing.renderedPdfScale || DEFAULT_PDF_SCALE });
     }
 
     async readFileAsDataURL(file) {
@@ -1822,10 +1776,20 @@ export class TakeoffManager {
 
     async renderPdfPreview(drawing, { scale = DEFAULT_PDF_SCALE } = {}) {
         await this.ensurePdfWorker();
-        const data = drawing.pdfData || await drawing.file?.arrayBuffer();
+        if (!drawing) {
+            return;
+        }
+
+        let data = drawing.pdfData;
+        if (!data) {
+            if (drawing.sourceUrl) {
+                data = this.dataUrlToUint8Array(drawing.sourceUrl);
+            }
+        }
         if (!data) {
             return;
         }
+
         drawing.pdfData = data;
         const pdf = await window.pdfjsLib.getDocument({ data }).promise;
         const pageIndex = drawing.currentPage || 1;
@@ -1842,6 +1806,43 @@ export class TakeoffManager {
         drawing.naturalHeight = canvas.height;
         drawing.pdfPageCount = pdf.numPages;
         drawing.renderedPdfScale = effectiveScale;
+        pdf.cleanup?.();
+        pdf.destroy?.();
+    }
+
+    dataUrlToUint8Array(dataUrl) {
+        if (typeof dataUrl !== 'string') {
+            return null;
+        }
+        const commaIndex = dataUrl.indexOf(',');
+        if (commaIndex === -1) {
+            return null;
+        }
+        const metadata = dataUrl.substring(0, commaIndex);
+        const encoded = dataUrl.substring(commaIndex + 1);
+
+        if (!encoded) {
+            return null;
+        }
+
+        let binaryString;
+        if (metadata.includes(';base64')) {
+            try {
+                binaryString = atob(encoded);
+            } catch (error) {
+                console.warn('Unable to decode base64 data URL', error);
+                return null;
+            }
+        } else {
+            binaryString = decodeURIComponent(encoded);
+        }
+
+        const length = binaryString.length;
+        const bytes = new Uint8Array(length);
+        for (let index = 0; index < length; index += 1) {
+            bytes[index] = binaryString.charCodeAt(index);
+        }
+        return bytes;
     }
 
     loadImageResource(url) {
