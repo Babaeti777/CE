@@ -570,13 +570,35 @@ export class TakeoffManager {
             if (!Array.isArray(parsed)) {
                 return;
             }
-            this.state.drawings = parsed.map((item) => ({
-                ...item,
-                type: item.type || 'image',
-                annotations: Array.isArray(item.annotations) ? item.annotations : [],
-                notes: typeof item.notes === 'string' ? item.notes : '',
-                rotation: item.rotation || 0
-            }));
+            this.state.drawings = parsed.map((item) => {
+                const drawing = {
+                    ...item,
+                    type: item.type || 'image',
+                    annotations: Array.isArray(item.annotations) ? item.annotations : [],
+                    notes: typeof item.notes === 'string' ? item.notes : '',
+                    rotation: item.rotation || 0,
+                    sourceDataUrl: item.sourceDataUrl || null,
+                    previewUrl: item.previewUrl || item.sourceDataUrl || null,
+                    naturalWidth: item.naturalWidth || null,
+                    naturalHeight: item.naturalHeight || null,
+                    pdfPageCount: item.pdfPageCount || item.pageCount || null,
+                    currentPage: item.currentPage || 1
+                };
+                if (drawing.sourceDataUrl) {
+                    drawing.sourceUrl = drawing.sourceDataUrl;
+                    const objectUrl = this.createObjectUrlFromDataUrl(drawing.sourceDataUrl);
+                    if (objectUrl) {
+                        drawing.objectUrl = objectUrl;
+                    }
+                }
+                if (drawing.type === 'pdf' && drawing.sourceDataUrl) {
+                    const buffer = this.dataUrlToArrayBuffer(drawing.sourceDataUrl);
+                    if (buffer) {
+                        drawing.pdfData = buffer;
+                    }
+                }
+                return drawing;
+            });
             this.state.drawings.forEach((drawing) => {
                 if (Array.isArray(drawing.savedMeasurements) && drawing.savedMeasurements.length) {
                     this.setMeasurementItems(drawing.id, drawing.savedMeasurements);
@@ -608,6 +630,12 @@ export class TakeoffManager {
                 rotation: drawing.rotation || 0,
                 createdAt: drawing.createdAt,
                 annotations: Array.isArray(drawing.annotations) ? drawing.annotations : [],
+                sourceDataUrl: drawing.sourceDataUrl || null,
+                previewUrl: drawing.previewUrl || drawing.sourceDataUrl || null,
+                naturalWidth: drawing.naturalWidth || null,
+                naturalHeight: drawing.naturalHeight || null,
+                pdfPageCount: drawing.pdfPageCount || null,
+                currentPage: drawing.currentPage || 1,
                 savedMeasurements: this.getMeasurementItems(drawing.id)
             }));
             storage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -1470,70 +1498,6 @@ export class TakeoffManager {
         this.showToast('Drawing saved.', 'success');
     }
 
-    handleMeasurementFormSubmit(event) {
-        event?.preventDefault?.();
-        const drawing = this.getActiveDrawing();
-        if (!drawing) {
-            this.showToast('Create a drawing before adding measurements.', 'warning');
-            return;
-        }
-
-        const {
-            measurementLabel,
-            measurementMode,
-            measurementValue,
-            measurementUnit,
-            measurementList,
-            summaryContainer
-        } = this.elements;
-
-        const label = measurementLabel?.value?.trim() || '';
-        const mode = measurementMode?.value || 'length';
-        const numericValue = parseFloat(measurementValue?.value);
-        const quantity = Number.isFinite(numericValue) ? numericValue : 0;
-        const units = measurementUnit?.value?.trim() || '';
-
-        const payload = {
-            id: createId('measurement'),
-            name: label || undefined,
-            mode,
-            quantity,
-            units,
-            details: units ? `${quantity} ${units}` : `${quantity}`,
-            label,
-            points: []
-        };
-
-        const saved = this.addMeasurement(drawing.id, payload);
-        if (!saved) {
-            this.showToast('Unable to save measurement.', 'error');
-            return;
-        }
-
-        if (!Array.isArray(drawing.measurements)) {
-            drawing.measurements = [];
-        }
-        drawing.measurements.push(saved);
-
-        if (measurementLabel) measurementLabel.value = '';
-        if (measurementValue) measurementValue.value = '';
-        if (measurementUnit) measurementUnit.value = '';
-
-        if (measurementList) {
-            const items = this.getMeasurementItems(drawing.id);
-            const summary = items.map((item) => item.label || item.name || 'Measurement').join(', ');
-            measurementList.textContent = summary || 'Add measurements to capture quantities.';
-        }
-
-        if (summaryContainer) {
-            const suffix = units ? ` ${units}` : '';
-            summaryContainer.textContent = `Measurement summary: ${quantity}${suffix}`.trim();
-        }
-
-        this.updateStatus('Measurement saved.');
-        this.showToast('Measurement saved.', 'success');
-    }
-
     async handleDrawingUpload(event) {
         const files = Array.from(event?.target?.files || []);
         if (!files.length) {
@@ -1604,6 +1568,7 @@ export class TakeoffManager {
             return this.createPdfDrawing(file, id, sourceUrl);
         }
 
+        URL.revokeObjectURL(objectUrl);
         throw new Error('Unsupported file type. Upload PDF, PNG, JPG, GIF, SVG, or WebP plans.');
     }
 
@@ -1674,6 +1639,56 @@ export class TakeoffManager {
             reader.onerror = () => reject(new Error('Unable to read file.'));
             reader.readAsDataURL(file);
         });
+    }
+
+    dataUrlToArrayBuffer(dataUrl) {
+        if (typeof dataUrl !== 'string') {
+            return null;
+        }
+        const [, base64 = ''] = dataUrl.split(',');
+        if (!base64) {
+            return null;
+        }
+        try {
+            const binaryString = atob(base64);
+            const length = binaryString.length;
+            const bytes = new Uint8Array(length);
+            for (let index = 0; index < length; index += 1) {
+                bytes[index] = binaryString.charCodeAt(index);
+            }
+            return bytes.buffer;
+        } catch (error) {
+            console.warn('Unable to decode data URL to array buffer', error);
+            return null;
+        }
+    }
+
+    blobFromDataUrl(dataUrl) {
+        const buffer = this.dataUrlToArrayBuffer(dataUrl);
+        if (!buffer) {
+            return null;
+        }
+        const match = /^data:([^;]+);base64/.exec(dataUrl);
+        const mimeType = match?.[1] || 'application/octet-stream';
+        try {
+            return new Blob([buffer], { type: mimeType });
+        } catch (error) {
+            console.warn('Unable to convert data URL to blob', error);
+            return null;
+        }
+    }
+
+    createObjectUrlFromDataUrl(dataUrl) {
+        try {
+            const blob = this.blobFromDataUrl(dataUrl);
+            if (!blob) {
+                return null;
+            }
+            return URL.createObjectURL(blob);
+        } catch (error) {
+            console.warn('Unable to create object URL from data URL', error);
+            return null;
+        }
     }
 
     async loadImage(src) {
@@ -2036,12 +2051,13 @@ export class TakeoffManager {
             return;
         }
         const drawing = this.getActiveDrawing();
-        if (!drawing || !drawing.objectUrl) {
+        const targetUrl = drawing?.objectUrl || drawing?.sourceDataUrl || drawing?.sourceUrl;
+        if (!drawing || !targetUrl) {
             this.showToast('Select a drawing before opening the source file.', 'warning');
             return;
         }
         try {
-            window.open(drawing.objectUrl, '_blank', 'noopener');
+            window.open(targetUrl, '_blank', 'noopener');
         } catch (error) {
             console.error('Unable to open drawing', error);
             this.showToast('Unable to open the original document.', 'error');
