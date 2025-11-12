@@ -2334,8 +2334,17 @@ import {
             window.showToast = showToast;
         }
         
+        function toFiniteNumber(value, fallback = 0) {
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value;
+            }
+            const parsed = parseNumeric(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
+
         function formatCurrency(amount) {
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+            const safeValue = toFiniteNumber(amount);
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(safeValue);
         }
 
         function formatNumber(value, { decimals = 0 } = {}) {
@@ -4125,7 +4134,7 @@ import {
             const recentList = document.getElementById('recentProjectsList');
 
             const totalProjects = state.savedProjects.length;
-            const totalValue = state.savedProjects.reduce((sum, p) => sum + (p.total || 0), 0);
+            const totalValue = state.savedProjects.reduce((sum, project) => sum + toFiniteNumber(project.total), 0);
             const review = state.savedProjects.filter(p => p.status === 'review').length;
             const wins = state.savedProjects.filter(p => p.status === 'won').length;
             const totalConsidered = state.savedProjects.filter(p => p.status !== 'review').length;
