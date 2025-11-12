@@ -6,6 +6,7 @@ import { debounce } from './utils/debounce.js';
 import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
 import { LifecycleManager } from './services/lifecycle-manager.js';
+import { clampPercentage } from './utils/percentage.js';
 import { calculate as performCalculation, handleUnitConversion as convertUnits } from './calculator.js';
 import {
     initializeFirebase,
@@ -3209,6 +3210,29 @@ import {
             }
         }
 
+        function getPercentageInputValue(id) {
+            const input = document.getElementById(id);
+            if (!input) {
+                return 0;
+            }
+            const rawValue = input.value;
+            if (rawValue === '') {
+                return 0;
+            }
+
+            const parsed = Number.parseFloat(rawValue);
+            if (!Number.isFinite(parsed)) {
+                input.value = '';
+                return 0;
+            }
+
+            const clamped = clampPercentage(parsed);
+            if (clamped !== parsed) {
+                input.value = formatInputNumber(clamped);
+            }
+            return clamped;
+        }
+
         function updateBidTotal() {
             let subtotal = 0;
             document.querySelectorAll('.line-item-row').forEach(row => {
@@ -3217,10 +3241,10 @@ import {
                 subtotal += quantity * rate;
             });
 
-            const overheadPercent = parseFloat(document.getElementById('overhead').value) || 0;
-            const profitPercent = parseFloat(document.getElementById('profit').value) || 0;
-            const contingencyPercent = parseFloat(document.getElementById('contingency').value) || 0;
-            
+            const overheadPercent = getPercentageInputValue('overhead');
+            const profitPercent = getPercentageInputValue('profit');
+            const contingencyPercent = getPercentageInputValue('contingency');
+
             const markup = subtotal * (overheadPercent / 100) + subtotal * (profitPercent / 100);
             const subtotalWithMarkup = subtotal + markup;
             const contingency = subtotalWithMarkup * (contingencyPercent / 100);
@@ -3297,9 +3321,9 @@ import {
                 lineItems.push({ category, description, quantity, unit, rate, total: quantity * rate });
             });
 
-            const overheadPercent = parseFloat(document.getElementById('overhead').value) || 0;
-            const profitPercent = parseFloat(document.getElementById('profit').value) || 0;
-            const contingencyPercent = parseFloat(document.getElementById('contingency').value) || 0;
+            const overheadPercent = getPercentageInputValue('overhead');
+            const profitPercent = getPercentageInputValue('profit');
+            const contingencyPercent = getPercentageInputValue('contingency');
 
             const subtotal = parseFloat(document.getElementById('bidSubtotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
             const markup = parseFloat(document.getElementById('bidMarkup').textContent.replace(/[^0-9.-]+/g, '')) || 0;
