@@ -87,7 +87,7 @@ import {
             regionalAdjustments: {},
             costIndices: {},
             referenceAssemblies: [],
-            databaseMeta: {},
+            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
             savedProjects: [],
             companyInfo: { ...EMPTY_COMPANY_INFO },
             currentEstimate: null,
@@ -95,18 +95,13 @@ import {
             editingProjectId: null,
             lineItemId: 0,
             lastFocusedInput: null,
-            calcMode: "basic",
+            calcMode: 'basic',
             calculator: {
                 displayValue: '0',
                 firstOperand: null,
                 waitingForSecondOperand: false,
-                operator: null
+                operator: null,
             },
-            lineItemCategories: {},
-            laborRates: {},
-            equipmentRates: {},
-            regionalAdjustments: {},
-            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
             pendingUpdate: null,
             syncProfileId: null,
             remoteSyncEnabled: false,
@@ -344,17 +339,25 @@ import {
             });
         }
 
-        function ensureQuickEstimatorBaseline() {
+        function getQuickEstimatorItems({ createIfMissing = false } = {}) {
             if (!Array.isArray(state.quickEstimatorItems)) {
+                if (!createIfMissing) {
+                    return [];
+                }
                 state.quickEstimatorItems = [];
             }
+            return state.quickEstimatorItems;
+        }
+
+        function ensureQuickEstimatorBaseline() {
+            const items = getQuickEstimatorItems({ createIfMissing: true });
 
             QUICK_SCOPE_CONFIG.forEach(config => {
-                const existing = state.quickEstimatorItems.find(item => item.scopeId === config.id);
+                const existing = items.find(item => item.scopeId === config.id);
                 if (!existing) {
                     const materialKey = findFallbackMaterialKey(config.category, config.fallbackMaterial);
                     const material = getMaterialData(config.category, materialKey);
-                    state.quickEstimatorItems.push({
+                    items.push({
                         id: `qe-${config.id}`,
                         scopeId: config.id,
                         scopeLabel: config.scopeLabel,
@@ -379,9 +382,10 @@ import {
         }
 
         function syncQuickEstimatorMaterials({ reRender = false } = {}) {
-            if (!Array.isArray(state.quickEstimatorItems)) return;
+            const items = getQuickEstimatorItems();
+            if (!items.length) return;
 
-            state.quickEstimatorItems.forEach(item => {
+            items.forEach(item => {
                 if (item.category === 'custom') return;
 
                 const options = getMaterialOptions(item.category);
@@ -417,10 +421,11 @@ import {
         }
 
         function updateAutoQuantities({ reRender = false } = {}) {
-            if (!Array.isArray(state.quickEstimatorItems)) return;
+            const items = getQuickEstimatorItems();
+            if (!items.length) return;
             const { sqft, floors } = getEstimatorInputs();
 
-            state.quickEstimatorItems.forEach(item => {
+            items.forEach(item => {
                 if (item.category === 'custom' || item.manualQuantity) return;
                 const config = getScopeConfig(item.scopeId || item.category);
                 if (!config || typeof config.quantity !== 'function') return;
@@ -432,9 +437,9 @@ import {
         }
 
         function getOrderedEstimatorItems() {
-            if (!Array.isArray(state.quickEstimatorItems)) return [];
-            const items = state.quickEstimatorItems.slice();
-            return items.sort((a, b) => {
+            const items = getQuickEstimatorItems();
+            if (!items.length) return [];
+            return items.slice().sort((a, b) => {
                 const orderA = QUICK_SCOPE_ORDER.indexOf(a.scopeId);
                 const orderB = QUICK_SCOPE_ORDER.indexOf(b.scopeId);
                 if (orderA !== -1 && orderB !== -1) return orderA - orderB;
@@ -677,7 +682,7 @@ import {
 
         function updateEstimatorSummaryTotals() {
             let subtotal = 0;
-            (state.quickEstimatorItems || []).forEach(item => {
+            getQuickEstimatorItems().forEach(item => {
                 const quantity = parseFloat(item.quantity) || 0;
                 const rate = parseFloat(item.unitCost) || 0;
                 item.total = quantity * rate;
@@ -777,7 +782,7 @@ import {
         function findEstimatorItemByRow(row) {
             if (!row) return null;
             const id = row.dataset.estimatorId;
-            return (state.quickEstimatorItems || []).find(item => String(item.id) === id) || null;
+            return getQuickEstimatorItems().find(item => String(item.id) === id) || null;
         }
 
         function addCustomEstimatorItem() {
@@ -799,11 +804,7 @@ import {
                 createdAt: Date.now(),
             };
 
-            if (!Array.isArray(state.quickEstimatorItems)) {
-                state.quickEstimatorItems = [];
-            }
-
-            state.quickEstimatorItems.push(newItem);
+            getQuickEstimatorItems({ createIfMissing: true }).push(newItem);
             renderEstimatorItems();
 
             requestAnimationFrame(() => {
@@ -878,7 +879,7 @@ import {
                 updateEstimatorRowDisplay(row, item);
                 updateEstimatorSummaryTotals();
             } else if (action === 'remove-item') {
-                state.quickEstimatorItems = (state.quickEstimatorItems || []).filter(existing => existing !== item);
+                state.quickEstimatorItems = getQuickEstimatorItems().filter(existing => existing !== item);
                 renderEstimatorItems();
                 return;
             }
