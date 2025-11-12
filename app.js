@@ -1,11 +1,12 @@
 import { TakeoffManager } from './takeoff.js';
 import { StateManager } from './state/state-manager.js';
+import { createInitialState } from './state/initial-state.js';
 import { createStorageService } from './services/storage-service.js';
-import { ErrorBoundary } from './utils/error-boundary.js';
-import { debounce } from './utils/debounce.js';
 import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
 import { LifecycleManager } from './services/lifecycle-manager.js';
+import { ErrorBoundary } from './utils/error-boundary.js';
+import { debounce } from './utils/debounce.js';
 import { clampPercentage } from './utils/percentage.js';
 import {
     appendChildren,
@@ -97,9 +98,6 @@ import {
         const stateManager = new StateManager(initialState);
         const state = stateManager.state;
         const storage = createStorageService({ prefix: 'ce' });
-        const DATABASE_STORAGE_KEY = 'materialDatabase';
-        const DATABASE_VERSION_KEY = 'materialDatabaseVersion';
-        const DATABASE_SOURCE_URL = 'data/database.json';
         const loadingManager = new LoadingManager();
         const commandHistory = new CommandHistory();
         let priceTrendChart = null;
