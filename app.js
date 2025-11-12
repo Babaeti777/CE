@@ -7,6 +7,13 @@ import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
 import { LifecycleManager } from './services/lifecycle-manager.js';
 import { clampPercentage } from './utils/percentage.js';
+import {
+    appendChildren,
+    createElement,
+    setSelectValue,
+    setTextIfChanged,
+    setValueIfChanged,
+} from './utils/dom.js';
 import { calculate as performCalculation, handleUnitConversion as convertUnits } from './calculator.js';
 import {
     initializeFirebase,
@@ -471,148 +478,158 @@ import {
                 table.setAttribute('aria-hidden', 'false');
             }
             if (wrapper) wrapper.classList.remove('empty');
-            items.forEach(item => {
-                tbody.appendChild(buildEstimatorRow(item));
-            });
+            items.forEach(item => tbody.appendChild(buildEstimatorRow(item)));
             updateEstimatorSummaryTotals();
         }
 
         function buildEstimatorRow(item) {
-            const row = document.createElement('tr');
-            row.className = 'estimator-row';
-            row.dataset.estimatorId = String(item.id);
-            if (item.scopeId) row.dataset.scope = item.scopeId;
-            row.dataset.category = item.category;
+            const row = createElement('tr', {
+                className: 'estimator-row',
+                dataset: {
+                    estimatorId: String(item.id),
+                    scope: item.scopeId || undefined,
+                    category: item.category,
+                },
+            });
 
-            const scopeCell = document.createElement('td');
+            const scopeCell = createElement('td');
             if (item.category === 'custom') {
-                const scopeInput = document.createElement('input');
-                scopeInput.type = 'text';
-                scopeInput.className = 'form-input estimator-scope-input';
-                scopeInput.placeholder = 'Scope name';
-                scopeInput.dataset.field = 'scopeName';
-                scopeInput.value = item.scopeLabel || item.customScopeName || '';
-                scopeCell.appendChild(scopeInput);
+                scopeCell.appendChild(createElement('input', {
+                    className: 'form-input estimator-scope-input',
+                    dataset: { field: 'scopeName' },
+                    placeholder: 'Scope name',
+                    type: 'text',
+                    value: item.scopeLabel || item.customScopeName || '',
+                }));
             } else {
-                const title = document.createElement('div');
-                title.className = 'estimator-scope-title';
-                title.textContent = item.scopeLabel || getScopeConfig(item.scopeId)?.scopeLabel || toTitleCase(item.category);
-                scopeCell.appendChild(title);
-
-                const meta = document.createElement('div');
-                meta.className = 'estimator-scope-meta';
-                meta.dataset.role = 'quantityHint';
-                meta.textContent = item.manualQuantity ? 'Manual quantity override' : (getScopeConfig(item.scopeId || item.category)?.hint || '');
-                scopeCell.appendChild(meta);
+                appendChildren(scopeCell, [
+                    createElement('div', {
+                        className: 'estimator-scope-title',
+                        textContent:
+                            item.scopeLabel ||
+                            getScopeConfig(item.scopeId)?.scopeLabel ||
+                            toTitleCase(item.category),
+                    }),
+                    createElement('div', {
+                        className: 'estimator-scope-meta',
+                        dataset: { role: 'quantityHint' },
+                        textContent: item.manualQuantity
+                            ? 'Manual quantity override'
+                            : getScopeConfig(item.scopeId || item.category)?.hint || '',
+                    }),
+                ]);
             }
             row.appendChild(scopeCell);
 
-            const assemblyCell = document.createElement('td');
+            const assemblyCell = createElement('td');
             if (item.category === 'custom') {
-                const descriptionInput = document.createElement('input');
-                descriptionInput.type = 'text';
-                descriptionInput.className = 'form-input';
-                descriptionInput.placeholder = 'Describe allowance or material';
-                descriptionInput.dataset.field = 'customDescription';
-                descriptionInput.value = item.materialLabel || item.customDescription || '';
-                assemblyCell.appendChild(descriptionInput);
+                assemblyCell.appendChild(createElement('input', {
+                    className: 'form-input',
+                    dataset: { field: 'customDescription' },
+                    placeholder: 'Describe allowance or material',
+                    type: 'text',
+                    value: item.materialLabel || item.customDescription || '',
+                }));
             } else {
-                const select = document.createElement('select');
-                select.className = 'form-select estimator-assembly-select';
-                select.dataset.field = 'material';
-
-                getMaterialOptions(item.category).forEach(optionData => {
-                    const option = document.createElement('option');
-                    option.value = optionData.key;
-                    option.textContent = optionData.label;
-                    if (optionData.key === item.materialKey) option.selected = true;
-                    select.appendChild(option);
+                const select = createElement('select', {
+                    className: 'form-select estimator-assembly-select',
+                    dataset: { field: 'material' },
                 });
 
-                assemblyCell.appendChild(select);
+                getMaterialOptions(item.category).forEach(optionData => {
+                    select.appendChild(createElement('option', {
+                        value: optionData.key,
+                        textContent: optionData.label,
+                        selected: optionData.key === item.materialKey,
+                    }));
+                });
 
-                const meta = document.createElement('div');
-                meta.className = 'estimator-assembly-meta';
-                meta.dataset.role = 'materialMeta';
-                meta.textContent = item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : (item.unit ? `Unit: ${item.unit}` : '');
-                assemblyCell.appendChild(meta);
+                appendChildren(assemblyCell, [
+                    select,
+                    createElement('div', {
+                        className: 'estimator-assembly-meta',
+                        dataset: { role: 'materialMeta' },
+                        textContent: item.lastUpdated
+                            ? `Updated ${formatDateForDisplay(item.lastUpdated)}`
+                            : item.unit
+                                ? `Unit: ${item.unit}`
+                                : '',
+                    }),
+                ]);
             }
             row.appendChild(assemblyCell);
 
-            const quantityCell = document.createElement('td');
-            const quantityWrap = document.createElement('div');
-            quantityWrap.className = 'estimator-quantity-cell';
-
-            const quantityInput = document.createElement('input');
-            quantityInput.type = 'number';
-            quantityInput.className = 'form-input';
-            quantityInput.dataset.field = 'quantity';
-            quantityInput.step = '0.01';
-            quantityInput.min = '0';
-            quantityInput.value = Number.isFinite(item.quantity) ? item.quantity : 0;
-            quantityWrap.appendChild(quantityInput);
+            const quantityInputValue = Number.isFinite(item.quantity) ? item.quantity : 0;
+            const quantityCell = createElement('td');
+            const quantityWrap = createElement('div', { className: 'estimator-quantity-cell' });
+            quantityWrap.appendChild(createElement('input', {
+                className: 'form-input',
+                dataset: { field: 'quantity' },
+                min: '0',
+                step: '0.01',
+                type: 'number',
+                value: quantityInputValue,
+            }));
 
             if (item.category === 'custom') {
-                const unitInput = document.createElement('input');
-                unitInput.type = 'text';
-                unitInput.className = 'form-input estimator-unit-input';
-                unitInput.dataset.field = 'unit';
-                unitInput.placeholder = 'Unit';
-                unitInput.value = item.unit || '';
-                quantityWrap.appendChild(unitInput);
+                quantityWrap.appendChild(createElement('input', {
+                    className: 'form-input estimator-unit-input',
+                    dataset: { field: 'unit' },
+                    placeholder: 'Unit',
+                    type: 'text',
+                    value: item.unit || '',
+                }));
             } else {
-                const unitChip = document.createElement('span');
-                unitChip.className = 'unit-chip';
-                unitChip.dataset.role = 'unitLabel';
-                unitChip.textContent = item.unit || 'unit';
-                quantityWrap.appendChild(unitChip);
+                quantityWrap.appendChild(createElement('span', {
+                    className: 'unit-chip',
+                    dataset: { role: 'unitLabel' },
+                    textContent: item.unit || 'unit',
+                }));
             }
 
             quantityCell.appendChild(quantityWrap);
 
             if (item.category !== 'custom') {
-                const toggleButton = document.createElement('button');
-                toggleButton.type = 'button';
-                toggleButton.className = 'link-btn estimator-quantity-action';
-                toggleButton.dataset.action = item.manualQuantity ? 'reset-auto' : 'toggle-manual';
-                toggleButton.textContent = item.manualQuantity ? 'Use auto quantity' : 'Manual override';
-                quantityCell.appendChild(toggleButton);
+                quantityCell.appendChild(createElement('button', {
+                    className: 'link-btn estimator-quantity-action',
+                    dataset: { action: item.manualQuantity ? 'reset-auto' : 'toggle-manual' },
+                    textContent: item.manualQuantity ? 'Use auto quantity' : 'Manual override',
+                    type: 'button',
+                }));
             }
 
             row.appendChild(quantityCell);
 
-            const costCell = document.createElement('td');
-            const costInput = document.createElement('input');
-            costInput.type = 'number';
-            costInput.className = 'form-input';
-            costInput.dataset.field = 'unitCost';
-            costInput.step = '0.01';
-            costInput.min = '0';
-            costInput.value = Number.isFinite(item.unitCost) ? item.unitCost : 0;
-            costCell.appendChild(costInput);
-
-            const unitHint = document.createElement('span');
-            unitHint.className = 'unit-hint';
-            unitHint.dataset.role = 'unitHint';
-            unitHint.textContent = item.unit ? `per ${item.unit}` : '';
-            costCell.appendChild(unitHint);
-
+            const costCell = createElement('td');
+            costCell.appendChild(createElement('input', {
+                className: 'form-input',
+                dataset: { field: 'unitCost' },
+                min: '0',
+                step: '0.01',
+                type: 'number',
+                value: Number.isFinite(item.unitCost) ? item.unitCost : 0,
+            }));
+            costCell.appendChild(createElement('span', {
+                className: 'unit-hint',
+                dataset: { role: 'unitHint' },
+                textContent: item.unit ? `per ${item.unit}` : '',
+            }));
             row.appendChild(costCell);
 
-            const totalCell = document.createElement('td');
-            const totalValue = document.createElement('div');
-            totalValue.className = 'estimator-total';
-            totalValue.dataset.role = 'lineTotal';
-            totalValue.textContent = formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0));
-            totalCell.appendChild(totalValue);
+            const totalCell = createElement('td');
+            totalCell.appendChild(createElement('div', {
+                className: 'estimator-total',
+                dataset: { role: 'lineTotal' },
+                textContent: formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0)),
+            }));
 
             if (item.category === 'custom') {
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.className = 'link-btn danger estimator-quantity-action';
-                removeBtn.dataset.action = 'remove-item';
-                removeBtn.textContent = 'Remove';
-                totalCell.appendChild(removeBtn);
+                totalCell.appendChild(createElement('button', {
+                    className: 'link-btn danger estimator-quantity-action',
+                    dataset: { action: 'remove-item' },
+                    textContent: 'Remove',
+                    type: 'button',
+                }));
             }
 
             row.appendChild(totalCell);
@@ -623,56 +640,36 @@ import {
         function updateEstimatorRowDisplay(row, item) {
             if (!row) return;
 
-            const quantityInput = row.querySelector('[data-field="quantity"]');
-            if (quantityInput && document.activeElement !== quantityInput) {
-                quantityInput.value = Number.isFinite(item.quantity) ? item.quantity : 0;
-            }
-
-            const unitInput = row.querySelector('[data-field="unit"]');
-            if (unitInput && document.activeElement !== unitInput) {
-                unitInput.value = item.unit || '';
-            }
-
-            const unitLabel = row.querySelector('[data-role="unitLabel"]');
-            if (unitLabel) {
-                unitLabel.textContent = item.unit || 'unit';
-            }
-
-            const unitHint = row.querySelector('[data-role="unitHint"]');
-            if (unitHint) {
-                unitHint.textContent = item.unit ? `per ${item.unit}` : '';
-            }
+            setValueIfChanged(row.querySelector('[data-field="quantity"]'), Number.isFinite(item.quantity) ? item.quantity : 0);
+            setValueIfChanged(row.querySelector('[data-field="unit"]'), item.unit || '');
+            setTextIfChanged(row.querySelector('[data-role="unitLabel"]'), item.unit || 'unit');
+            setTextIfChanged(row.querySelector('[data-role="unitHint"]'), item.unit ? `per ${item.unit}` : '');
 
             const materialSelect = row.querySelector('[data-field="material"]');
-            if (materialSelect && materialSelect.value !== item.materialKey) {
-                materialSelect.value = item.materialKey || '';
-            }
+            setSelectValue(materialSelect, item.materialKey || '');
 
-            const materialMeta = row.querySelector('[data-role="materialMeta"]');
-            if (materialMeta) {
-                materialMeta.textContent = item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : (item.unit ? `Unit: ${item.unit}` : '');
-            }
+            setTextIfChanged(
+                row.querySelector('[data-role="materialMeta"]'),
+                item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : item.unit ? `Unit: ${item.unit}` : ''
+            );
 
-            const quantityHint = row.querySelector('[data-role="quantityHint"]');
-            if (quantityHint) {
-                quantityHint.textContent = item.manualQuantity ? 'Manual quantity override' : (getScopeConfig(item.scopeId || item.category)?.hint || '');
-            }
+            setTextIfChanged(
+                row.querySelector('[data-role="quantityHint"]'),
+                item.manualQuantity
+                    ? 'Manual quantity override'
+                    : getScopeConfig(item.scopeId || item.category)?.hint || ''
+            );
 
             const toggleButton = row.querySelector('.estimator-quantity-action[data-action]');
             if (toggleButton && item.category !== 'custom') {
-                if (item.manualQuantity) {
-                    toggleButton.dataset.action = 'reset-auto';
-                    toggleButton.textContent = 'Use auto quantity';
-                } else {
-                    toggleButton.dataset.action = 'toggle-manual';
-                    toggleButton.textContent = 'Manual override';
-                }
+                toggleButton.dataset.action = item.manualQuantity ? 'reset-auto' : 'toggle-manual';
+                setTextIfChanged(toggleButton, item.manualQuantity ? 'Use auto quantity' : 'Manual override');
             }
 
-            const totalValue = row.querySelector('[data-role="lineTotal"]');
-            if (totalValue) {
-                totalValue.textContent = formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0));
-            }
+            setTextIfChanged(
+                row.querySelector('[data-role="lineTotal"]'),
+                formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0))
+            );
         }
 
         function updateEstimatorSummaryTotals() {
