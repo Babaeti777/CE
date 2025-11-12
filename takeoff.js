@@ -570,13 +570,18 @@ export class TakeoffManager {
             if (!Array.isArray(parsed)) {
                 return;
             }
-            this.state.drawings = parsed.map((item) => ({
-                ...item,
-                type: item.type || 'image',
-                annotations: Array.isArray(item.annotations) ? item.annotations : [],
-                notes: typeof item.notes === 'string' ? item.notes : '',
-                rotation: item.rotation || 0
-            }));
+            this.state.drawings = parsed.map((item) => {
+                const sourceUrl = typeof item.sourceUrl === 'string' ? item.sourceUrl : null;
+                return {
+                    ...item,
+                    type: item.type || 'image',
+                    annotations: Array.isArray(item.annotations) ? item.annotations : [],
+                    notes: typeof item.notes === 'string' ? item.notes : '',
+                    rotation: item.rotation || 0,
+                    sourceUrl,
+                    objectUrl: typeof item.objectUrl === 'string' ? item.objectUrl : sourceUrl || null
+                };
+            });
             this.state.drawings.forEach((drawing) => {
                 if (Array.isArray(drawing.savedMeasurements) && drawing.savedMeasurements.length) {
                     this.setMeasurementItems(drawing.id, drawing.savedMeasurements);
@@ -608,7 +613,8 @@ export class TakeoffManager {
                 rotation: drawing.rotation || 0,
                 createdAt: drawing.createdAt,
                 annotations: Array.isArray(drawing.annotations) ? drawing.annotations : [],
-                savedMeasurements: this.getMeasurementItems(drawing.id)
+                savedMeasurements: this.getMeasurementItems(drawing.id),
+                sourceUrl: typeof drawing.sourceUrl === 'string' ? drawing.sourceUrl : null
             }));
             storage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch (error) {
