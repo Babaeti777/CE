@@ -1,6 +1,5 @@
 import { TakeoffManager } from './takeoff.js';
 import { StateManager } from './state/state-manager.js';
-import { createInitialState } from './state/initial-state.js';
 import { createStorageService } from './services/storage-service.js';
 import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
@@ -26,6 +25,17 @@ import {
     QUICK_SCOPE_ORDER,
 } from './state/initial-state.js';
 import {
+    SETTINGS_STORAGE_KEY,
+    SYNC_STATUS_RESET_DELAY,
+    SYNC_PROFILE_STORAGE_KEY,
+    FIREBASE_CONFIG_STORAGE_KEY,
+    FREQUENCY_INTERVALS,
+    CLOUD_STATUS_MESSAGES,
+    DATABASE_STORAGE_KEY,
+    DATABASE_VERSION_KEY,
+    DATABASE_SOURCE_URL,
+} from './config/app-constants.js';
+import {
     initializeFirebase,
     isFirebaseConfigured,
     subscribeToProjects as subscribeToCloudProjects,
@@ -43,59 +53,7 @@ import {
 (function() {
         'use strict';
 
-        const DATABASE_CACHE_KEY = 'ce:materials:cache:v2';
-        const SETTINGS_STORAGE_KEY = 'ce:settings';
-        const SYNC_STATUS_RESET_DELAY = 2500;
-        const SYNC_PROFILE_STORAGE_KEY = 'ce:cloud:profile-id';
-        const FIREBASE_CONFIG_STORAGE_KEY = 'ce:firebase-config';
-        const FREQUENCY_INTERVALS = {
-            daily: 24 * 60 * 60 * 1000,
-            weekly: 7 * 24 * 60 * 60 * 1000,
-            monthly: 30 * 24 * 60 * 60 * 1000
-        };
-        const CLOUD_STATUS_MESSAGES = {
-            disabled: 'Configure Firebase to enable cloud sync.',
-            offline: 'Cloud sync offline',
-            connecting: 'Connecting to Firebase…',
-            connected: 'Cloud sync connected',
-            error: 'Cloud sync unavailable',
-            authRequired: 'Sign in with Google to enable cloud sync.'
-        };
-
-        // --- STATE MANAGEMENT ---
-        const initialState = {
-            currentTab: 'dashboard',
-            materialPrices: {},
-            lineItemCategories: {},
-            laborRates: {},
-            equipmentRates: {},
-            regionalAdjustments: {},
-            costIndices: {},
-            referenceAssemblies: [],
-            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
-            savedProjects: [],
-            companyInfo: { ...EMPTY_COMPANY_INFO },
-            currentEstimate: null,
-            quickEstimatorItems: [],
-            editingProjectId: null,
-            lineItemId: 0,
-            lastFocusedInput: null,
-            calcMode: 'basic',
-            calculator: {
-                displayValue: '0',
-                firstOperand: null,
-                waitingForSecondOperand: false,
-                operator: null,
-            },
-            pendingUpdate: null,
-            syncProfileId: null,
-            remoteSyncEnabled: false,
-            remoteSyncStatus: 'disabled',
-            authUser: null,
-            firebaseConfig: null,
-        };
-
-        const stateManager = new StateManager(initialState);
+        const stateManager = new StateManager(createInitialState());
         const state = stateManager.state;
         const storage = createStorageService({ prefix: 'ce' });
         const loadingManager = new LoadingManager();
