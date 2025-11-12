@@ -269,11 +269,6 @@ export class TakeoffManager {
             clearBtn: byId('takeoffClearBtn'),
             exportCsvBtn: byId('takeoffExportCsvBtn'),
             pushBtn: byId('takeoffPushBtn'),
-            drawingForm: byId('takeoffDrawingForm'),
-            drawingName: byId('takeoffDrawingName'),
-            drawingTrade: byId('takeoffDrawingTrade'),
-            drawingFloor: byId('takeoffDrawingFloor'),
-            drawingNotes: byId('takeoffDrawingNotes'),
             measurementForm: byId('takeoffMeasurementForm'),
             measurementLabel: byId('measurementLabelInput'),
             measurementMode: byId('measurementModeSelect'),
@@ -319,7 +314,6 @@ export class TakeoffManager {
             clearBtn,
             exportCsvBtn,
             pushBtn,
-            drawingForm,
             measurementForm,
             addNoteBtn,
             noteList,
@@ -328,7 +322,6 @@ export class TakeoffManager {
             annotationLayer
         } = this.elements;
 
-        this.lifecycle.addEventListener(drawingForm, 'submit', (event) => this.handleDrawingFormSubmit(event));
         this.lifecycle.addEventListener(measurementForm, 'submit', (event) => this.handleMeasurementFormSubmit(event));
         this.lifecycle.addEventListener(drawingInput, 'change', (event) => this.handleDrawingUpload(event));
         this.lifecycle.addEventListener(sortSelect, 'change', (event) => {
@@ -463,46 +456,6 @@ export class TakeoffManager {
         if (summaryContainer) {
             summaryContainer.textContent = entries.join(' • ');
         }
-    }
-
-    handleDrawingFormSubmit(event) {
-        event?.preventDefault?.();
-
-        const { drawingName, drawingTrade, drawingFloor, drawingNotes } = this.elements;
-        const name = drawingName?.value?.trim();
-        if (!name) {
-            this.showToast('Enter a drawing name before saving.', 'warning');
-            return null;
-        }
-
-        const drawing = {
-            id: createId('drawing'),
-            name,
-            trade: drawingTrade?.value?.trim() || '',
-            floor: drawingFloor?.value?.trim() || '',
-            page: '',
-            notes: drawingNotes?.value?.trim() || '',
-            createdAt: Date.now(),
-            type: 'manual',
-            rotation: 0,
-            annotations: [],
-            measurements: []
-        };
-
-        this.state.drawings.push(drawing);
-        this.state.currentDrawingId = drawing.id;
-        this.setMeasurementItems(drawing.id, []);
-        this.renderDrawingList();
-        this.updateActiveDrawingDisplay();
-        this.updatePlanVisibility();
-        this.refreshMeasurementTable(drawing.id);
-        this.drawMeasurements();
-        this.renderMeasurementSummary(drawing);
-        this.renderNotes(drawing);
-        this.updateStatus('Drawing saved.');
-        this.persistState();
-
-        return drawing;
     }
 
     handleMeasurementFormSubmit(event) {
@@ -1436,68 +1389,6 @@ export class TakeoffManager {
         this.persistState();
     }
 
-    handleDrawingFormSubmit(event) {
-        event?.preventDefault?.();
-        const {
-            drawingName,
-            drawingTrade,
-            drawingFloor,
-            drawingNotes,
-            measurementList,
-            drawingEmptyState
-        } = this.elements;
-
-        const name = drawingName?.value?.trim() || '';
-        if (!name) {
-            this.showToast('Enter a drawing name before saving.', 'warning');
-            return;
-        }
-
-        const drawing = {
-            id: createId(),
-            name,
-            trade: drawingTrade?.value?.trim() || '',
-            floor: drawingFloor?.value?.trim() || '',
-            page: '',
-            createdAt: Date.now(),
-            type: 'manual',
-            notes: drawingNotes?.value?.trim() || '',
-            rotation: 0,
-            annotations: [],
-            naturalWidth: this.elements.canvas?.width || 0,
-            naturalHeight: this.elements.canvas?.height || 0,
-            measurements: []
-        };
-
-        this.state.drawings.push(drawing);
-        this.measurements.set(drawing.id, { items: [] });
-        this.measurementCounters.set(drawing.id, this.createEmptyCounters());
-        this.state.currentDrawingId = drawing.id;
-
-        if (drawingName) drawingName.value = '';
-        if (drawingTrade) drawingTrade.value = '';
-        if (drawingFloor) drawingFloor.value = '';
-        if (drawingNotes) drawingNotes.value = '';
-
-        this.renderDrawingList();
-        this.updateActiveDrawingDisplay();
-        this.updatePlanVisibility();
-        this.refreshMeasurementTable(drawing.id);
-        this.drawMeasurements();
-        this.renderNotes(drawing);
-
-        if (measurementList) {
-            measurementList.textContent = 'Add measurements to capture quantities.';
-        }
-        if (drawingEmptyState) {
-            drawingEmptyState.textContent = '';
-        }
-
-        this.persistState();
-        this.updateStatus('Drawing added.');
-        this.showToast('Drawing saved.', 'success');
-    }
-
     async handleDrawingUpload(event) {
         const files = Array.from(event?.target?.files || []);
         if (!files.length) {
@@ -1541,9 +1432,9 @@ export class TakeoffManager {
 
     async createDrawingFromFile(file) {
         const id = createId();
-        const sourceUrl = await this.readFileAsDataURL(file);
 
         if (SUPPORTED_IMAGE_TYPES.has(file.type)) {
+            const sourceUrl = await this.readFileAsDataURL(file);
             return {
                 id,
                 name: file.name,
@@ -1565,16 +1456,17 @@ export class TakeoffManager {
         }
 
         if (SUPPORTED_PDF_TYPES.has(file.type)) {
-            return this.createPdfDrawing(file, id, sourceUrl);
+            return this.createPdfDrawing(file, id);
         }
 
-        URL.revokeObjectURL(objectUrl);
         throw new Error('Unsupported file type. Upload PDF, PNG, JPG, GIF, SVG, or WebP plans.');
     }
 
-    async createPdfDrawing(file, id, sourceUrl) {
+    async createPdfDrawing(file, id) {
         await this.ensurePdfWorker();
+        const dataUrlPromise = this.readFileAsDataURL(file);
         const arrayBuffer = await file.arrayBuffer();
+        const sourceUrl = await dataUrlPromise;
         const pdfData = new Uint8Array(arrayBuffer);
         const pdf = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
         const pageNumber = 1;
