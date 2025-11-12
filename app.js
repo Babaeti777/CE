@@ -16,7 +16,6 @@ import {
 } from './utils/dom.js';
 import { calculate as performCalculation, handleUnitConversion as convertUnits } from './calculator.js';
 import {
-    createInitialState,
     DEFAULT_MATERIAL_UNITS,
     EMPTY_COMPANY_INFO,
     PRIORITY_LINE_ITEM_CATEGORIES,
@@ -25,15 +24,15 @@ import {
     QUICK_SCOPE_ORDER,
 } from './state/initial-state.js';
 import {
-    SETTINGS_STORAGE_KEY,
-    SYNC_STATUS_RESET_DELAY,
-    SYNC_PROFILE_STORAGE_KEY,
-    FIREBASE_CONFIG_STORAGE_KEY,
-    FREQUENCY_INTERVALS,
     CLOUD_STATUS_MESSAGES,
+    DATABASE_SOURCE_URL,
     DATABASE_STORAGE_KEY,
     DATABASE_VERSION_KEY,
-    DATABASE_SOURCE_URL,
+    FIREBASE_CONFIG_STORAGE_KEY,
+    FREQUENCY_INTERVALS,
+    SETTINGS_STORAGE_KEY,
+    SYNC_PROFILE_STORAGE_KEY,
+    SYNC_STATUS_RESET_DELAY,
 } from './config/app-constants.js';
 import {
     initializeFirebase,
@@ -53,7 +52,42 @@ import {
 (function() {
         'use strict';
 
-        const stateManager = new StateManager(createInitialState());
+        const DATABASE_CACHE_KEY = 'ce:materials:cache:v2';
+
+        // --- STATE MANAGEMENT ---
+        const initialState = {
+            currentTab: 'dashboard',
+            materialPrices: {},
+            lineItemCategories: {},
+            laborRates: {},
+            equipmentRates: {},
+            regionalAdjustments: {},
+            costIndices: {},
+            referenceAssemblies: [],
+            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
+            savedProjects: [],
+            companyInfo: { ...EMPTY_COMPANY_INFO },
+            currentEstimate: null,
+            quickEstimatorItems: [],
+            editingProjectId: null,
+            lineItemId: 0,
+            lastFocusedInput: null,
+            calcMode: 'basic',
+            calculator: {
+                displayValue: '0',
+                firstOperand: null,
+                waitingForSecondOperand: false,
+                operator: null,
+            },
+            pendingUpdate: null,
+            syncProfileId: null,
+            remoteSyncEnabled: false,
+            remoteSyncStatus: 'disabled',
+            authUser: null,
+            firebaseConfig: null,
+        };
+
+        const stateManager = new StateManager(initialState);
         const state = stateManager.state;
         const storage = createStorageService({ prefix: 'ce' });
         const loadingManager = new LoadingManager();
