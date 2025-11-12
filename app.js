@@ -1,13 +1,28 @@
 import { TakeoffManager } from './takeoff.js';
 import { StateManager } from './state/state-manager.js';
+import { createInitialState } from './state/initial-state.js';
 import { createStorageService } from './services/storage-service.js';
-import { ErrorBoundary } from './utils/error-boundary.js';
-import { debounce } from './utils/debounce.js';
 import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
 import { LifecycleManager } from './services/lifecycle-manager.js';
+import { ErrorBoundary } from './utils/error-boundary.js';
+import { debounce } from './utils/debounce.js';
 import { clampPercentage } from './utils/percentage.js';
 import { calculate as performCalculation, handleUnitConversion as convertUnits } from './calculator.js';
+import {
+    SETTINGS_STORAGE_KEY,
+    SYNC_STATUS_RESET_DELAY,
+    SYNC_PROFILE_STORAGE_KEY,
+    FIREBASE_CONFIG_STORAGE_KEY,
+    DATABASE_STORAGE_KEY,
+    DATABASE_VERSION_KEY,
+    DATABASE_SOURCE_URL,
+    FREQUENCY_INTERVALS,
+    CLOUD_STATUS_MESSAGES,
+    EMPTY_COMPANY_INFO,
+} from './config/app-constants.js';
+import { QUICK_SCOPE_CONFIG, QUICK_SCOPE_ORDER, QUICK_SCOPE_CATEGORIES } from './config/quick-scope.js';
+import { DEFAULT_MATERIAL_UNITS, PRIORITY_LINE_ITEM_CATEGORIES } from './config/materials.js';
 import {
     initializeFirebase,
     isFirebaseConfigured,
@@ -26,101 +41,10 @@ import {
 (function() {
         'use strict';
 
-        const DATABASE_CACHE_KEY = 'ce:materials:cache:v2';
-        const SETTINGS_STORAGE_KEY = 'ce:settings';
-        const SYNC_STATUS_RESET_DELAY = 2500;
-        const SYNC_PROFILE_STORAGE_KEY = 'ce:cloud:profile-id';
-        const FIREBASE_CONFIG_STORAGE_KEY = 'ce:firebase-config';
-        const FREQUENCY_INTERVALS = {
-            daily: 24 * 60 * 60 * 1000,
-            weekly: 7 * 24 * 60 * 60 * 1000,
-            monthly: 30 * 24 * 60 * 60 * 1000
-        };
-        const CLOUD_STATUS_MESSAGES = {
-            disabled: 'Configure Firebase to enable cloud sync.',
-            offline: 'Cloud sync offline',
-            connecting: 'Connecting to Firebase…',
-            connected: 'Cloud sync connected',
-            error: 'Cloud sync unavailable',
-            authRequired: 'Sign in with Google to enable cloud sync.'
-        };
-
-        const EMPTY_COMPANY_INFO = { name: '', address: '', phone: '', email: '' };
-
-        const QUICK_SCOPE_CONFIG = [
-            {
-                id: 'foundation',
-                scopeLabel: 'Foundation System',
-                category: 'foundation',
-                fallbackMaterial: 'slab',
-                quantity: ({ sqft }) => sqft,
-                hint: 'Uses footprint square footage to price concrete work.',
-            },
-            {
-                id: 'framing',
-                scopeLabel: 'Structural Framing',
-                category: 'framing',
-                fallbackMaterial: 'wood',
-                quantity: ({ sqft, floors }) => sqft * floors,
-                hint: 'Multiplies footprint by the floor count for framing volume.',
-            },
-            {
-                id: 'exterior',
-                scopeLabel: 'Building Envelope',
-                category: 'exterior',
-                fallbackMaterial: 'vinyl',
-                quantity: ({ sqft, floors }) => sqft * floors * 0.8,
-                hint: 'Approx. 80% of exterior wall area for skin systems.',
-            }
-        ];
-
-        const QUICK_SCOPE_ORDER = QUICK_SCOPE_CONFIG.map(cfg => cfg.id);
-        const QUICK_SCOPE_CATEGORIES = [...new Set(QUICK_SCOPE_CONFIG.map(cfg => cfg.category))];
-
         // --- STATE MANAGEMENT ---
-        const initialState = {
-            currentTab: 'dashboard',
-            materialPrices: {},
-            lineItemCategories: {},
-            laborRates: {},
-            equipmentRates: {},
-            regionalAdjustments: {},
-            costIndices: {},
-            referenceAssemblies: [],
-            databaseMeta: {},
-            savedProjects: [],
-            companyInfo: { ...EMPTY_COMPANY_INFO },
-            currentEstimate: null,
-            quickEstimatorItems: [],
-            editingProjectId: null,
-            lineItemId: 0,
-            lastFocusedInput: null,
-            calcMode: "basic",
-            calculator: {
-                displayValue: '0',
-                firstOperand: null,
-                waitingForSecondOperand: false,
-                operator: null
-            },
-            lineItemCategories: {},
-            laborRates: {},
-            equipmentRates: {},
-            regionalAdjustments: {},
-            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
-            pendingUpdate: null,
-            syncProfileId: null,
-            remoteSyncEnabled: false,
-            remoteSyncStatus: 'disabled',
-            authUser: null,
-            firebaseConfig: null,
-        };
-
-        const stateManager = new StateManager(initialState);
+        const stateManager = new StateManager(createInitialState());
         const state = stateManager.state;
         const storage = createStorageService({ prefix: 'ce' });
-        const DATABASE_STORAGE_KEY = 'materialDatabase';
-        const DATABASE_VERSION_KEY = 'materialDatabaseVersion';
-        const DATABASE_SOURCE_URL = 'data/database.json';
         const loadingManager = new LoadingManager();
         const commandHistory = new CommandHistory();
         let priceTrendChart = null;
