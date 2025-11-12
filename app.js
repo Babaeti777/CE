@@ -1,12 +1,39 @@
 import { TakeoffManager } from './takeoff.js';
 import { StateManager } from './state/state-manager.js';
 import { createStorageService } from './services/storage-service.js';
-import { ErrorBoundary } from './utils/error-boundary.js';
-import { debounce } from './utils/debounce.js';
 import { LoadingManager } from './services/loading-manager.js';
 import { CommandHistory } from './services/command-history.js';
 import { LifecycleManager } from './services/lifecycle-manager.js';
+import { ErrorBoundary } from './utils/error-boundary.js';
+import { debounce } from './utils/debounce.js';
+import { clampPercentage } from './utils/percentage.js';
+import {
+    appendChildren,
+    createElement,
+    setSelectValue,
+    setTextIfChanged,
+    setValueIfChanged,
+} from './utils/dom.js';
 import { calculate as performCalculation, handleUnitConversion as convertUnits } from './calculator.js';
+import {
+    DEFAULT_MATERIAL_UNITS,
+    EMPTY_COMPANY_INFO,
+    PRIORITY_LINE_ITEM_CATEGORIES,
+    QUICK_SCOPE_CATEGORIES,
+    QUICK_SCOPE_CONFIG,
+    QUICK_SCOPE_ORDER,
+} from './state/initial-state.js';
+import {
+    CLOUD_STATUS_MESSAGES,
+    DATABASE_SOURCE_URL,
+    DATABASE_STORAGE_KEY,
+    DATABASE_VERSION_KEY,
+    FIREBASE_CONFIG_STORAGE_KEY,
+    FREQUENCY_INTERVALS,
+    SETTINGS_STORAGE_KEY,
+    SYNC_PROFILE_STORAGE_KEY,
+    SYNC_STATUS_RESET_DELAY,
+} from './config/app-constants.js';
 import {
     initializeFirebase,
     isFirebaseConfigured,
@@ -26,55 +53,6 @@ import {
         'use strict';
 
         const DATABASE_CACHE_KEY = 'ce:materials:cache:v2';
-        const SETTINGS_STORAGE_KEY = 'ce:settings';
-        const SYNC_STATUS_RESET_DELAY = 2500;
-        const SYNC_PROFILE_STORAGE_KEY = 'ce:cloud:profile-id';
-        const FIREBASE_CONFIG_STORAGE_KEY = 'ce:firebase-config';
-        const FREQUENCY_INTERVALS = {
-            daily: 24 * 60 * 60 * 1000,
-            weekly: 7 * 24 * 60 * 60 * 1000,
-            monthly: 30 * 24 * 60 * 60 * 1000
-        };
-        const CLOUD_STATUS_MESSAGES = {
-            disabled: 'Configure Firebase to enable cloud sync.',
-            offline: 'Cloud sync offline',
-            connecting: 'Connecting to Firebase…',
-            connected: 'Cloud sync connected',
-            error: 'Cloud sync unavailable',
-            authRequired: 'Sign in with Google to enable cloud sync.'
-        };
-
-        const EMPTY_COMPANY_INFO = { name: '', address: '', phone: '', email: '' };
-
-        const QUICK_SCOPE_CONFIG = [
-            {
-                id: 'foundation',
-                scopeLabel: 'Foundation System',
-                category: 'foundation',
-                fallbackMaterial: 'slab',
-                quantity: ({ sqft }) => sqft,
-                hint: 'Uses footprint square footage to price concrete work.',
-            },
-            {
-                id: 'framing',
-                scopeLabel: 'Structural Framing',
-                category: 'framing',
-                fallbackMaterial: 'wood',
-                quantity: ({ sqft, floors }) => sqft * floors,
-                hint: 'Multiplies footprint by the floor count for framing volume.',
-            },
-            {
-                id: 'exterior',
-                scopeLabel: 'Building Envelope',
-                category: 'exterior',
-                fallbackMaterial: 'vinyl',
-                quantity: ({ sqft, floors }) => sqft * floors * 0.8,
-                hint: 'Approx. 80% of exterior wall area for skin systems.',
-            }
-        ];
-
-        const QUICK_SCOPE_ORDER = QUICK_SCOPE_CONFIG.map(cfg => cfg.id);
-        const QUICK_SCOPE_CATEGORIES = [...new Set(QUICK_SCOPE_CONFIG.map(cfg => cfg.category))];
 
         // --- STATE MANAGEMENT ---
         const initialState = {
@@ -86,7 +64,7 @@ import {
             regionalAdjustments: {},
             costIndices: {},
             referenceAssemblies: [],
-            databaseMeta: {},
+            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
             savedProjects: [],
             companyInfo: { ...EMPTY_COMPANY_INFO },
             currentEstimate: null,
@@ -94,18 +72,13 @@ import {
             editingProjectId: null,
             lineItemId: 0,
             lastFocusedInput: null,
-            calcMode: "basic",
+            calcMode: 'basic',
             calculator: {
                 displayValue: '0',
                 firstOperand: null,
                 waitingForSecondOperand: false,
-                operator: null
+                operator: null,
             },
-            lineItemCategories: {},
-            laborRates: {},
-            equipmentRates: {},
-            regionalAdjustments: {},
-            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
             pendingUpdate: null,
             syncProfileId: null,
             remoteSyncEnabled: false,
@@ -117,9 +90,6 @@ import {
         const stateManager = new StateManager(initialState);
         const state = stateManager.state;
         const storage = createStorageService({ prefix: 'ce' });
-        const DATABASE_STORAGE_KEY = 'materialDatabase';
-        const DATABASE_VERSION_KEY = 'materialDatabaseVersion';
-        const DATABASE_SOURCE_URL = 'data/database.json';
         const loadingManager = new LoadingManager();
         const commandHistory = new CommandHistory();
         let priceTrendChart = null;
@@ -271,26 +241,6 @@ import {
             }
         }
 
-        const DEFAULT_MATERIAL_UNITS = {
-            foundation: 'sq ft',
-            framing: 'sq ft',
-            exterior: 'sq ft',
-            roofing: 'sq ft',
-            flooring: 'sq ft',
-            insulation: 'sq ft',
-            interiorFinishes: 'sq ft',
-            openings: 'each',
-            mechanical: 'ton',
-            plumbing: 'fixture',
-            electrical: 'sq ft',
-            sitework: 'sq ft',
-            fireProtection: 'sq ft',
-            specialties: 'allowance',
-            demolition: 'sq ft',
-        };
-
-        const PRIORITY_LINE_ITEM_CATEGORIES = ['Demolition'];
-
         function normalizeMaterialEntry(category, key, entry, fallbackUpdated, fallbackSource) {
             const normalized = {};
             if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
@@ -343,17 +293,25 @@ import {
             });
         }
 
-        function ensureQuickEstimatorBaseline() {
+        function getQuickEstimatorItems({ createIfMissing = false } = {}) {
             if (!Array.isArray(state.quickEstimatorItems)) {
+                if (!createIfMissing) {
+                    return [];
+                }
                 state.quickEstimatorItems = [];
             }
+            return state.quickEstimatorItems;
+        }
+
+        function ensureQuickEstimatorBaseline() {
+            const items = getQuickEstimatorItems({ createIfMissing: true });
 
             QUICK_SCOPE_CONFIG.forEach(config => {
-                const existing = state.quickEstimatorItems.find(item => item.scopeId === config.id);
+                const existing = items.find(item => item.scopeId === config.id);
                 if (!existing) {
                     const materialKey = findFallbackMaterialKey(config.category, config.fallbackMaterial);
                     const material = getMaterialData(config.category, materialKey);
-                    state.quickEstimatorItems.push({
+                    items.push({
                         id: `qe-${config.id}`,
                         scopeId: config.id,
                         scopeLabel: config.scopeLabel,
@@ -378,9 +336,10 @@ import {
         }
 
         function syncQuickEstimatorMaterials({ reRender = false } = {}) {
-            if (!Array.isArray(state.quickEstimatorItems)) return;
+            const items = getQuickEstimatorItems();
+            if (!items.length) return;
 
-            state.quickEstimatorItems.forEach(item => {
+            items.forEach(item => {
                 if (item.category === 'custom') return;
 
                 const options = getMaterialOptions(item.category);
@@ -416,10 +375,11 @@ import {
         }
 
         function updateAutoQuantities({ reRender = false } = {}) {
-            if (!Array.isArray(state.quickEstimatorItems)) return;
+            const items = getQuickEstimatorItems();
+            if (!items.length) return;
             const { sqft, floors } = getEstimatorInputs();
 
-            state.quickEstimatorItems.forEach(item => {
+            items.forEach(item => {
                 if (item.category === 'custom' || item.manualQuantity) return;
                 const config = getScopeConfig(item.scopeId || item.category);
                 if (!config || typeof config.quantity !== 'function') return;
@@ -431,9 +391,9 @@ import {
         }
 
         function getOrderedEstimatorItems() {
-            if (!Array.isArray(state.quickEstimatorItems)) return [];
-            const items = state.quickEstimatorItems.slice();
-            return items.sort((a, b) => {
+            const items = getQuickEstimatorItems();
+            if (!items.length) return [];
+            return items.slice().sort((a, b) => {
                 const orderA = QUICK_SCOPE_ORDER.indexOf(a.scopeId);
                 const orderB = QUICK_SCOPE_ORDER.indexOf(b.scopeId);
                 if (orderA !== -1 && orderB !== -1) return orderA - orderB;
@@ -470,148 +430,158 @@ import {
                 table.setAttribute('aria-hidden', 'false');
             }
             if (wrapper) wrapper.classList.remove('empty');
-            items.forEach(item => {
-                tbody.appendChild(buildEstimatorRow(item));
-            });
+            items.forEach(item => tbody.appendChild(buildEstimatorRow(item)));
             updateEstimatorSummaryTotals();
         }
 
         function buildEstimatorRow(item) {
-            const row = document.createElement('tr');
-            row.className = 'estimator-row';
-            row.dataset.estimatorId = String(item.id);
-            if (item.scopeId) row.dataset.scope = item.scopeId;
-            row.dataset.category = item.category;
+            const row = createElement('tr', {
+                className: 'estimator-row',
+                dataset: {
+                    estimatorId: String(item.id),
+                    scope: item.scopeId || undefined,
+                    category: item.category,
+                },
+            });
 
-            const scopeCell = document.createElement('td');
+            const scopeCell = createElement('td');
             if (item.category === 'custom') {
-                const scopeInput = document.createElement('input');
-                scopeInput.type = 'text';
-                scopeInput.className = 'form-input estimator-scope-input';
-                scopeInput.placeholder = 'Scope name';
-                scopeInput.dataset.field = 'scopeName';
-                scopeInput.value = item.scopeLabel || item.customScopeName || '';
-                scopeCell.appendChild(scopeInput);
+                scopeCell.appendChild(createElement('input', {
+                    className: 'form-input estimator-scope-input',
+                    dataset: { field: 'scopeName' },
+                    placeholder: 'Scope name',
+                    type: 'text',
+                    value: item.scopeLabel || item.customScopeName || '',
+                }));
             } else {
-                const title = document.createElement('div');
-                title.className = 'estimator-scope-title';
-                title.textContent = item.scopeLabel || getScopeConfig(item.scopeId)?.scopeLabel || toTitleCase(item.category);
-                scopeCell.appendChild(title);
-
-                const meta = document.createElement('div');
-                meta.className = 'estimator-scope-meta';
-                meta.dataset.role = 'quantityHint';
-                meta.textContent = item.manualQuantity ? 'Manual quantity override' : (getScopeConfig(item.scopeId || item.category)?.hint || '');
-                scopeCell.appendChild(meta);
+                appendChildren(scopeCell, [
+                    createElement('div', {
+                        className: 'estimator-scope-title',
+                        textContent:
+                            item.scopeLabel ||
+                            getScopeConfig(item.scopeId)?.scopeLabel ||
+                            toTitleCase(item.category),
+                    }),
+                    createElement('div', {
+                        className: 'estimator-scope-meta',
+                        dataset: { role: 'quantityHint' },
+                        textContent: item.manualQuantity
+                            ? 'Manual quantity override'
+                            : getScopeConfig(item.scopeId || item.category)?.hint || '',
+                    }),
+                ]);
             }
             row.appendChild(scopeCell);
 
-            const assemblyCell = document.createElement('td');
+            const assemblyCell = createElement('td');
             if (item.category === 'custom') {
-                const descriptionInput = document.createElement('input');
-                descriptionInput.type = 'text';
-                descriptionInput.className = 'form-input';
-                descriptionInput.placeholder = 'Describe allowance or material';
-                descriptionInput.dataset.field = 'customDescription';
-                descriptionInput.value = item.materialLabel || item.customDescription || '';
-                assemblyCell.appendChild(descriptionInput);
+                assemblyCell.appendChild(createElement('input', {
+                    className: 'form-input',
+                    dataset: { field: 'customDescription' },
+                    placeholder: 'Describe allowance or material',
+                    type: 'text',
+                    value: item.materialLabel || item.customDescription || '',
+                }));
             } else {
-                const select = document.createElement('select');
-                select.className = 'form-select estimator-assembly-select';
-                select.dataset.field = 'material';
-
-                getMaterialOptions(item.category).forEach(optionData => {
-                    const option = document.createElement('option');
-                    option.value = optionData.key;
-                    option.textContent = optionData.label;
-                    if (optionData.key === item.materialKey) option.selected = true;
-                    select.appendChild(option);
+                const select = createElement('select', {
+                    className: 'form-select estimator-assembly-select',
+                    dataset: { field: 'material' },
                 });
 
-                assemblyCell.appendChild(select);
+                getMaterialOptions(item.category).forEach(optionData => {
+                    select.appendChild(createElement('option', {
+                        value: optionData.key,
+                        textContent: optionData.label,
+                        selected: optionData.key === item.materialKey,
+                    }));
+                });
 
-                const meta = document.createElement('div');
-                meta.className = 'estimator-assembly-meta';
-                meta.dataset.role = 'materialMeta';
-                meta.textContent = item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : (item.unit ? `Unit: ${item.unit}` : '');
-                assemblyCell.appendChild(meta);
+                appendChildren(assemblyCell, [
+                    select,
+                    createElement('div', {
+                        className: 'estimator-assembly-meta',
+                        dataset: { role: 'materialMeta' },
+                        textContent: item.lastUpdated
+                            ? `Updated ${formatDateForDisplay(item.lastUpdated)}`
+                            : item.unit
+                                ? `Unit: ${item.unit}`
+                                : '',
+                    }),
+                ]);
             }
             row.appendChild(assemblyCell);
 
-            const quantityCell = document.createElement('td');
-            const quantityWrap = document.createElement('div');
-            quantityWrap.className = 'estimator-quantity-cell';
-
-            const quantityInput = document.createElement('input');
-            quantityInput.type = 'number';
-            quantityInput.className = 'form-input';
-            quantityInput.dataset.field = 'quantity';
-            quantityInput.step = '0.01';
-            quantityInput.min = '0';
-            quantityInput.value = Number.isFinite(item.quantity) ? item.quantity : 0;
-            quantityWrap.appendChild(quantityInput);
+            const quantityInputValue = Number.isFinite(item.quantity) ? item.quantity : 0;
+            const quantityCell = createElement('td');
+            const quantityWrap = createElement('div', { className: 'estimator-quantity-cell' });
+            quantityWrap.appendChild(createElement('input', {
+                className: 'form-input',
+                dataset: { field: 'quantity' },
+                min: '0',
+                step: '0.01',
+                type: 'number',
+                value: quantityInputValue,
+            }));
 
             if (item.category === 'custom') {
-                const unitInput = document.createElement('input');
-                unitInput.type = 'text';
-                unitInput.className = 'form-input estimator-unit-input';
-                unitInput.dataset.field = 'unit';
-                unitInput.placeholder = 'Unit';
-                unitInput.value = item.unit || '';
-                quantityWrap.appendChild(unitInput);
+                quantityWrap.appendChild(createElement('input', {
+                    className: 'form-input estimator-unit-input',
+                    dataset: { field: 'unit' },
+                    placeholder: 'Unit',
+                    type: 'text',
+                    value: item.unit || '',
+                }));
             } else {
-                const unitChip = document.createElement('span');
-                unitChip.className = 'unit-chip';
-                unitChip.dataset.role = 'unitLabel';
-                unitChip.textContent = item.unit || 'unit';
-                quantityWrap.appendChild(unitChip);
+                quantityWrap.appendChild(createElement('span', {
+                    className: 'unit-chip',
+                    dataset: { role: 'unitLabel' },
+                    textContent: item.unit || 'unit',
+                }));
             }
 
             quantityCell.appendChild(quantityWrap);
 
             if (item.category !== 'custom') {
-                const toggleButton = document.createElement('button');
-                toggleButton.type = 'button';
-                toggleButton.className = 'link-btn estimator-quantity-action';
-                toggleButton.dataset.action = item.manualQuantity ? 'reset-auto' : 'toggle-manual';
-                toggleButton.textContent = item.manualQuantity ? 'Use auto quantity' : 'Manual override';
-                quantityCell.appendChild(toggleButton);
+                quantityCell.appendChild(createElement('button', {
+                    className: 'link-btn estimator-quantity-action',
+                    dataset: { action: item.manualQuantity ? 'reset-auto' : 'toggle-manual' },
+                    textContent: item.manualQuantity ? 'Use auto quantity' : 'Manual override',
+                    type: 'button',
+                }));
             }
 
             row.appendChild(quantityCell);
 
-            const costCell = document.createElement('td');
-            const costInput = document.createElement('input');
-            costInput.type = 'number';
-            costInput.className = 'form-input';
-            costInput.dataset.field = 'unitCost';
-            costInput.step = '0.01';
-            costInput.min = '0';
-            costInput.value = Number.isFinite(item.unitCost) ? item.unitCost : 0;
-            costCell.appendChild(costInput);
-
-            const unitHint = document.createElement('span');
-            unitHint.className = 'unit-hint';
-            unitHint.dataset.role = 'unitHint';
-            unitHint.textContent = item.unit ? `per ${item.unit}` : '';
-            costCell.appendChild(unitHint);
-
+            const costCell = createElement('td');
+            costCell.appendChild(createElement('input', {
+                className: 'form-input',
+                dataset: { field: 'unitCost' },
+                min: '0',
+                step: '0.01',
+                type: 'number',
+                value: Number.isFinite(item.unitCost) ? item.unitCost : 0,
+            }));
+            costCell.appendChild(createElement('span', {
+                className: 'unit-hint',
+                dataset: { role: 'unitHint' },
+                textContent: item.unit ? `per ${item.unit}` : '',
+            }));
             row.appendChild(costCell);
 
-            const totalCell = document.createElement('td');
-            const totalValue = document.createElement('div');
-            totalValue.className = 'estimator-total';
-            totalValue.dataset.role = 'lineTotal';
-            totalValue.textContent = formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0));
-            totalCell.appendChild(totalValue);
+            const totalCell = createElement('td');
+            totalCell.appendChild(createElement('div', {
+                className: 'estimator-total',
+                dataset: { role: 'lineTotal' },
+                textContent: formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0)),
+            }));
 
             if (item.category === 'custom') {
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.className = 'link-btn danger estimator-quantity-action';
-                removeBtn.dataset.action = 'remove-item';
-                removeBtn.textContent = 'Remove';
-                totalCell.appendChild(removeBtn);
+                totalCell.appendChild(createElement('button', {
+                    className: 'link-btn danger estimator-quantity-action',
+                    dataset: { action: 'remove-item' },
+                    textContent: 'Remove',
+                    type: 'button',
+                }));
             }
 
             row.appendChild(totalCell);
@@ -622,61 +592,41 @@ import {
         function updateEstimatorRowDisplay(row, item) {
             if (!row) return;
 
-            const quantityInput = row.querySelector('[data-field="quantity"]');
-            if (quantityInput && document.activeElement !== quantityInput) {
-                quantityInput.value = Number.isFinite(item.quantity) ? item.quantity : 0;
-            }
-
-            const unitInput = row.querySelector('[data-field="unit"]');
-            if (unitInput && document.activeElement !== unitInput) {
-                unitInput.value = item.unit || '';
-            }
-
-            const unitLabel = row.querySelector('[data-role="unitLabel"]');
-            if (unitLabel) {
-                unitLabel.textContent = item.unit || 'unit';
-            }
-
-            const unitHint = row.querySelector('[data-role="unitHint"]');
-            if (unitHint) {
-                unitHint.textContent = item.unit ? `per ${item.unit}` : '';
-            }
+            setValueIfChanged(row.querySelector('[data-field="quantity"]'), Number.isFinite(item.quantity) ? item.quantity : 0);
+            setValueIfChanged(row.querySelector('[data-field="unit"]'), item.unit || '');
+            setTextIfChanged(row.querySelector('[data-role="unitLabel"]'), item.unit || 'unit');
+            setTextIfChanged(row.querySelector('[data-role="unitHint"]'), item.unit ? `per ${item.unit}` : '');
 
             const materialSelect = row.querySelector('[data-field="material"]');
-            if (materialSelect && materialSelect.value !== item.materialKey) {
-                materialSelect.value = item.materialKey || '';
-            }
+            setSelectValue(materialSelect, item.materialKey || '');
 
-            const materialMeta = row.querySelector('[data-role="materialMeta"]');
-            if (materialMeta) {
-                materialMeta.textContent = item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : (item.unit ? `Unit: ${item.unit}` : '');
-            }
+            setTextIfChanged(
+                row.querySelector('[data-role="materialMeta"]'),
+                item.lastUpdated ? `Updated ${formatDateForDisplay(item.lastUpdated)}` : item.unit ? `Unit: ${item.unit}` : ''
+            );
 
-            const quantityHint = row.querySelector('[data-role="quantityHint"]');
-            if (quantityHint) {
-                quantityHint.textContent = item.manualQuantity ? 'Manual quantity override' : (getScopeConfig(item.scopeId || item.category)?.hint || '');
-            }
+            setTextIfChanged(
+                row.querySelector('[data-role="quantityHint"]'),
+                item.manualQuantity
+                    ? 'Manual quantity override'
+                    : getScopeConfig(item.scopeId || item.category)?.hint || ''
+            );
 
             const toggleButton = row.querySelector('.estimator-quantity-action[data-action]');
             if (toggleButton && item.category !== 'custom') {
-                if (item.manualQuantity) {
-                    toggleButton.dataset.action = 'reset-auto';
-                    toggleButton.textContent = 'Use auto quantity';
-                } else {
-                    toggleButton.dataset.action = 'toggle-manual';
-                    toggleButton.textContent = 'Manual override';
-                }
+                toggleButton.dataset.action = item.manualQuantity ? 'reset-auto' : 'toggle-manual';
+                setTextIfChanged(toggleButton, item.manualQuantity ? 'Use auto quantity' : 'Manual override');
             }
 
-            const totalValue = row.querySelector('[data-role="lineTotal"]');
-            if (totalValue) {
-                totalValue.textContent = formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0));
-            }
+            setTextIfChanged(
+                row.querySelector('[data-role="lineTotal"]'),
+                formatCurrency((Number(item.quantity) || 0) * (Number(item.unitCost) || 0))
+            );
         }
 
         function updateEstimatorSummaryTotals() {
             let subtotal = 0;
-            (state.quickEstimatorItems || []).forEach(item => {
+            getQuickEstimatorItems().forEach(item => {
                 const quantity = parseFloat(item.quantity) || 0;
                 const rate = parseFloat(item.unitCost) || 0;
                 item.total = quantity * rate;
@@ -776,7 +726,7 @@ import {
         function findEstimatorItemByRow(row) {
             if (!row) return null;
             const id = row.dataset.estimatorId;
-            return (state.quickEstimatorItems || []).find(item => String(item.id) === id) || null;
+            return getQuickEstimatorItems().find(item => String(item.id) === id) || null;
         }
 
         function addCustomEstimatorItem() {
@@ -798,11 +748,7 @@ import {
                 createdAt: Date.now(),
             };
 
-            if (!Array.isArray(state.quickEstimatorItems)) {
-                state.quickEstimatorItems = [];
-            }
-
-            state.quickEstimatorItems.push(newItem);
+            getQuickEstimatorItems({ createIfMissing: true }).push(newItem);
             renderEstimatorItems();
 
             requestAnimationFrame(() => {
@@ -877,7 +823,7 @@ import {
                 updateEstimatorRowDisplay(row, item);
                 updateEstimatorSummaryTotals();
             } else if (action === 'remove-item') {
-                state.quickEstimatorItems = (state.quickEstimatorItems || []).filter(existing => existing !== item);
+                state.quickEstimatorItems = getQuickEstimatorItems().filter(existing => existing !== item);
                 renderEstimatorItems();
                 return;
             }
@@ -2064,6 +2010,7 @@ import {
             document.getElementById('projectSearch')?.addEventListener('input', (e) => loadProjects(e.target.value));
 
             document.getElementById('exportProjectsBtn')?.addEventListener('click', exportProjects);
+            document.getElementById('downloadProjectsTemplateBtn')?.addEventListener('click', downloadProjectsTemplate);
             document.getElementById('importProjectsBtn')?.addEventListener('click', () => document.getElementById('importProjectsInput').click());
             document.getElementById('importProjectsInput')?.addEventListener('change', importProjects);
 
@@ -3208,6 +3155,29 @@ import {
             }
         }
 
+        function getPercentageInputValue(id) {
+            const input = document.getElementById(id);
+            if (!input) {
+                return 0;
+            }
+            const rawValue = input.value;
+            if (rawValue === '') {
+                return 0;
+            }
+
+            const parsed = Number.parseFloat(rawValue);
+            if (!Number.isFinite(parsed)) {
+                input.value = '';
+                return 0;
+            }
+
+            const clamped = clampPercentage(parsed);
+            if (clamped !== parsed) {
+                input.value = formatInputNumber(clamped);
+            }
+            return clamped;
+        }
+
         function updateBidTotal() {
             let subtotal = 0;
             document.querySelectorAll('.line-item-row').forEach(row => {
@@ -3216,10 +3186,10 @@ import {
                 subtotal += quantity * rate;
             });
 
-            const overheadPercent = parseFloat(document.getElementById('overhead').value) || 0;
-            const profitPercent = parseFloat(document.getElementById('profit').value) || 0;
-            const contingencyPercent = parseFloat(document.getElementById('contingency').value) || 0;
-            
+            const overheadPercent = getPercentageInputValue('overhead');
+            const profitPercent = getPercentageInputValue('profit');
+            const contingencyPercent = getPercentageInputValue('contingency');
+
             const markup = subtotal * (overheadPercent / 100) + subtotal * (profitPercent / 100);
             const subtotalWithMarkup = subtotal + markup;
             const contingency = subtotalWithMarkup * (contingencyPercent / 100);
@@ -3296,9 +3266,9 @@ import {
                 lineItems.push({ category, description, quantity, unit, rate, total: quantity * rate });
             });
 
-            const overheadPercent = parseFloat(document.getElementById('overhead').value) || 0;
-            const profitPercent = parseFloat(document.getElementById('profit').value) || 0;
-            const contingencyPercent = parseFloat(document.getElementById('contingency').value) || 0;
+            const overheadPercent = getPercentageInputValue('overhead');
+            const profitPercent = getPercentageInputValue('profit');
+            const contingencyPercent = getPercentageInputValue('contingency');
 
             const subtotal = parseFloat(document.getElementById('bidSubtotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
             const markup = parseFloat(document.getElementById('bidMarkup').textContent.replace(/[^0-9.-]+/g, '')) || 0;
@@ -3890,6 +3860,35 @@ import {
             link.href = URL.createObjectURL(blob);
             link.download = 'projects.json';
             link.click();
+        }
+
+        function downloadProjectsTemplate() {
+            const headers = [
+                'name',
+                'estimateType',
+                'type',
+                'sqft',
+                'floors',
+                'laborMultiplier',
+                'total',
+                'status',
+                'bidDate',
+                'clientName',
+                'completionDays',
+                'overheadPercent',
+                'profitPercent',
+                'contingencyPercent'
+            ];
+            const csv = `${headers.join(',')}\n`;
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'project-import-template.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         }
 
         function importProjects(e) {
