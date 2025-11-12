@@ -4233,7 +4233,7 @@ import {
                 if (!projectDate) return;
                 for (const month of months) {
                     if (projectDate >= month.start && projectDate < month.end) {
-                        const total = toFiniteNumber(project.total);
+                        const total = Number(project.total) || 0;
                         month.pipeline += total;
                         if (project.status === 'won') {
                             month.awarded += total;
