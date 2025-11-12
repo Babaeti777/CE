@@ -9,6 +9,15 @@ import { LifecycleManager } from './services/lifecycle-manager.js';
 import { clampPercentage } from './utils/percentage.js';
 import { calculate as performCalculation, handleUnitConversion as convertUnits } from './calculator.js';
 import {
+    createInitialState,
+    DEFAULT_MATERIAL_UNITS,
+    EMPTY_COMPANY_INFO,
+    PRIORITY_LINE_ITEM_CATEGORIES,
+    QUICK_SCOPE_CATEGORIES,
+    QUICK_SCOPE_CONFIG,
+    QUICK_SCOPE_ORDER,
+} from './state/initial-state.js';
+import {
     initializeFirebase,
     isFirebaseConfigured,
     subscribeToProjects as subscribeToCloudProjects,
@@ -45,77 +54,8 @@ import {
             authRequired: 'Sign in with Google to enable cloud sync.'
         };
 
-        const EMPTY_COMPANY_INFO = { name: '', address: '', phone: '', email: '' };
-
-        const QUICK_SCOPE_CONFIG = [
-            {
-                id: 'foundation',
-                scopeLabel: 'Foundation System',
-                category: 'foundation',
-                fallbackMaterial: 'slab',
-                quantity: ({ sqft }) => sqft,
-                hint: 'Uses footprint square footage to price concrete work.',
-            },
-            {
-                id: 'framing',
-                scopeLabel: 'Structural Framing',
-                category: 'framing',
-                fallbackMaterial: 'wood',
-                quantity: ({ sqft, floors }) => sqft * floors,
-                hint: 'Multiplies footprint by the floor count for framing volume.',
-            },
-            {
-                id: 'exterior',
-                scopeLabel: 'Building Envelope',
-                category: 'exterior',
-                fallbackMaterial: 'vinyl',
-                quantity: ({ sqft, floors }) => sqft * floors * 0.8,
-                hint: 'Approx. 80% of exterior wall area for skin systems.',
-            }
-        ];
-
-        const QUICK_SCOPE_ORDER = QUICK_SCOPE_CONFIG.map(cfg => cfg.id);
-        const QUICK_SCOPE_CATEGORIES = [...new Set(QUICK_SCOPE_CONFIG.map(cfg => cfg.category))];
-
         // --- STATE MANAGEMENT ---
-        const initialState = {
-            currentTab: 'dashboard',
-            materialPrices: {},
-            lineItemCategories: {},
-            laborRates: {},
-            equipmentRates: {},
-            regionalAdjustments: {},
-            costIndices: {},
-            referenceAssemblies: [],
-            databaseMeta: {},
-            savedProjects: [],
-            companyInfo: { ...EMPTY_COMPANY_INFO },
-            currentEstimate: null,
-            quickEstimatorItems: [],
-            editingProjectId: null,
-            lineItemId: 0,
-            lastFocusedInput: null,
-            calcMode: "basic",
-            calculator: {
-                displayValue: '0',
-                firstOperand: null,
-                waitingForSecondOperand: false,
-                operator: null
-            },
-            lineItemCategories: {},
-            laborRates: {},
-            equipmentRates: {},
-            regionalAdjustments: {},
-            databaseMeta: { version: '0.0.0', lastUpdated: null, releaseNotes: [], sources: [] },
-            pendingUpdate: null,
-            syncProfileId: null,
-            remoteSyncEnabled: false,
-            remoteSyncStatus: 'disabled',
-            authUser: null,
-            firebaseConfig: null,
-        };
-
-        const stateManager = new StateManager(initialState);
+        const stateManager = new StateManager(createInitialState());
         const state = stateManager.state;
         const storage = createStorageService({ prefix: 'ce' });
         const DATABASE_STORAGE_KEY = 'materialDatabase';
@@ -271,26 +211,6 @@ import {
                 showToast(`Material database updated to v${state.databaseMeta.version}`, 'success');
             }
         }
-
-        const DEFAULT_MATERIAL_UNITS = {
-            foundation: 'sq ft',
-            framing: 'sq ft',
-            exterior: 'sq ft',
-            roofing: 'sq ft',
-            flooring: 'sq ft',
-            insulation: 'sq ft',
-            interiorFinishes: 'sq ft',
-            openings: 'each',
-            mechanical: 'ton',
-            plumbing: 'fixture',
-            electrical: 'sq ft',
-            sitework: 'sq ft',
-            fireProtection: 'sq ft',
-            specialties: 'allowance',
-            demolition: 'sq ft',
-        };
-
-        const PRIORITY_LINE_ITEM_CATEGORIES = ['Demolition'];
 
         function normalizeMaterialEntry(category, key, entry, fallbackUpdated, fallbackSource) {
             const normalized = {};
