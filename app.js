@@ -2064,6 +2064,7 @@ import {
             document.getElementById('projectSearch')?.addEventListener('input', (e) => loadProjects(e.target.value));
 
             document.getElementById('exportProjectsBtn')?.addEventListener('click', exportProjects);
+            document.getElementById('downloadProjectsTemplateBtn')?.addEventListener('click', downloadProjectsTemplate);
             document.getElementById('importProjectsBtn')?.addEventListener('click', () => document.getElementById('importProjectsInput').click());
             document.getElementById('importProjectsInput')?.addEventListener('change', importProjects);
 
@@ -3890,6 +3891,35 @@ import {
             link.href = URL.createObjectURL(blob);
             link.download = 'projects.json';
             link.click();
+        }
+
+        function downloadProjectsTemplate() {
+            const headers = [
+                'name',
+                'estimateType',
+                'type',
+                'sqft',
+                'floors',
+                'laborMultiplier',
+                'total',
+                'status',
+                'bidDate',
+                'clientName',
+                'completionDays',
+                'overheadPercent',
+                'profitPercent',
+                'contingencyPercent'
+            ];
+            const csv = `${headers.join(',')}\n`;
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'project-import-template.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         }
 
         function importProjects(e) {

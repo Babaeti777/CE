@@ -421,6 +421,7 @@
                         <input type="search" class="form-input max-w-sm" id="projectSearch" placeholder="Search projects...">
                         <button class="btn btn-secondary" id="exportProjectsBtn">Export</button>
                         <button class="btn btn-secondary" id="importProjectsBtn">Import</button>
+                        <button class="btn btn-secondary" id="downloadProjectsTemplateBtn">Download CSV Template</button>
                         <input type="file" id="importProjectsInput" accept=".json,.csv,.xlsx,.xls" class="hidden-input">
                     </div>
                     <div id="projectsList" class="mt-xl"></div>
@@ -438,19 +439,7 @@
                                 <input type="file" id="takeoffDrawingInput" accept="application/pdf,image/*" multiple class="hidden-input">
                                 </label>
                             </div>
-                            <button class="btn btn-secondary" id="takeoffAddDrawingBtn" type="button">Add Drawing</button>
                         </div>
-                        <form id="takeoffDrawingForm" class="takeoff-form">
-                            <div class="takeoff-form-row">
-                                <input type="text" class="form-input" id="takeoffDrawingName" placeholder="Sheet name (e.g. A1.01)" required>
-                                <input type="text" class="form-input" id="takeoffDrawingTrade" placeholder="Trade">
-                            </div>
-                            <div class="takeoff-form-row">
-                                <input type="text" class="form-input" id="takeoffDrawingFloor" placeholder="Level">
-                                <input type="text" class="form-input" id="takeoffDrawingNotes" placeholder="Notes">
-                                <button class="btn btn-primary" type="submit">Save</button>
-                            </div>
-                        </form>
                         <div class="takeoff-filters">
                             <input type="search" class="form-input" id="takeoffSearchInput" placeholder="Filter drawings...">
                             <select id="takeoffSortSelect" class="form-select">
