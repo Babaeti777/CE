@@ -22,4 +22,4 @@ export const CLOUD_STATUS_MESSAGES = {
     authRequired: 'Sign in with Google to enable cloud sync.',
 };
 
-export const EMPTY_COMPANY_INFO = { name: '', address: '', phone: '', email: '' };
+export const EMPTY_COMPANY_INFO = Object.freeze({ name: '', address: '', phone: '', email: '' });
