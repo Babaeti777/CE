@@ -25,11 +25,11 @@
             </div>
             <div class="workspace-actions">
                 <div class="nav-dropdown">
-                    <button class="btn btn-ghost nav-dropdown-trigger" id="navToggle" aria-haspopup="true" aria-expanded="false" aria-controls="workspaceTabBar">
+                    <button class="btn btn-ghost nav-dropdown-trigger" id="navDropdownToggle" aria-haspopup="true" aria-expanded="false" aria-controls="navDropdownMenu">
                         Workspace
                         <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9l6 6 6-6"/></svg>
                     </button>
-                    <div class="nav-dropdown-menu" id="workspaceTabBar" role="menu">
+                    <div class="nav-dropdown-menu" id="navDropdownMenu" role="menu">
                         <button type="button" class="nav-item topnav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true" role="menuitem">
                             <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
                             <span class="nav-label">Dashboard</span>
@@ -126,7 +126,7 @@
                         <div id="recentProjectsList" class="space-y-3"></div>
                         <button class="btn btn-secondary mt-md" id="viewAllProjectsBtn">View All</button>
                     </div>
-                    <div class="card">
+                    <div class="card card-chart">
                         <h3 class="card-title mb-lg">Material Price Trends</h3>
                         <canvas id="priceChart" class="chart-sm"></canvas>
                     </div>

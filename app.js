@@ -93,6 +93,7 @@ import {
         const loadingManager = new LoadingManager();
         const commandHistory = new CommandHistory();
         let priceTrendChart = null;
+        let priceChartObserver = null;
         const lifecycle = new LifecycleManager();
 
         let takeoffManager = null;
@@ -859,7 +860,7 @@ import {
 
         function getProjectDate(project) {
             if (!project) return null;
-            return coerceDate(project.date) || coerceDate(project.updatedAt) || null;
+            return coerceDate(project.date) || coerceDate(project.updatedAt) || coerceDate(project.createdAt) || null;
         }
 
         function formatDate(value, fallback = 'Invalid date') {
@@ -1311,7 +1312,6 @@ import {
                 populateMaterialsTable();
                 loadProjects();
                 updateDashboard();
-                initCharts();
 
                 takeoffManager = new TakeoffManager({
                     toastService: showToast,
@@ -4179,6 +4179,8 @@ import {
                 });
                 recentList.appendChild(div);
             });
+
+            updatePriceTrendChart();
         }
 
         function populateMaterialsTable() {
@@ -4202,6 +4204,92 @@ import {
         }
 
         // --- CHARTS ---
+        function getPriceTrendChartData(monthCount = 6) {
+            const months = [];
+            const now = new Date();
+            for (let i = monthCount - 1; i >= 0; i--) {
+                const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+                months.push({
+                    label: start.toLocaleString(undefined, { month: 'short' }),
+                    start,
+                    end,
+                    pipeline: 0,
+                    awarded: 0,
+                });
+            }
+
+            state.savedProjects.forEach(project => {
+                const projectDate = getProjectDate(project) || coerceDate(project.createdAt);
+                if (!projectDate) return;
+                for (const month of months) {
+                    if (projectDate >= month.start && projectDate < month.end) {
+                        const total = Number(project.total) || 0;
+                        month.pipeline += total;
+                        if (project.status === 'won') {
+                            month.awarded += total;
+                        }
+                        break;
+                    }
+                }
+            });
+
+            const labels = months.map(month => month.label);
+            const normalize = values => values.map(value => Number((value / 1000).toFixed(1)));
+            return {
+                labels,
+                datasets: [
+                    {
+                        label: 'Active Pipeline ($K)',
+                        data: normalize(months.map(month => month.pipeline)),
+                        borderColor: 'rgba(99, 102, 241, 1)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.25)',
+                        tension: 0.35,
+                        fill: true,
+                    },
+                    {
+                        label: 'Awarded Work ($K)',
+                        data: normalize(months.map(month => month.awarded)),
+                        borderColor: 'rgba(34, 211, 238, 1)',
+                        backgroundColor: 'rgba(34, 211, 238, 0.2)',
+                        tension: 0.35,
+                        fill: true,
+                    }
+                ]
+            };
+        }
+
+        function observePriceChart(canvas) {
+            if (typeof ResizeObserver === 'undefined' || !canvas) return;
+            if (priceChartObserver) {
+                priceChartObserver.disconnect();
+            }
+            const container = canvas.parentElement;
+            if (!container) return;
+            priceChartObserver = new ResizeObserver(() => {
+                if (priceTrendChart) {
+                    priceTrendChart.resize();
+                }
+            });
+            priceChartObserver.observe(container);
+        }
+
+        function updatePriceTrendChart() {
+            if (!priceTrendChart) {
+                initCharts();
+                return;
+            }
+            const chartData = getPriceTrendChartData();
+            priceTrendChart.data.labels = chartData.labels;
+            priceTrendChart.data.datasets.forEach((dataset, index) => {
+                const source = chartData.datasets[index];
+                if (!source) return;
+                dataset.data = source.data;
+                dataset.label = source.label;
+            });
+            priceTrendChart.update('none');
+        }
+
         function initCharts() {
             const canvas = document.getElementById('priceChart');
             if (!canvas) return;
@@ -4209,46 +4297,39 @@ import {
             const context = canvas.getContext('2d');
             if (!context) return;
 
-            if (canvas.height < 240) {
-                canvas.height = 260;
-            }
-
             if (priceTrendChart) {
                 priceTrendChart.destroy();
+                priceTrendChart = null;
             }
+
+            if (priceChartObserver) {
+                priceChartObserver.disconnect();
+                priceChartObserver = null;
+            }
+
+            const chartData = getPriceTrendChartData();
 
             priceTrendChart = new Chart(context, {
                 type: 'line',
-                data: {
-                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                    datasets: [
-                        {
-                            label: 'Lumber',
-                            data: [12, 19, 13, 15, 12, 13],
-                            borderColor: 'rgba(99, 102, 241, 1)',
-                            backgroundColor: 'rgba(99, 102, 241, 0.25)',
-                            tension: 0.35,
-                            fill: true,
-                        },
-                        {
-                            label: 'Steel',
-                            data: [20, 22, 21, 24, 25, 23],
-                            borderColor: 'rgba(34, 211, 238, 1)',
-                            backgroundColor: 'rgba(34, 211, 238, 0.2)',
-                            tension: 0.35,
-                            fill: true,
-                        }
-                    ]
-                },
+                data: chartData,
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
                             labels: {
                                 color: '#cbd5f5',
                                 usePointStyle: true,
                                 boxWidth: 10,
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label(context) {
+                                    const value = context.parsed.y ?? 0;
+                                    return `${context.dataset.label}: $${value.toLocaleString()}k`;
+                                }
                             }
                         }
                     },
@@ -4259,11 +4340,18 @@ import {
                         },
                         y: {
                             grid: { color: 'rgba(148, 163, 184, 0.12)' },
-                            ticks: { color: '#94a3b8' }
+                            ticks: {
+                                color: '#94a3b8',
+                                callback(value) {
+                                    return `$${value}k`;
+                                }
+                            }
                         }
                     }
                 }
             });
+
+            observePriceChart(canvas);
         }
 
         // --- SETTINGS & UPDATES ---

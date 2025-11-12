@@ -76,7 +76,7 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
     backdrop-filter: blur(var(--glass-blur));
-    overflow: hidden;
+    overflow: visible;
 }
 
 .app-shell::before {
@@ -272,7 +272,8 @@ button {
     background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(79, 70, 229, 0.28));
     border-bottom: 1px solid var(--border);
     position: relative;
-    z-index: 10;
+    z-index: 30;
+    overflow: visible;
 }
 
 @media (max-width: 768px) {
@@ -431,7 +432,7 @@ body.nav-open .nav-dropdown-menu {
     flex-direction: column;
     gap: 0.25rem;
     backdrop-filter: blur(24px);
-    z-index: 20;
+    z-index: 200;
 }
 
 .nav-dropdown-menu.is-open {
@@ -1737,6 +1738,17 @@ body.takeoff-fullscreen-active {
 .chart-sm {
     width: 100%;
     min-height: 240px;
+    height: 280px;
+    display: block;
+}
+
+.card-chart {
+    min-height: 360px;
+    position: relative;
+}
+
+.card-chart canvas {
+    flex: 1;
 }
 
 .hidden-input {
