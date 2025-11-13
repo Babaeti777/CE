@@ -6,7 +6,7 @@
     <title>CE — Minimal Estimator Workspace</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="/__/firebase/10.12.2/firebase-app-compat.js"></script>
     <script src="/__/firebase/10.12.2/firebase-firestore-compat.js"></script>
     <script src="/__/firebase/10.12.2/firebase-auth-compat.js"></script>
@@ -678,19 +678,6 @@
                             <div class="form-group"><label class="form-label">Default Tax Rate (%)</label><input type="number" class="form-input" value="8.5" step="0.1"></div>
                         </div>
                     </div>
-                </div>
-                <div class="card mt-xl">
-                    <h3 class="card-title mb-lg">Firebase Configuration</h3>
-                    <p class="card-subtitle mb-lg">Paste the Firebase web app keys from your console to enable Google sign-in.</p>
-                    <div class="grid-2 gap-md firebase-config-grid">
-                        <div class="form-group"><label class="form-label" for="firebaseApiKey">API Key</label><input type="text" class="form-input" id="firebaseApiKey" autocomplete="off"></div>
-                        <div class="form-group"><label class="form-label" for="firebaseAuthDomain">Auth Domain</label><input type="text" class="form-input" id="firebaseAuthDomain" autocomplete="off"></div>
-                        <div class="form-group"><label class="form-label" for="firebaseProjectId">Project ID</label><input type="text" class="form-input" id="firebaseProjectId" autocomplete="off"></div>
-                        <div class="form-group"><label class="form-label" for="firebaseStorageBucket">Storage Bucket</label><input type="text" class="form-input" id="firebaseStorageBucket" autocomplete="off"></div>
-                        <div class="form-group"><label class="form-label" for="firebaseMessagingSenderId">Messaging Sender ID</label><input type="text" class="form-input" id="firebaseMessagingSenderId" autocomplete="off"></div>
-                        <div class="form-group"><label class="form-label" for="firebaseAppId">App ID</label><input type="text" class="form-input" id="firebaseAppId" autocomplete="off"></div>
-                    </div>
-                    <button class="btn btn-primary mt-md" id="saveFirebaseConfigBtn" type="button">Save Firebase Settings</button>
                 </div>
                 <div class="card mt-xl">
                     <h3 class="card-title mb-lg">Company Information</h3>
