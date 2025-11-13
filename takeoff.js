@@ -110,6 +110,20 @@ function formatNumber(value, { maximumFractionDigits = 2 } = {}) {
     });
 }
 
+function resolveAbsoluteUrl(source) {
+    if (typeof source !== 'string' || !source) {
+        return null;
+    }
+    if (typeof window === 'undefined' || typeof window.location === 'undefined') {
+        return source;
+    }
+    try {
+        return new URL(source, window.location.href).toString();
+    } catch (error) {
+        return source;
+    }
+}
+
 function computeCentroid(points) {
     if (!Array.isArray(points) || points.length === 0) {
         return null;
