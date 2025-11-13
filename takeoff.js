@@ -60,6 +60,23 @@ function createId(prefix = 'drawing') {
     return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
 }
 
+function resolveAssetUrl(path) {
+    if (typeof path !== 'string') {
+        return path;
+    }
+
+    if (typeof document === 'undefined' || typeof document.baseURI !== 'string') {
+        return path;
+    }
+
+    try {
+        return new URL(path, document.baseURI).toString();
+    } catch (error) {
+        console.warn('Failed to resolve asset URL, falling back to raw path.', error);
+        return path;
+    }
+}
+
 function distance(a, b) {
     if (!a || !b) {
         return 0;
@@ -185,6 +202,7 @@ export class TakeoffManager {
         this.pdfRenderInFlight = false;
         this.pdfScriptPromise = null;
         this.pendingZoomRefresh = false;
+        this.pdfAssetCache = new Map();
         this.handlers = {
             windowResize: () => {
                 if (this.resizeScheduled) return;
