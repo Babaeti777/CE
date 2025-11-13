@@ -14,6 +14,8 @@ const SUPPORTED_PDF_TYPES = new Set([
 ]);
 
 const DEFAULT_PDF_SCALE = 1.5;
+const PDF_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js';
+const PDF_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -181,6 +183,7 @@ export class TakeoffManager {
         this.pdfWorkerInitialized = false;
         this.pdfRenderToken = 0;
         this.pdfRenderInFlight = false;
+        this.pdfScriptPromise = null;
         this.pendingZoomRefresh = false;
         this.handlers = {
             windowResize: () => {
@@ -1612,16 +1615,51 @@ export class TakeoffManager {
         };
     }
 
+    async ensurePdfLibrary() {
+        if (typeof window === 'undefined') {
+            throw new Error('PDF renderer not available.');
+        }
+        if (window.pdfjsLib) {
+            return;
+        }
+        if (!this.pdfScriptPromise) {
+            this.pdfScriptPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = PDF_JS_CDN;
+                script.async = true;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load PDF renderer.'));
+                const target = document.head || document.body || document.documentElement;
+                if (target) {
+                    target.appendChild(script);
+                } else {
+                    reject(new Error('Document not ready for PDF renderer.'));
+                }
+            }).catch((error) => {
+                this.pdfScriptPromise = null;
+                throw error;
+            });
+        }
+
+        await this.pdfScriptPromise;
+
+        if (!window.pdfjsLib) {
+            this.pdfScriptPromise = null;
+            throw new Error('PDF renderer not available.');
+        }
+    }
+
     async ensurePdfWorker() {
         if (this.pdfWorkerInitialized) {
             return;
         }
-        if (typeof window === 'undefined' || !window.pdfjsLib) {
-            throw new Error('PDF renderer not available.');
-        }
-        const workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
-        if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+
+        await this.ensurePdfLibrary();
+
+        const pdfjs = window.pdfjsLib;
+        const globalOptions = pdfjs.GlobalWorkerOptions || (pdfjs.GlobalWorkerOptions = {});
+        if (!globalOptions.workerSrc) {
+            globalOptions.workerSrc = PDF_WORKER_CDN;
         }
         this.pdfWorkerInitialized = true;
     }
