@@ -16,57 +16,73 @@
 <body>
     <div class="app-shell">
                 <nav class="workspace-header" id="sidebar" role="navigation">
-            <div class="workspace-brand">
-                <span class="brand-mark">CE</span>
-                <div class="brand-copy">
-                    <span class="brand-title">Construct Estimate</span>
-                    <span class="brand-tagline">Plan, price, and deliver with clarity.</span>
-                </div>
-            </div>
-            <div class="workspace-actions">
-                <div class="nav-dropdown">
-                    <button class="btn btn-ghost nav-dropdown-trigger" id="navDropdownToggle" aria-haspopup="true" aria-expanded="false" aria-controls="navDropdownMenu">
-                        Workspace
-                        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9l6 6 6-6"/></svg>
-                    </button>
-                    <div class="nav-dropdown-menu" id="navDropdownMenu" role="menu">
-                        <button type="button" class="nav-item topnav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true" role="menuitem">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-                            <span class="nav-label">Dashboard</span>
-                        </button>
-                        <button type="button" class="nav-item topnav-item" data-tab="estimator" aria-controls="estimatorTab" aria-selected="false" role="menuitem">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                            <span class="nav-label">Quick Estimator</span>
-                        </button>
-                        <button type="button" class="nav-item topnav-item" data-tab="detailed" aria-controls="detailedTab" aria-selected="false" role="menuitem">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                            <span class="nav-label">Detailed Bidding</span>
-                        </button>
-                        <button type="button" class="nav-item topnav-item" data-tab="takeoff" aria-controls="takeoffTab" aria-selected="false" role="menuitem">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
-                            <span class="nav-label">Takeoff Manager</span>
-                        </button>
-                        <button type="button" class="nav-item topnav-item" data-tab="projects" aria-controls="projectsTab" aria-selected="false" role="menuitem">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                            <span class="nav-label">Projects</span>
-                        </button>
-                        <button type="button" class="nav-item topnav-item" data-tab="materials" aria-controls="materialsTab" aria-selected="false" role="menuitem">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
-                            <span class="nav-label">Materials</span>
-                        </button>
-                        <button type="button" class="nav-item topnav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false" role="menuitem">
-                            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31-.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.072 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                            <span class="nav-label">Settings</span>
-                        </button>
+            <div class="workspace-bar">
+                <div class="workspace-brand">
+                    <span class="brand-mark">CE</span>
+                    <div class="brand-copy">
+                        <span class="brand-title">Construct Estimate</span>
+                        <span class="brand-tagline">Plan, price, and deliver with clarity.</span>
                     </div>
                 </div>
-                <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                </button>
-                <button class="btn btn-primary" id="newProjectBtn" type="button">New Project</button>
-                <div class="sync-badge" id="syncStatus">
-                    <div class="sync-dot"></div>
-                    <span>Database synced</span>
+                <div class="workspace-actions">
+                    <button class="btn btn-ghost" id="calculatorBtn" aria-label="Open Calculator">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    </button>
+                    <button class="btn btn-primary" id="newProjectBtn" type="button">New Project</button>
+                    <div class="sync-badge" id="syncStatus">
+                        <div class="sync-dot"></div>
+                        <span>Database synced</span>
+                    </div>
+                </div>
+            </div>
+            <div class="project-trace" aria-label="Project tracing" role="list">
+                <div class="trace-pill" role="listitem">
+                    <span class="sr-only">Active projects</span>
+                    <span class="trace-value" id="traceProjects">0</span>
+                </div>
+                <div class="trace-pill" role="listitem">
+                    <span class="sr-only">Bids under review</span>
+                    <span class="trace-value" id="traceReview">0</span>
+                </div>
+                <div class="trace-pill" role="listitem">
+                    <span class="sr-only">Win rate</span>
+                    <span class="trace-value" id="traceWinRate">0%</span>
+                </div>
+                <div class="trace-pill" role="listitem">
+                    <span class="sr-only">Bid volume</span>
+                    <span class="trace-value" id="traceValue">$0</span>
+                </div>
+            </div>
+            <div class="workspace-nav" aria-label="Workspace views" role="tablist">
+                <div class="workspace-nav-inner">
+                    <button type="button" class="nav-item topnav-item active" data-tab="dashboard" aria-controls="dashboardTab" aria-selected="true" role="tab">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                        <span class="nav-label">Dashboard</span>
+                    </button>
+                    <button type="button" class="nav-item topnav-item" data-tab="estimator" aria-controls="estimatorTab" aria-selected="false" role="tab">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        <span class="nav-label">Quick Estimator</span>
+                    </button>
+                    <button type="button" class="nav-item topnav-item" data-tab="detailed" aria-controls="detailedTab" aria-selected="false" role="tab">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        <span class="nav-label">Detailed Bidding</span>
+                    </button>
+                    <button type="button" class="nav-item topnav-item" data-tab="takeoff" aria-controls="takeoffTab" aria-selected="false" role="tab">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h4M4 11h8m-8 4h4m4-8h8a2 2 0 012 2v8a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2zm4 4h4"></path></svg>
+                        <span class="nav-label">Takeoff Manager</span>
+                    </button>
+                    <button type="button" class="nav-item topnav-item" data-tab="projects" aria-controls="projectsTab" aria-selected="false" role="tab">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                        <span class="nav-label">Projects</span>
+                    </button>
+                    <button type="button" class="nav-item topnav-item" data-tab="materials" aria-controls="materialsTab" aria-selected="false" role="tab">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8-4 8 4M4 7l8 4m0 0l8-4m-8 4v10"></path></svg>
+                        <span class="nav-label">Materials</span>
+                    </button>
+                    <button type="button" class="nav-item topnav-item" data-tab="settings" aria-controls="settingsTab" aria-selected="false" role="tab">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31-.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.072 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <span class="nav-label">Settings</span>
+                    </button>
                 </div>
             </div>
         </nav>

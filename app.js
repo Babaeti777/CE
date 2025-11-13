@@ -4122,6 +4122,10 @@ import {
             const totalValueEl = document.getElementById('totalValue');
             const reviewEl = document.getElementById('reviewCount');
             const winRateEl = document.getElementById('winRate');
+            const traceProjectsEl = document.getElementById('traceProjects');
+            const traceReviewEl = document.getElementById('traceReview');
+            const traceValueEl = document.getElementById('traceValue');
+            const traceWinRateEl = document.getElementById('traceWinRate');
             const recentList = document.getElementById('recentProjectsList');
 
             const totalProjects = state.savedProjects.length;
@@ -4135,6 +4139,10 @@ import {
             if (totalValueEl) totalValueEl.textContent = formatCurrency(totalValue);
             if (reviewEl) reviewEl.textContent = review;
             if (winRateEl) winRateEl.textContent = winRate + '%';
+            if (traceProjectsEl) traceProjectsEl.textContent = totalProjects;
+            if (traceReviewEl) traceReviewEl.textContent = review;
+            if (traceValueEl) traceValueEl.textContent = formatCurrency(totalValue);
+            if (traceWinRateEl) traceWinRateEl.textContent = winRate + '%';
 
             if (!recentList) return;
             recentList.innerHTML = '';
