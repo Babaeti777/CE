@@ -1669,6 +1669,63 @@ export class TakeoffManager {
         this.pdfWorkerInitialized = true;
     }
 
+    async loadScriptSequential(sources) {
+        if (!Array.isArray(sources) || sources.length === 0) {
+            throw new Error('No script sources provided.');
+        }
+
+        let lastError = null;
+        for (const source of sources) {
+            if (!source) {
+                continue;
+            }
+            try {
+                await this.injectScript(source);
+                if (window.pdfjsLib) {
+                    this.pdfScriptSource = source;
+                    return;
+                }
+                lastError = new Error('PDF renderer did not initialize.');
+            } catch (error) {
+                lastError = error;
+            }
+        }
+
+        throw lastError || new Error('Failed to load PDF renderer.');
+    }
+
+    injectScript(source) {
+        return new Promise((resolve, reject) => {
+            const target = document.head || document.body || document.documentElement;
+            if (!target) {
+                reject(new Error('Document not ready for PDF renderer.'));
+                return;
+            }
+
+            const existingScript = Array.from(target.querySelectorAll('script'))
+                .find((script) => script.src === source);
+            if (existingScript && window.pdfjsLib) {
+                resolve();
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = source;
+            script.async = true;
+            script.crossOrigin = 'anonymous';
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Failed to load PDF renderer from ${source}.`));
+            target.appendChild(script);
+        });
+    }
+
+    selectWorkerSource(candidates) {
+        if (!Array.isArray(candidates) || candidates.length === 0) {
+            throw new Error('No worker sources provided.');
+        }
+        return candidates.find((candidate) => Boolean(candidate)) || candidates[0];
+    }
+
     async refreshDrawingPreview(drawing) {
         if (!drawing) {
             return;
