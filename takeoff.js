@@ -14,12 +14,8 @@ const SUPPORTED_PDF_TYPES = new Set([
 ]);
 
 const DEFAULT_PDF_SCALE = 1.5;
-const PDF_LIBRARY_SOURCES = [
-    './vendor/pdfjs/pdf.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-];
-const PDF_WORKER_DEFAULT = './vendor/pdfjs/pdf.worker.min.js';
-const PDF_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const PDF_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js';
+const PDF_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -205,7 +201,6 @@ export class TakeoffManager {
         this.pdfRenderToken = 0;
         this.pdfRenderInFlight = false;
         this.pdfScriptPromise = null;
-        this.pdfLibrarySource = null;
         this.pendingZoomRefresh = false;
         this.pdfAssetCache = new Map();
         this.handlers = {
@@ -1644,24 +1639,29 @@ export class TakeoffManager {
         if (typeof window === 'undefined') {
             throw new Error('PDF renderer not available.');
         }
-
         if (window.pdfjsLib) {
-            if (!this.pdfLibrarySource) {
-                this.pdfLibrarySource = this.identifyExistingPdfLibrarySource();
-            }
             return;
         }
-
         if (!this.pdfScriptPromise) {
-            this.pdfScriptPromise = this.loadPdfLibrary().catch((error) => {
+            this.pdfScriptPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = PDF_JS_CDN;
+                script.async = true;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load PDF renderer.'));
+                const target = document.head || document.body || document.documentElement;
+                if (target) {
+                    target.appendChild(script);
+                } else {
+                    reject(new Error('Document not ready for PDF renderer.'));
+                }
+            }).catch((error) => {
                 this.pdfScriptPromise = null;
                 throw error;
             });
         }
 
         await this.pdfScriptPromise;
-
-        this.hydratePdfGlobal();
 
         if (!window.pdfjsLib) {
             this.pdfScriptPromise = null;
@@ -1678,72 +1678,41 @@ export class TakeoffManager {
 
         const pdfjs = window.pdfjsLib;
         const globalOptions = pdfjs.GlobalWorkerOptions || (pdfjs.GlobalWorkerOptions = {});
-        const workerSrc = this.resolvePdfWorkerSource();
-        if (globalOptions.workerSrc !== workerSrc) {
-            globalOptions.workerSrc = workerSrc;
+        if (!globalOptions.workerSrc) {
+            globalOptions.workerSrc = PDF_WORKER_CDN;
         }
+        const workerSrc = this.pdfWorkerCandidates[this.pdfWorkerIndex] || this.pdfWorkerCandidates[0];
+        globalOptions.workerSrc = workerSrc;
+        this.pdfWorkerSrc = workerSrc;
         this.pdfWorkerInitialized = true;
     }
 
-    hydratePdfGlobal() {
-        if (typeof window === 'undefined') {
-            return;
+    async loadScriptSequential(sources) {
+        if (!Array.isArray(sources) || sources.length === 0) {
+            throw new Error('No script sources provided.');
         }
 
-        if (!window.pdfjsLib && window['pdfjs-dist/build/pdf']) {
-            window.pdfjsLib = window['pdfjs-dist/build/pdf'];
-        }
-    }
-
-    resolvePdfAssetUrl(path) {
-        if (this.pdfAssetCache.has(path)) {
-            return this.pdfAssetCache.get(path);
-        }
-
-        const resolved = resolveAssetUrl(path);
-        this.pdfAssetCache.set(path, resolved);
-        return resolved;
-    }
-
-    identifyExistingPdfLibrarySource() {
-        if (typeof document === 'undefined') {
-            return null;
-        }
-        const scripts = Array.from(document.getElementsByTagName('script'));
-        for (const script of scripts) {
-            const src = script.getAttribute('src');
-            if (typeof src === 'string' && /pdf(\.min)?\.js(\?|$)/.test(src)) {
-                return src;
+        let lastError = null;
+        for (const source of sources) {
+            if (!source) {
+                continue;
             }
-        }
-        return null;
-    }
-
-    async loadPdfLibrary() {
-        const errors = [];
-        for (const source of PDF_LIBRARY_SOURCES) {
-            const url = this.resolvePdfAssetUrl(source);
             try {
-                await this.injectScript(url);
-                this.pdfLibrarySource = url;
-                this.hydratePdfGlobal();
+                await this.injectScript(source);
                 if (window.pdfjsLib) {
+                    this.pdfScriptSource = source;
                     return;
                 }
-                throw new Error('PDF renderer loaded but did not expose pdfjsLib.');
+                lastError = new Error('PDF renderer did not initialize.');
             } catch (error) {
-                errors.push(error);
+                lastError = error;
             }
         }
 
-        const failure = new Error('Failed to load PDF renderer.');
-        if (errors.length) {
-            failure.cause = errors[errors.length - 1];
-        }
-        throw failure;
+        throw lastError || new Error('Failed to load PDF renderer.');
     }
 
-    injectScript(src) {
+    injectScript(source) {
         return new Promise((resolve, reject) => {
             const target = document.head || document.body || document.documentElement;
             if (!target) {
@@ -1751,33 +1720,28 @@ export class TakeoffManager {
                 return;
             }
 
+            const existingScript = Array.from(target.querySelectorAll('script'))
+                .find((script) => script.src === source);
+            if (existingScript && window.pdfjsLib) {
+                resolve();
+                return;
+            }
+
             const script = document.createElement('script');
+            script.src = source;
             script.async = true;
-            script.src = src;
-            script.dataset.pdfjsDynamic = 'true';
+            script.crossOrigin = 'anonymous';
             script.onload = () => resolve();
-            script.onerror = () => {
-                script.remove();
-                reject(new Error(`Failed to load script: ${src}`));
-            };
+            script.onerror = () => reject(new Error(`Failed to load PDF renderer from ${source}.`));
             target.appendChild(script);
         });
     }
 
-    resolvePdfWorkerSource() {
-        const source = this.pdfLibrarySource || this.identifyExistingPdfLibrarySource();
-        if (typeof source === 'string') {
-            if (source.includes('vendor/pdfjs/')) {
-                return this.resolvePdfAssetUrl(PDF_WORKER_DEFAULT);
-            }
-            if (source.includes('cdnjs.cloudflare.com/ajax/libs/pdf.js/')) {
-                return PDF_WORKER_CDN;
-            }
+    selectWorkerSource(candidates) {
+        if (!Array.isArray(candidates) || candidates.length === 0) {
+            throw new Error('No worker sources provided.');
         }
-        if (typeof document !== 'undefined') {
-            return this.resolvePdfAssetUrl(PDF_WORKER_DEFAULT);
-        }
-        return PDF_WORKER_DEFAULT;
+        return candidates.find((candidate) => Boolean(candidate)) || candidates[0];
     }
 
     async refreshDrawingPreview(drawing) {
@@ -1837,7 +1801,17 @@ export class TakeoffManager {
         }
 
         drawing.pdfData = data;
-        const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+
+        let pdf;
+        try {
+            pdf = await window.pdfjsLib.getDocument({ data }).promise;
+        } catch (error) {
+            if (this.isPdfWorkerError(error) && this.tryFallbackPdfWorker()) {
+                pdf = await window.pdfjsLib.getDocument({ data }).promise;
+            } else {
+                throw error;
+            }
+        }
         const pageIndex = drawing.currentPage || 1;
         const page = await pdf.getPage(pageIndex);
         const effectiveScale = Number.isFinite(scale) && scale > 0 ? scale : DEFAULT_PDF_SCALE;
