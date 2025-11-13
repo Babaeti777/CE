@@ -1663,6 +1663,9 @@ export class TakeoffManager {
         if (!globalOptions.workerSrc) {
             globalOptions.workerSrc = PDF_WORKER_CDN;
         }
+        const workerSrc = this.pdfWorkerCandidates[this.pdfWorkerIndex] || this.pdfWorkerCandidates[0];
+        globalOptions.workerSrc = workerSrc;
+        this.pdfWorkerSrc = workerSrc;
         this.pdfWorkerInitialized = true;
     }
 
@@ -1723,7 +1726,17 @@ export class TakeoffManager {
         }
 
         drawing.pdfData = data;
-        const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+
+        let pdf;
+        try {
+            pdf = await window.pdfjsLib.getDocument({ data }).promise;
+        } catch (error) {
+            if (this.isPdfWorkerError(error) && this.tryFallbackPdfWorker()) {
+                pdf = await window.pdfjsLib.getDocument({ data }).promise;
+            } else {
+                throw error;
+            }
+        }
         const pageIndex = drawing.currentPage || 1;
         const page = await pdf.getPage(pageIndex);
         const effectiveScale = Number.isFinite(scale) && scale > 0 ? scale : DEFAULT_PDF_SCALE;
