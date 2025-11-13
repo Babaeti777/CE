@@ -14,12 +14,8 @@ const SUPPORTED_PDF_TYPES = new Set([
 ]);
 
 const DEFAULT_PDF_SCALE = 1.5;
-const PDF_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-const PDF_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-const PDF_JS_LOCAL = 'vendor/pdfjs/pdf.min.js';
-const PDF_WORKER_LOCAL = 'vendor/pdfjs/pdf.worker.min.js';
-const PDF_JS_SOURCES = [PDF_JS_LOCAL, PDF_JS_CDN];
-const PDF_WORKER_SOURCES = [PDF_WORKER_LOCAL, PDF_WORKER_CDN];
+const PDF_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js';
+const PDF_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -188,10 +184,6 @@ export class TakeoffManager {
         this.pdfRenderToken = 0;
         this.pdfRenderInFlight = false;
         this.pdfScriptPromise = null;
-        this.pdfScriptSource = null;
-        this.pdfWorkerCandidates = null;
-        this.pdfWorkerIndex = -1;
-        this.pdfWorkerSrc = null;
         this.pendingZoomRefresh = false;
         this.handlers = {
             windowResize: () => {
@@ -1625,82 +1617,6 @@ export class TakeoffManager {
         };
     }
 
-    loadScript(url) {
-        return new Promise((resolve, reject) => {
-            const target = document.head || document.body || document.documentElement;
-            if (!target) {
-                reject(new Error('Document not ready for script injection.'));
-                return;
-            }
-            const script = document.createElement('script');
-            script.src = url;
-            script.async = true;
-            script.onload = () => resolve(url);
-            script.onerror = () => {
-                script.remove();
-                reject(new Error(`Failed to load script: ${url}`));
-            };
-            target.appendChild(script);
-        });
-    }
-
-    buildPdfWorkerSources() {
-        const source = this.pdfScriptSource || PDF_JS_LOCAL;
-        const preferLocal = typeof source === 'string' && !source.startsWith('http');
-        const ordered = preferLocal ? PDF_WORKER_SOURCES : [...PDF_WORKER_SOURCES].reverse();
-        return Array.from(new Set(ordered));
-    }
-
-    isPdfWorkerError(error) {
-        if (!error) {
-            return false;
-        }
-        const message = String(error?.message || error || '').toLowerCase();
-        if (!message) {
-            return false;
-        }
-        const tokens = [
-            'worker',
-            'failed to fetch',
-            'setting up fake worker',
-            'globalworkeroptions.workersrc',
-            'chunk'
-        ];
-        return tokens.some((token) => message.includes(token));
-    }
-
-    tryFallbackPdfWorker() {
-        if (!Array.isArray(this.pdfWorkerCandidates) || !this.pdfWorkerCandidates.length) {
-            this.pdfWorkerCandidates = this.buildPdfWorkerSources();
-        }
-        if (!Array.isArray(this.pdfWorkerCandidates) || !this.pdfWorkerCandidates.length) {
-            return false;
-        }
-        if (this.pdfWorkerIndex === -1) {
-            this.pdfWorkerIndex = this.pdfWorkerCandidates.indexOf(this.pdfWorkerSrc);
-        }
-        let nextIndex = this.pdfWorkerIndex + 1;
-        while (nextIndex < this.pdfWorkerCandidates.length) {
-            const candidate = this.pdfWorkerCandidates[nextIndex];
-            nextIndex += 1;
-            if (!candidate || candidate === this.pdfWorkerSrc) {
-                continue;
-            }
-            const pdfjs = window?.pdfjsLib;
-            if (!pdfjs) {
-                return false;
-            }
-            const globalOptions = pdfjs.GlobalWorkerOptions || (pdfjs.GlobalWorkerOptions = {});
-            globalOptions.workerSrc = candidate;
-            this.pdfWorkerSrc = candidate;
-            this.pdfWorkerIndex = nextIndex - 1;
-            this.pdfWorkerInitialized = true;
-            console.warn(`PDF worker fallback activated: ${candidate}`);
-            return true;
-        }
-        return false;
-    }
-
     async ensurePdfLibrary() {
         if (typeof window === 'undefined') {
             throw new Error('PDF renderer not available.');
@@ -1709,41 +1625,34 @@ export class TakeoffManager {
             return;
         }
         if (!this.pdfScriptPromise) {
-            this.pdfScriptPromise = (async () => {
-                let lastError = null;
-                for (const source of PDF_JS_SOURCES) {
-                    try {
-                        await this.loadScript(source);
-                        if (window.pdfjsLib) {
-                            this.pdfScriptSource = source;
-                            return;
-                        }
-                        lastError = new Error('PDF renderer not available after script load.');
-                    } catch (error) {
-                        lastError = error;
-                    }
+            this.pdfScriptPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = PDF_JS_CDN;
+                script.async = true;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load PDF renderer.'));
+                const target = document.head || document.body || document.documentElement;
+                if (target) {
+                    target.appendChild(script);
+                } else {
+                    reject(new Error('Document not ready for PDF renderer.'));
                 }
-                this.pdfScriptSource = null;
-                throw lastError || new Error('Failed to load PDF renderer.');
-            })();
+            }).catch((error) => {
+                this.pdfScriptPromise = null;
+                throw error;
+            });
         }
 
-        try {
-            await this.pdfScriptPromise;
-        } catch (error) {
-            this.pdfScriptPromise = null;
-            throw error;
-        }
+        await this.pdfScriptPromise;
 
         if (!window.pdfjsLib) {
-            this.pdfScriptSource = null;
             this.pdfScriptPromise = null;
             throw new Error('PDF renderer not available.');
         }
     }
 
     async ensurePdfWorker() {
-        if (this.pdfWorkerInitialized && this.pdfWorkerSrc) {
+        if (this.pdfWorkerInitialized) {
             return;
         }
 
@@ -1751,16 +1660,8 @@ export class TakeoffManager {
 
         const pdfjs = window.pdfjsLib;
         const globalOptions = pdfjs.GlobalWorkerOptions || (pdfjs.GlobalWorkerOptions = {});
-        if (!Array.isArray(this.pdfWorkerCandidates) || !this.pdfWorkerCandidates.length) {
-            this.pdfWorkerCandidates = this.buildPdfWorkerSources();
-            this.pdfWorkerIndex = -1;
-        }
-        if (!Array.isArray(this.pdfWorkerCandidates) || !this.pdfWorkerCandidates.length) {
-            throw new Error('PDF worker not available.');
-        }
-        if (this.pdfWorkerIndex === -1) {
-            const initialIndex = this.pdfWorkerCandidates.indexOf(this.pdfWorkerSrc);
-            this.pdfWorkerIndex = initialIndex >= 0 ? initialIndex : 0;
+        if (!globalOptions.workerSrc) {
+            globalOptions.workerSrc = PDF_WORKER_CDN;
         }
         const workerSrc = this.pdfWorkerCandidates[this.pdfWorkerIndex] || this.pdfWorkerCandidates[0];
         globalOptions.workerSrc = workerSrc;
