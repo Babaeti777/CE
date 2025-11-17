@@ -1692,10 +1692,18 @@ export class TakeoffManager {
 
         const pdfjs = window.pdfjsLib;
         const globalOptions = pdfjs.GlobalWorkerOptions || (pdfjs.GlobalWorkerOptions = {});
-        if (!globalOptions.workerSrc) {
-            globalOptions.workerSrc = PDF_WORKER_CDN;
+
+        if (globalOptions.workerSrc) {
+            this.pdfWorkerSrc = globalOptions.workerSrc;
+            this.pdfWorkerInitialized = true;
+            return;
         }
-        const workerSrc = this.pdfWorkerCandidates[this.pdfWorkerIndex] || this.pdfWorkerCandidates[0];
+
+        const candidates = Array.isArray(this.pdfWorkerCandidates) && this.pdfWorkerCandidates.length > 0
+            ? this.pdfWorkerCandidates
+            : [PDF_WORKER_CDN];
+        const workerSrc = candidates[this.pdfWorkerIndex] || candidates[0];
+
         globalOptions.workerSrc = workerSrc;
         this.pdfWorkerSrc = workerSrc;
         this.pdfWorkerInitialized = true;
